@@ -1,5 +1,6 @@
 import qs from "qs";
 import axios, { AxiosRequestConfig, InternalAxiosRequestConfig } from "axios";
+import { createDecipheriv, createHash } from 'node:crypto';
 
 import { Model, TokenType } from "./model";
 
@@ -28,9 +29,43 @@ export class GHL {
     await this.generateAccessTokenRefreshTokenPair(code);
   }
 
-  decryptSSOData(key: string){
-    const data = CryptoJS.AES.decrypt(key, process.env.GHL_APP_SSO_KEY as string).toString(CryptoJS.enc.Utf8)
-    return JSON.parse(data)
+  decryptSSOData(key: string) {
+    try {
+      const blockSize = 16;
+      const keySize = 32;
+      const ivSize = 16;
+      const saltSize = 8;
+      
+      const rawEncryptedData = Buffer.from(key, 'base64');
+      const salt = rawEncryptedData.subarray(saltSize, blockSize);
+      const cipherText = rawEncryptedData.subarray(blockSize);
+      
+      let result = Buffer.alloc(0, 0);
+      while (result.length < (keySize + ivSize)) {
+        const hasher = createHash('md5');
+        result = Buffer.concat([
+          result,
+          hasher.update(Buffer.concat([
+            result.subarray(-ivSize),
+            Buffer.from(process.env.GHL_APP_SSO_KEY as string, 'utf-8'),
+            salt
+          ])).digest()
+        ]);
+      }
+      
+      const decipher = createDecipheriv(
+        'aes-256-cbc',
+        result.subarray(0, keySize),
+        result.subarray(keySize, keySize + ivSize)
+      );
+      
+      const decrypted = decipher.update(cipherText);
+      const finalDecrypted = Buffer.concat([decrypted, decipher.final()]);
+      return JSON.parse(finalDecrypted.toString());
+    } catch (error) {
+      console.error('Error decrypting SSO data:', error);
+      throw error;
+    }
   }
 
 /**
