@@ -4,15 +4,11 @@ import { GHL } from "./ghl";
 import * as CryptoJS from 'crypto-js'
 import { json } from "body-parser";
 import { ghlAuthRoutes } from "./auth/ghlAuthRoutes";
-
-const path = __dirname + "/ui/dist/";
+import path from "path";
 
 dotenv.config();
 const app: Express = express();
 app.use(json({ type: 'application/json' }))
-
-// Serve static files
-app.use(express.static(path));
 
 // Initialize GHL
 const ghl = new GHL();
@@ -96,9 +92,13 @@ app.post("/decrypt-sso", async (req: Request, res: Response) => {
   }
 })
 
+// Serve static files from the correct UI build directory
+const uiDistPath = path.join(__dirname, '../ui/dist');
+app.use(express.static(uiDistPath));
+
 // Serve main HTML file
 app.get("/", function (req, res) {
-  res.sendFile(path + "index.html");
+  res.sendFile(path.join(uiDistPath, 'index.html'));
 });
 
 app.listen(port, () => {
