@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import { GHL } from "./ghl";
 import * as CryptoJS from 'crypto-js'
 import { json } from "body-parser";
-import { authRoutes } from "./auth/authRoutes";
+import { ghlAuthRoutes } from "./auth/ghlAuthRoutes";
 
 const path = __dirname + "/ui/dist/";
 
@@ -19,8 +19,8 @@ const ghl = new GHL();
 
 const port = process.env.PORT || 3000;
 
-// Authentication routes
-app.use('/auth', authRoutes);
+// GHL Authentication routes
+app.use('/api/auth', ghlAuthRoutes);
 
 // Existing GHL routes
 app.get("/authorize-handler", async (req: Request, res: Response) => {
