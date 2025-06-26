@@ -6,23 +6,43 @@ export class GHL {
   constructor() {}
 
   async getUserData() {
-    const key = await new Promise((resolve) => {
-      window.parent.postMessage({ message: "REQUEST_USER_DATA" }, "*");
-      window.addEventListener("message", ({ data }) => {
-        if (data.message === "REQUEST_USER_DATA_RESPONSE") {
-          resolve(data.payload)
-        }
+    try {
+      const key = await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Timeout waiting for user data'));
+        }, 10000);
+
+        window.parent.postMessage({ message: "REQUEST_USER_DATA" }, "*");
+        
+        const messageHandler = ({ data }) => {
+          if (data.message === "REQUEST_USER_DATA_RESPONSE") {
+            clearTimeout(timeout);
+            window.removeEventListener("message", messageHandler);
+            resolve(data.payload);
+          }
+        };
+
+        window.addEventListener("message", messageHandler);
       });
-    });
-    const res = await fetch('/decrypt-sso', {
+
+      const res = await fetch('/decrypt-sso', {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({key})
+        body: JSON.stringify({ key })
       });
-    const data = await res.json()
-    return data
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+
+      const data = await res.json();
+      return data;
+    } catch (error) {
+      console.error('Error getting user data:', error);
+      throw error;
+    }
   }
 }
