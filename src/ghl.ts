@@ -47,7 +47,7 @@ export class GHL {
           result,
           hasher.update(Buffer.concat([
             result.subarray(-ivSize),
-            Buffer.from(process.env.GHL_APP_SSO_KEY as string, 'utf-8'),
+            Buffer.from(process.env.GHL_APP_SHARED_SECRET as string, 'utf-8'),
             salt
           ])).digest()
         ]);
