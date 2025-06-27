@@ -2,10 +2,23 @@
   "name": "ghl-data-extractor",
   "version": "1.0.0",
   "description": "A GoHighLevel data extraction app using Supabase Edge Functions",
+  "type": "module",
   "scripts": {
-    "dev": "cd ui && npm run dev",
-    "build": "cd ui && npm install && npm run build",
-    "preview": "cd ui && npm run preview"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "npm run dev"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@supabase/supabase-js": "^2.39.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.0.8"
   },
   "repository": {
     "type": "git",
