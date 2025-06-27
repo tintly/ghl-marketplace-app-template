@@ -16,6 +16,7 @@ function DataExtractionModule({ user, authService }) {
   const [ghlConfig, setGhlConfig] = useState(null)
   const [configError, setConfigError] = useState(null)
   const [retryCount, setRetryCount] = useState(0)
+  const [tokenStatus, setTokenStatus] = useState(null)
 
   useEffect(() => {
     loadData()
@@ -32,17 +33,74 @@ function DataExtractionModule({ user, authService }) {
       setGhlConfig(config)
 
       if (config) {
-        // Load custom fields and extraction fields in parallel
-        await Promise.all([
-          loadCustomFields(config),
-          loadExtractionFields(config.id)
-        ])
+        // Check token status
+        const status = validateTokenStatus(config)
+        setTokenStatus(status)
+        
+        if (status.isValid) {
+          // Load custom fields and extraction fields in parallel
+          await Promise.all([
+            loadCustomFields(config),
+            loadExtractionFields(config.id)
+          ])
+        } else {
+          setConfigError(`Token issue: ${status.message}`)
+        }
       }
     } catch (error) {
       console.error('Error loading data:', error)
       setError(error.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const validateTokenStatus = (config) => {
+    if (!config.access_token) {
+      return {
+        isValid: false,
+        status: 'missing_access_token',
+        message: 'Access token is missing. Please reinstall the app or contact support.',
+        severity: 'error'
+      }
+    }
+    
+    if (!config.refresh_token) {
+      return {
+        isValid: false,
+        status: 'missing_refresh_token',
+        message: 'Refresh token is missing. Please reinstall the app.',
+        severity: 'error'
+      }
+    }
+    
+    if (config.token_expires_at) {
+      const expiryDate = new Date(config.token_expires_at)
+      const now = new Date()
+      const hoursUntilExpiry = (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60)
+      
+      if (hoursUntilExpiry < 0) {
+        return {
+          isValid: false,
+          status: 'expired',
+          message: 'Access token has expired. The system will attempt to refresh it automatically.',
+          severity: 'warning'
+        }
+      } else if (hoursUntilExpiry < 24) {
+        return {
+          isValid: true,
+          status: 'expiring_soon',
+          message: `Access token expires in ${Math.round(hoursUntilExpiry)} hours.`,
+          severity: 'info'
+        }
+      }
+    }
+    
+    return {
+      isValid: true,
+      status: 'valid',
+      message: 'Access token is valid.',
+      severity: 'success'
     }
   }
 
@@ -53,7 +111,8 @@ function DataExtractionModule({ user, authService }) {
       locationId: user.locationId,
       devMode: user.devMode,
       configCreated: user.configCreated,
-      configId: user.configId
+      configId: user.configId,
+      tokenStatus: user.tokenStatus
     })
 
     try {
@@ -79,7 +138,10 @@ function DataExtractionModule({ user, authService }) {
           console.log('Found config by ghl_account_id:', {
             id: locationData.id,
             userId: locationData.user_id,
-            businessName: locationData.business_name
+            businessName: locationData.business_name,
+            hasAccessToken: !!locationData.access_token,
+            hasRefreshToken: !!locationData.refresh_token,
+            tokenExpiry: locationData.token_expires_at
           })
           
           // If found but no user_id, link it to current user
@@ -151,11 +213,16 @@ function DataExtractionModule({ user, authService }) {
             return manualConfig
           }
         }
+      } else {
+        // Production mode - configuration should exist from OAuth flow
+        setConfigError(
+          'No configuration found for this location. ' +
+          'Please ensure the app is properly installed via the GoHighLevel marketplace.'
+        )
       }
 
       // No configuration found
       console.log('No configuration found for user')
-      setConfigError('No configuration found. This should be created automatically.')
       return null
 
     } catch (error) {
@@ -174,8 +241,8 @@ function DataExtractionModule({ user, authService }) {
         ghl_account_id: user.locationId,
         client_id: 'dev-client-id',
         client_secret: 'dev-client-secret',
-        access_token: 'dev-access-token',
-        refresh_token: 'dev-refresh-token',
+        access_token: 'dev-access-token-' + Date.now(),
+        refresh_token: 'dev-refresh-token-' + Date.now(),
         token_expires_at: new Date(Date.now() + (365 * 24 * 60 * 60 * 1000)).toISOString(),
         business_name: 'Development Business',
         business_address: '123 Dev Street',
@@ -430,7 +497,10 @@ function DataExtractionModule({ user, authService }) {
         <h3 className="text-yellow-800 font-medium">No Configuration Found</h3>
         <p className="text-yellow-600 text-sm mt-1">
           No GoHighLevel configuration found for this location. 
-          {user.devMode && ' The configuration should be created automatically by the auth system.'}
+          {user.devMode 
+            ? ' The configuration should be created automatically by the auth system.'
+            : ' Please ensure the app is properly installed via the GoHighLevel marketplace.'
+          }
         </p>
         <div className="mt-3 text-xs text-yellow-700 space-y-1">
           <p><strong>User ID:</strong> {user.userId}</p>
@@ -438,6 +508,7 @@ function DataExtractionModule({ user, authService }) {
           <p><strong>Dev Mode:</strong> {user.devMode ? 'Yes' : 'No'}</p>
           <p><strong>Config Created:</strong> {user.configCreated ? 'Yes' : 'No'}</p>
           <p><strong>Config ID:</strong> {user.configId || 'None'}</p>
+          <p><strong>Token Status:</strong> {user.tokenStatus || 'Unknown'}</p>
           <p><strong>Retry Count:</strong> {retryCount}/3</p>
           {configError && (
             <p><strong>Error:</strong> {configError}</p>
@@ -465,6 +536,36 @@ function DataExtractionModule({ user, authService }) {
 
   return (
     <div className="space-y-6">
+      {/* Token Status Alert */}
+      {tokenStatus && !tokenStatus.isValid && (
+        <div className={`border rounded-lg p-4 ${
+          tokenStatus.severity === 'error' 
+            ? 'bg-red-50 border-red-200' 
+            : 'bg-yellow-50 border-yellow-200'
+        }`}>
+          <h3 className={`font-medium ${
+            tokenStatus.severity === 'error' ? 'text-red-800' : 'text-yellow-800'
+          }`}>
+            Token Issue Detected
+          </h3>
+          <p className={`text-sm mt-1 ${
+            tokenStatus.severity === 'error' ? 'text-red-600' : 'text-yellow-600'
+          }`}>
+            {tokenStatus.message}
+          </p>
+          {tokenStatus.severity === 'error' && (
+            <div className="mt-3">
+              <button
+                onClick={() => window.open('https://marketplace.gohighlevel.com', '_blank')}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
+              >
+                Reinstall App
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="bg-white rounded-lg shadow">
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">Data Extraction Configuration</h2>
@@ -474,6 +575,11 @@ function DataExtractionModule({ user, authService }) {
           {user.devMode && (
             <div className="mt-2 text-xs text-yellow-700 bg-yellow-50 px-2 py-1 rounded">
               Dev Mode: Using configuration ID {ghlConfig.id} for location {ghlConfig.ghl_account_id}
+            </div>
+          )}
+          {tokenStatus && tokenStatus.isValid && (
+            <div className="mt-2 text-xs text-green-700 bg-green-50 px-2 py-1 rounded">
+              Token Status: {tokenStatus.message}
             </div>
           )}
         </div>

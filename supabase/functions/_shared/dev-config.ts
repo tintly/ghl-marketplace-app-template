@@ -15,7 +15,8 @@ export interface DevUserData {
 // Set DEV_MODE to true to use manual user data instead of SSO decryption
 export const DEV_MODE = Deno.env.get("DEV_MODE") === "true"
 
-// IMPORTANT: Use FAKE/TEST IDs for development - NEVER use real production IDs
+// CRITICAL: Use FAKE/TEST IDs for development - NEVER use real production IDs
+// These should be completely different from your actual GHL account IDs
 export const DEV_USER_DATA: DevUserData = {
   userId: Deno.env.get("DEV_USER_ID") || "dev_user_12345",
   email: Deno.env.get("DEV_USER_EMAIL") || "dev@example.com", 
@@ -37,5 +38,29 @@ export function getDevUserContext() {
     companyId: DEV_USER_DATA.companyId,
     locationId: DEV_USER_DATA.locationId,
     activeLocation: DEV_USER_DATA.activeLocation
+  }
+}
+
+// Function to check if a location ID is a production ID that should be protected
+export function isProductionLocationId(locationId: string): boolean {
+  const PROTECTED_PRODUCTION_IDS = [
+    "4beIyWyWrcoPRD7PEN5G", // Your actual production location ID
+    // Add other production IDs here that should never be used in dev mode
+  ]
+  
+  return PROTECTED_PRODUCTION_IDS.includes(locationId)
+}
+
+// Function to validate that dev mode isn't accidentally using production data
+export function validateDevEnvironment() {
+  if (DEV_MODE) {
+    const devLocationId = DEV_USER_DATA.locationId
+    
+    if (isProductionLocationId(devLocationId)) {
+      throw new Error(
+        `CRITICAL ERROR: Development mode is configured to use production location ID ${devLocationId}. ` +
+        `This could overwrite live data. Please update DEV_LOCATION_ID environment variable to use a test ID.`
+      )
+    }
   }
 }

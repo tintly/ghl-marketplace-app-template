@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { md5 } from "../_shared/md5.ts"
-import { DEV_MODE, getDevUserContext } from "../_shared/dev-config.ts"
+import { DEV_MODE, getDevUserContext, validateDevEnvironment } from "../_shared/dev-config.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,7 +35,30 @@ serve(async (req: Request) => {
     
     // Check if we're in development mode
     if (DEV_MODE) {
-      console.log('Development mode enabled - using manual user data')
+      console.log('Development mode enabled - validating environment safety...')
+      
+      // Validate that dev mode isn't using production IDs
+      try {
+        validateDevEnvironment()
+      } catch (validationError) {
+        console.error('DEV ENVIRONMENT VALIDATION FAILED:', validationError.message)
+        return new Response(
+          JSON.stringify({ 
+            error: "Development environment validation failed",
+            details: validationError.message,
+            critical: true
+          }),
+          {
+            status: 400,
+            headers: {
+              "Content-Type": "application/json",
+              ...corsHeaders,
+            },
+          }
+        )
+      }
+      
+      console.log('Development environment validated - using safe test data')
       const userContext = getDevUserContext()
       
       // Initialize Supabase client with service role for dev configuration
@@ -101,6 +124,7 @@ serve(async (req: Request) => {
       )
     }
     
+    // Production mode - handle SSO decryption
     const { key } = await req.json()
     
     if (!key) {
@@ -137,10 +161,23 @@ serve(async (req: Request) => {
 
     console.log('User context created:', { userId: userContext.userId, email: userContext.email })
 
+    // Initialize Supabase to validate/create configuration
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    
+    // Ensure production configuration exists and has valid tokens
+    const configResult = await ensureProductionConfiguration(supabase, userContext)
+
     return new Response(
       JSON.stringify({
         success: true,
-        user: userContext
+        user: {
+          ...userContext,
+          configValidated: !!configResult,
+          configId: configResult?.id || null,
+          tokenStatus: configResult?.tokenStatus || 'unknown'
+        }
       }),
       {
         status: 200,
@@ -171,6 +208,99 @@ serve(async (req: Request) => {
     )
   }
 })
+
+async function ensureProductionConfiguration(supabase: any, userContext: any) {
+  try {
+    console.log('=== PRODUCTION CONFIGURATION VALIDATION ===')
+    console.log('User context:', {
+      userId: userContext.userId,
+      locationId: userContext.locationId,
+      email: userContext.email
+    })
+    
+    // Check if configuration exists
+    const { data: existingConfig, error: checkError } = await supabase
+      .from('ghl_configurations')
+      .select('*')
+      .eq('ghl_account_id', userContext.locationId)
+      .maybeSingle()
+
+    if (checkError) {
+      console.error('Error checking existing config:', checkError)
+      throw new Error(`Failed to check existing configuration: ${checkError.message}`)
+    }
+    
+    if (existingConfig) {
+      console.log('Found existing configuration:', {
+        id: existingConfig.id,
+        userId: existingConfig.user_id,
+        businessName: existingConfig.business_name,
+        hasAccessToken: !!existingConfig.access_token,
+        hasRefreshToken: !!existingConfig.refresh_token,
+        tokenExpiry: existingConfig.token_expires_at
+      })
+      
+      // Validate token status
+      const tokenStatus = validateTokenStatus(existingConfig)
+      console.log('Token validation result:', tokenStatus)
+      
+      // If configuration exists but no user_id, link it
+      if (!existingConfig.user_id) {
+        console.log('Linking existing config to user...')
+        const { data: updatedConfig, error: updateError } = await supabase
+          .from('ghl_configurations')
+          .update({ 
+            user_id: userContext.userId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingConfig.id)
+          .select()
+          .single()
+
+        if (updateError) {
+          console.error('Failed to link config:', updateError)
+          return { ...existingConfig, tokenStatus }
+        }
+        
+        console.log('Successfully linked config to user')
+        return { ...updatedConfig, tokenStatus }
+      }
+      
+      return { ...existingConfig, tokenStatus }
+    }
+    
+    console.log('No existing configuration found - this should be created via OAuth flow')
+    return null
+    
+  } catch (error) {
+    console.error('Error in production configuration validation:', error)
+    return null
+  }
+}
+
+function validateTokenStatus(config: any) {
+  if (!config.access_token) {
+    return 'missing_access_token'
+  }
+  
+  if (!config.refresh_token) {
+    return 'missing_refresh_token'
+  }
+  
+  if (config.token_expires_at) {
+    const expiryDate = new Date(config.token_expires_at)
+    const now = new Date()
+    const hoursUntilExpiry = (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60)
+    
+    if (hoursUntilExpiry < 0) {
+      return 'expired'
+    } else if (hoursUntilExpiry < 24) {
+      return 'expiring_soon'
+    }
+  }
+  
+  return 'valid'
+}
 
 async function ensureDevConfiguration(supabase: any, userContext: any) {
   try {
@@ -274,8 +404,8 @@ async function ensureDevConfiguration(supabase: any, userContext: any) {
       ghl_account_id: userContext.locationId,
       client_id: 'dev-client-id',
       client_secret: 'dev-client-secret',
-      access_token: 'dev-access-token',
-      refresh_token: 'dev-refresh-token',
+      access_token: 'dev-access-token-' + Date.now(),
+      refresh_token: 'dev-refresh-token-' + Date.now(),
       token_expires_at: new Date(Date.now() + (365 * 24 * 60 * 60 * 1000)).toISOString(),
       business_name: 'Development Business',
       business_address: '123 Dev Street',
