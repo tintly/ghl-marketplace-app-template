@@ -13,8 +13,8 @@ export class AuthService {
       const encryptedUserData = await this.getEncryptedUserData()
       console.log('Encrypted user data received')
 
-      // Use Netlify Functions instead of Supabase
-      const response = await fetch('/.netlify/functions/auth-user-context', {
+      // Use the backend API instead of Netlify Functions
+      const response = await fetch('/api/auth/user-context', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -88,7 +88,7 @@ export class AuthService {
     try {
       const encryptedUserData = await this.getEncryptedUserData()
 
-      const response = await fetch(`/.netlify/functions/auth-verify-location/${locationId}`, {
+      const response = await fetch(`/api/auth/verify-location/${locationId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

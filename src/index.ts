@@ -5,9 +5,18 @@ import * as CryptoJS from 'crypto-js'
 import { json } from "body-parser";
 import { ghlAuthRoutes } from "./auth/ghlAuthRoutes";
 import path from "path";
+import cors from "cors";
 
 dotenv.config();
 const app: Express = express();
+
+// Enable CORS for all routes
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(json({ type: 'application/json' }))
 
 // Initialize GHL
@@ -92,12 +101,12 @@ app.post("/decrypt-sso", async (req: Request, res: Response) => {
   }
 })
 
-// Serve static files from the correct UI build directory
+// Serve static files from the UI build directory
 const uiDistPath = path.join(__dirname, '../ui/dist');
 app.use(express.static(uiDistPath));
 
-// Serve main HTML file
-app.get("/", function (req, res) {
+// Serve main HTML file for all other routes (SPA routing)
+app.get("*", function (req, res) {
   res.sendFile(path.join(uiDistPath, 'index.html'));
 });
 
