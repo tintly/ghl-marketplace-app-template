@@ -1,87 +1,103 @@
-import { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import AuthService from '../services/AuthService'
 
-function DataExtractorApp({ user, authService }) {
-  const getLocationDisplay = () => {
-    if (user.activeLocation) {
-      return `Location: ${user.activeLocation}`
+const DataExtractorApp = () => {
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    initializeAuth()
+  }, [])
+
+  const initializeAuth = async () => {
+    try {
+      setLoading(true)
+      const userContext = await AuthService.getUserContext()
+      setUser(userContext)
+    } catch (err) {
+      console.error('Authentication error:', err)
+      setError(err.message)
+    } finally {
+      setLoading(false)
     }
-    return `Company: ${user.companyId}`
   }
 
-  const getContextTypeDisplay = () => {
-    return user.type === 'agency' ? 'Agency User' : 'Location User'
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center p-8 bg-red-50 rounded-lg">
+          <h2 className="text-xl font-semibold text-red-800 mb-2">Authentication Error</h2>
+          <p className="text-red-600">{error}</p>
+          <button 
+            onClick={initializeAuth}
+            className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="app-container">
-      <header className="app-header">
-        <h1>Data Extractor</h1>
-        <div className="user-info">
-          <span className="user-name">{user.userName}</span>
-          <span className="location-badge">{getLocationDisplay()}</span>
-        </div>
-      </header>
-      
-      <main className="app-content">
-        <div className="welcome-section">
-          <h2>Welcome to Your Conversation Data Extractor</h2>
-          <p>Extract valuable insights from your GoHighLevel conversations automatically.</p>
-          
-          <div className="stats-grid">
-            <div className="stat-card">
-              <h3>User ID</h3>
-              <p className="stat-value">{user.userId}</p>
-            </div>
-            
-            <div className="stat-card">
-              <h3>Location ID</h3>
-              <p className="stat-value">{user.locationId}</p>
-            </div>
-            
-            <div className="stat-card">
-              <h3>User Role</h3>
-              <p className="stat-value">{user.role}</p>
-            </div>
-            
-            <div className="stat-card">
-              <h3>Context Type</h3>
-              <p className="stat-value">{getContextTypeDisplay()}</p>
-            </div>
-
-            <div className="stat-card">
-              <h3>Email</h3>
-              <p className="stat-value">{user.email}</p>
-            </div>
-
-            <div className="stat-card">
-              <h3>Company ID</h3>
-              <p className="stat-value">{user.companyId}</p>
-            </div>
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <h1 className="text-3xl font-bold text-gray-900">
+              GHL Data Extractor
+            </h1>
+            {user && (
+              <div className="text-sm text-gray-600">
+                Welcome, {user.userName || user.email}
+              </div>
+            )}
           </div>
         </div>
-        
-        <div className="features-section">
-          <h3>Available Features</h3>
-          <div className="feature-grid">
-            <div className="feature-card">
-              <div className="feature-icon">🔍</div>
-              <h4>Data Extraction</h4>
-              <p>Set up custom fields to extract from conversations</p>
-              <button className="feature-button">Configure</button>
-            </div>
-            
-            <div className="feature-card">
-              <div className="feature-icon">⚙️</div>
-              <h4>Rules & Triggers</h4>
-              <p>Define when and how data should be extracted</p>
-              <button className="feature-button">Manage</button>
-            </div>
-            
-            <div className="feature-card">
-              <div className="feature-icon">📊</div>
-              <h4>Analytics</h4>
-              <p>View extraction performance and insights</p>
-              <button className="feature-button">View Reports</button>
+      </header>
+
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div className="px-4 py-6 sm:px-0">
+          <div className="border-4 border-dashed border-gray-200 rounded-lg p-8">
+            <div className="text-center">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-4">
+                Data Extraction Dashboard
+              </h2>
+              <p className="text-gray-600 mb-6">
+                Configure and manage your GoHighLevel data extraction settings.
+              </p>
+              
+              {user && (
+                <div className="bg-white p-6 rounded-lg shadow">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">User Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                    <div>
+                      <span className="font-medium">User ID:</span> {user.userId}
+                    </div>
+                    <div>
+                      <span className="font-medium">Email:</span> {user.email}
+                    </div>
+                    <div>
+                      <span className="font-medium">Role:</span> {user.role}
+                    </div>
+                    <div>
+                      <span className="font-medium">Location ID:</span> {user.locationId}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

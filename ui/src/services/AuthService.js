@@ -1,128 +1,70 @@
-export class AuthService {
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://your-project-ref.supabase.co'
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-anon-key-here'
+
+class AuthService {
   constructor() {
-    this.currentUser = null
-    this.isAuthenticated = false
+    this.baseUrl = `${SUPABASE_URL}/functions/v1`
   }
 
-  // Get user data using GHL SSO
-  async getUserData() {
+  async getUserContext() {
     try {
-      console.log('Starting authentication process...')
+      // Get SSO key from URL parameters or iframe context
+      const ssoKey = this.getSSOKey()
       
-      // Get encrypted data from parent window
-      const encryptedUserData = await this.getEncryptedUserData()
-      console.log('Encrypted user data received')
-
-      // Use Supabase Edge Function
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-      if (!supabaseUrl) {
-        throw new Error('VITE_SUPABASE_URL environment variable is not set')
-      }
-
-      console.log('Making request to:', `${supabaseUrl}/functions/v1/auth-user-context`)
-
-      const response = await fetch(`${supabaseUrl}/functions/v1/auth-user-context`, {
+      const response = await fetch(`${this.baseUrl}/auth-user-context`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify({ key: encryptedUserData })
+        body: JSON.stringify({ key: ssoKey })
       })
 
-      console.log('Auth response status:', response.status)
-
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error('Auth response error:', errorText)
-        throw new Error(`Authentication failed: ${response.status} - ${errorText}`)
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to authenticate')
       }
 
-      const result = await response.json()
-      console.log('Authentication successful:', result)
-      
-      this.currentUser = result.user
-      this.isAuthenticated = true
-      
-      return result.user
+      const data = await response.json()
+      return data.user
     } catch (error) {
-      console.error('Failed to fetch user data:', error)
+      console.error('Auth service error:', error)
       throw error
     }
   }
 
-  // Extract the encrypted user data logic into separate method
-  async getEncryptedUserData() {
-    return new Promise((resolve, reject) => {
-      console.log('Requesting user data from parent window...')
-      
-      const timeout = setTimeout(() => {
-        console.error('Timeout waiting for user data from parent window')
-        reject(new Error('Timeout waiting for user data from parent window. Please ensure you are accessing this app from within GoHighLevel.'))
-      }, 15000) // Increased timeout to 15 seconds
-
-      // Request user data from parent window
-      window.parent.postMessage({ message: 'REQUEST_USER_DATA' }, '*')
-
-      // Listen for the response
-      const messageHandler = ({ data, origin }) => {
-        console.log('Received message from parent:', { message: data.message, origin })
-        
-        if (data.message === 'REQUEST_USER_DATA_RESPONSE') {
-          clearTimeout(timeout)
-          window.removeEventListener('message', messageHandler)
-          
-          if (data.payload) {
-            console.log('User data payload received')
-            resolve(data.payload)
-          } else {
-            console.error('No payload in user data response')
-            reject(new Error('No user data payload received'))
-          }
-        }
-      }
-
-      window.addEventListener('message', messageHandler)
-      
-      // Also try to get data immediately in case it's already available
-      setTimeout(() => {
-        window.parent.postMessage({ message: 'REQUEST_USER_DATA' }, '*')
-      }, 1000)
-    })
-  }
-
-  // Verify access to a specific location
   async verifyLocationAccess(locationId) {
     try {
-      const encryptedUserData = await this.getEncryptedUserData()
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-
-      const response = await fetch(`${supabaseUrl}/functions/v1/auth-verify-location/${locationId}`, {
+      const ssoKey = this.getSSOKey()
+      
+      const response = await fetch(`${this.baseUrl}/auth-verify-location/${locationId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify({ key: encryptedUserData })
+        body: JSON.stringify({ key: ssoKey })
       })
 
       if (!response.ok) {
-        throw new Error('Access verification failed')
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Access denied')
       }
 
-      const result = await response.json()
-      return result.hasAccess
+      const data = await response.json()
+      return data.hasAccess
     } catch (error) {
-      console.error('Failed to verify location access:', error)
-      return false
+      console.error('Location verification error:', error)
+      throw error
     }
   }
 
-  getCurrentUser() {
-    return this.currentUser
-  }
-
-  isUserAuthenticated() {
-    return this.isAuthenticated
+  getSSOKey() {
+    // In a real GHL iframe, this would come from the parent window
+    // For development, we'll use a placeholder or URL parameter
+    const urlParams = new URLSearchParams(window.location.search)
+    return urlParams.get('key') || 'dev-mode-key'
   }
 }
+
+export default new AuthService()
