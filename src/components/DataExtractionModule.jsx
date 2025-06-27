@@ -44,12 +44,54 @@ function DataExtractionModule({ user, authService }) {
   }
 
   const getGHLConfiguration = async () => {
-    const { data, error } = await supabase
+    // First try to find by user_id
+    let { data, error } = await supabase
       .from('ghl_configurations')
       .select('*')
       .eq('user_id', user.userId)
       .eq('is_active', true)
       .single()
+
+    // If not found by user_id, try to find by location_id (for dev mode or unlinked configs)
+    if (error && error.code === 'PGRST116' && user.locationId) {
+      console.log('No config found by user_id, trying by location_id...')
+      
+      const { data: locationData, error: locationError } = await supabase
+        .from('ghl_configurations')
+        .select('*')
+        .eq('ghl_account_id', user.locationId)
+        .eq('is_active', true)
+        .single()
+
+      if (locationError && locationError.code !== 'PGRST116') {
+        throw new Error('Failed to load GHL configuration')
+      }
+
+      // If found by location but no user_id, link it to current user
+      if (locationData && !locationData.user_id) {
+        console.log('Found unlinked config, linking to current user...')
+        
+        const { data: updatedData, error: updateError } = await supabase
+          .from('ghl_configurations')
+          .update({ 
+            user_id: user.userId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', locationData.id)
+          .select()
+          .single()
+
+        if (updateError) {
+          console.error('Failed to link configuration:', updateError)
+          // Still return the original data even if linking fails
+          return locationData
+        }
+
+        return updatedData
+      }
+
+      return locationData
+    }
 
     if (error && error.code !== 'PGRST116') {
       throw new Error('Failed to load GHL configuration')
@@ -60,13 +102,76 @@ function DataExtractionModule({ user, authService }) {
 
   const loadCustomFields = async (config) => {
     try {
-      const ghlService = new GHLApiService(config.access_token)
-      const fields = await ghlService.getCustomFields(config.ghl_account_id)
-      setCustomFields(fields)
+      // In dev mode, use mock data if API call fails
+      if (user.devMode) {
+        try {
+          const ghlService = new GHLApiService(config.access_token)
+          const fields = await ghlService.getCustomFields(config.ghl_account_id)
+          setCustomFields(fields)
+        } catch (error) {
+          console.log('API call failed in dev mode, using mock data:', error.message)
+          setCustomFields(getMockCustomFields())
+        }
+      } else {
+        const ghlService = new GHLApiService(config.access_token)
+        const fields = await ghlService.getCustomFields(config.ghl_account_id)
+        setCustomFields(fields)
+      }
     } catch (error) {
       console.error('Error loading custom fields:', error)
-      throw new Error('Failed to load custom fields from GoHighLevel')
+      if (user.devMode) {
+        console.log('Using mock data due to error in dev mode')
+        setCustomFields(getMockCustomFields())
+      } else {
+        throw new Error('Failed to load custom fields from GoHighLevel')
+      }
     }
+  }
+
+  const getMockCustomFields = () => {
+    return [
+      {
+        id: "mock-text-field",
+        name: "Customer Name",
+        model: "contact",
+        fieldKey: "contact.customer_name",
+        placeholder: "Enter customer name",
+        dataType: "TEXT",
+        position: 50,
+        standard: false
+      },
+      {
+        id: "mock-phone-field",
+        name: "Phone Number",
+        model: "contact",
+        fieldKey: "contact.phone_number",
+        placeholder: "",
+        dataType: "PHONE",
+        position: 100,
+        standard: false
+      },
+      {
+        id: "mock-service-field",
+        name: "Service Type",
+        model: "contact",
+        fieldKey: "contact.service_type",
+        placeholder: "",
+        dataType: "SINGLE_OPTIONS",
+        position: 150,
+        standard: false,
+        picklistOptions: ["Consultation", "Installation", "Maintenance", "Repair"]
+      },
+      {
+        id: "mock-date-field",
+        name: "Appointment Date",
+        model: "contact",
+        fieldKey: "contact.appointment_date",
+        placeholder: "",
+        dataType: "DATE",
+        position: 200,
+        standard: false
+      }
+    ]
   }
 
   const loadExtractionFields = async (configId) => {
@@ -183,8 +288,20 @@ function DataExtractionModule({ user, authService }) {
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
         <h3 className="text-yellow-800 font-medium">No Configuration Found</h3>
         <p className="text-yellow-600 text-sm mt-1">
-          Please complete your GoHighLevel integration setup first.
+          No GoHighLevel configuration found for this location. 
+          {user.devMode && ' In dev mode, a configuration should be automatically created.'}
         </p>
+        <div className="mt-3 text-xs text-yellow-700">
+          <p>User ID: {user.userId}</p>
+          <p>Location ID: {user.locationId}</p>
+          <p>Dev Mode: {user.devMode ? 'Yes' : 'No'}</p>
+        </div>
+        <button
+          onClick={loadData}
+          className="mt-3 bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
+        >
+          Retry Loading
+        </button>
       </div>
     )
   }
@@ -197,6 +314,11 @@ function DataExtractionModule({ user, authService }) {
           <p className="text-sm text-gray-600 mt-1">
             Configure which custom fields should be automatically populated by AI during conversations.
           </p>
+          {user.devMode && (
+            <div className="mt-2 text-xs text-yellow-700 bg-yellow-50 px-2 py-1 rounded">
+              Dev Mode: Using configuration ID {ghlConfig.id}
+            </div>
+          )}
         </div>
 
         <div className="p-6">
