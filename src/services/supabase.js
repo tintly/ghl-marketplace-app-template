@@ -27,8 +27,13 @@ export async function getUserGHLConfigurations(userId) {
 
 // Helper function to check if user has any active configurations
 export async function hasActiveGHLConfiguration(userId) {
-  const configurations = await getUserGHLConfigurations(userId)
-  return configurations.length > 0
+  try {
+    const configurations = await getUserGHLConfigurations(userId)
+    return configurations.length > 0
+  } catch (error) {
+    console.error('Error checking GHL configurations:', error)
+    return false
+  }
 }
 
 // Helper function to get configuration by location ID

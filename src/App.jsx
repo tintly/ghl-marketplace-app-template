@@ -1,16 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { AuthService } from './services/AuthService'
-import { hasActiveGHLConfiguration } from './services/supabase'
 import DataExtractorApp from './components/DataExtractorApp'
 import OAuthCallback from './components/OAuthCallback'
-import InstallationGuide from './components/InstallationGuide'
 
 function App() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [hasConfiguration, setHasConfiguration] = useState(false)
   const [authService] = useState(new AuthService())
 
   useEffect(() => {
@@ -30,23 +27,6 @@ function App() {
       
       console.log('User authenticated successfully:', userData)
       console.log('Dev mode flag from auth:', userData.devMode)
-
-      // Check if we're in dev mode - this comes from the edge function response
-      const isDevMode = userData.devMode === true
-      console.log('Is dev mode:', isDevMode)
-
-      // In dev mode, we should have a configuration created by the edge function
-      // In production mode, check if user has any GHL configurations
-      if (userData.userId) {
-        try {
-          const hasConfig = await hasActiveGHLConfiguration(userData.userId)
-          setHasConfiguration(hasConfig)
-          console.log('User has GHL configuration:', hasConfig)
-        } catch (configError) {
-          console.log('Could not check GHL configuration:', configError.message)
-          setHasConfiguration(false)
-        }
-      }
       
     } catch (error) {
       console.error('Authentication error:', error)
@@ -101,12 +81,7 @@ function App() {
     )
   }
 
-  console.log('Final render decision:', { 
-    hasConfiguration, 
-    devMode: user?.devMode,
-    userId: user?.userId 
-  })
-
+  // Always show the main app - no installation guide logic
   return (
     <Router>
       <Routes>
@@ -116,11 +91,7 @@ function App() {
         />
         <Route 
           path="/" 
-          element={
-            hasConfiguration ? 
-              <DataExtractorApp user={user} authService={authService} isDevMode={user?.devMode} /> :
-              <InstallationGuide user={user} />
-          } 
+          element={<DataExtractorApp user={user} authService={authService} isDevMode={user?.devMode} />} 
         />
       </Routes>
     </Router>
