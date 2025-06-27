@@ -44,9 +44,13 @@ serve(async (req: Request) => {
       const supabase = createClient(supabaseUrl, supabaseServiceKey)
       
       // Create or update dev configuration
-      await ensureDevConfiguration(supabase, userContext)
+      const configCreated = await ensureDevConfiguration(supabase, userContext)
       
-      console.log('Dev user context created:', { userId: userContext.userId, email: userContext.email })
+      console.log('Dev user context created:', { 
+        userId: userContext.userId, 
+        email: userContext.email,
+        configCreated: !!configCreated
+      })
 
       return new Response(
         JSON.stringify({
@@ -132,9 +136,54 @@ serve(async (req: Request) => {
 
 async function ensureDevConfiguration(supabase: any, userContext: any) {
   try {
-    console.log('Creating/updating dev configuration for location:', userContext.locationId)
+    console.log('=== Starting dev configuration creation ===')
+    console.log('User context:', {
+      userId: userContext.userId,
+      locationId: userContext.locationId,
+      email: userContext.email
+    })
     
-    // Use upsert with the unique constraint on ghl_account_id
+    // First, check if configuration already exists
+    console.log('Checking for existing configuration...')
+    const { data: existingConfig, error: checkError } = await supabase
+      .from('ghl_configurations')
+      .select('*')
+      .eq('ghl_account_id', userContext.locationId)
+      .maybeSingle()
+
+    if (checkError) {
+      console.error('Error checking existing config:', checkError)
+    } else if (existingConfig) {
+      console.log('Found existing configuration:', existingConfig.id)
+      
+      // If exists but no user_id, update it
+      if (!existingConfig.user_id) {
+        console.log('Linking existing config to user...')
+        const { data: updatedConfig, error: updateError } = await supabase
+          .from('ghl_configurations')
+          .update({ 
+            user_id: userContext.userId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingConfig.id)
+          .select()
+          .single()
+
+        if (updateError) {
+          console.error('Failed to link config:', updateError)
+          return existingConfig
+        }
+        
+        console.log('Successfully linked config to user')
+        return updatedConfig
+      }
+      
+      console.log('Configuration already properly linked')
+      return existingConfig
+    }
+
+    // Create new configuration
+    console.log('Creating new dev configuration...')
     const configData = {
       user_id: userContext.userId,
       ghl_account_id: userContext.locationId,
@@ -142,7 +191,7 @@ async function ensureDevConfiguration(supabase: any, userContext: any) {
       client_secret: 'dev-client-secret',
       access_token: 'dev-access-token',
       refresh_token: 'dev-refresh-token',
-      token_expires_at: new Date(Date.now() + (365 * 24 * 60 * 60 * 1000)).toISOString(), // 1 year from now
+      token_expires_at: new Date(Date.now() + (365 * 24 * 60 * 60 * 1000)).toISOString(),
       business_name: 'Development Business',
       business_address: '123 Dev Street',
       business_phone: '+1-555-0123',
@@ -156,54 +205,58 @@ async function ensureDevConfiguration(supabase: any, userContext: any) {
       created_by: userContext.userId
     }
 
-    console.log('Attempting upsert with data:', {
+    console.log('Inserting configuration with data:', {
       user_id: configData.user_id,
       ghl_account_id: configData.ghl_account_id,
       business_name: configData.business_name
     })
 
-    // Use upsert to handle both insert and update cases
-    const { data, error } = await supabase
+    const { data: newConfig, error: insertError } = await supabase
       .from('ghl_configurations')
-      .upsert(configData, {
-        onConflict: 'ghl_account_id',
-        ignoreDuplicates: false
-      })
+      .insert(configData)
       .select()
+      .single()
 
-    if (error) {
-      console.error('Error upserting dev configuration:', error)
-      console.error('Error details:', {
-        code: error.code,
-        message: error.message,
-        details: error.details,
-        hint: error.hint
-      })
+    if (insertError) {
+      console.error('=== INSERT ERROR ===')
+      console.error('Error code:', insertError.code)
+      console.error('Error message:', insertError.message)
+      console.error('Error details:', insertError.details)
+      console.error('Error hint:', insertError.hint)
+      console.error('Full error:', JSON.stringify(insertError, null, 2))
       
-      // Try a direct insert as fallback
-      console.log('Attempting direct insert as fallback...')
-      const { data: insertData, error: insertError } = await supabase
-        .from('ghl_configurations')
-        .insert(configData)
-        .select()
-
-      if (insertError) {
-        console.error('Direct insert also failed:', insertError)
-        throw insertError
+      // Check if it's a unique constraint violation
+      if (insertError.code === '23505') {
+        console.log('Unique constraint violation - trying to fetch existing record')
+        const { data: existingAfterError, error: fetchError } = await supabase
+          .from('ghl_configurations')
+          .select('*')
+          .eq('ghl_account_id', userContext.locationId)
+          .single()
+          
+        if (!fetchError && existingAfterError) {
+          console.log('Found existing record after constraint violation')
+          return existingAfterError
+        }
       }
-
-      console.log('Direct insert succeeded:', insertData?.[0]?.id)
-      return insertData?.[0]
+      
+      throw insertError
     }
 
-    console.log('Dev configuration upserted successfully:', data?.[0]?.id)
-    return data?.[0]
+    console.log('=== SUCCESS ===')
+    console.log('Dev configuration created successfully:', newConfig.id)
+    return newConfig
+    
   } catch (error) {
-    console.error('Failed to ensure dev configuration:', error)
+    console.error('=== CONFIGURATION CREATION FAILED ===')
+    console.error('Error type:', typeof error)
+    console.error('Error message:', error.message)
+    console.error('Error stack:', error.stack)
     console.error('Full error object:', JSON.stringify(error, null, 2))
     
-    // Don't throw - we want auth to succeed even if config creation fails
-    console.log('Continuing with auth despite config creation failure')
+    // Return null instead of throwing to allow auth to continue
+    console.log('Returning null to allow auth to continue despite config failure')
+    return null
   }
 }
 
