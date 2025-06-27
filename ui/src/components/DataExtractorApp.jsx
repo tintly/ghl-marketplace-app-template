@@ -1,13 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 
 function DataExtractorApp({ user, authService }) {
-  const [isDevelopmentMode, setIsDevelopmentMode] = useState(false)
-
-  useEffect(() => {
-    // Check if we're in development mode
-    setIsDevelopmentMode(authService.isMockMode())
-  }, [authService])
-
   const getLocationDisplay = () => {
     if (user.activeLocation) {
       return `Location: ${user.activeLocation}`
@@ -26,20 +19,10 @@ function DataExtractorApp({ user, authService }) {
         <div className="user-info">
           <span className="user-name">{user.userName}</span>
           <span className="location-badge">{getLocationDisplay()}</span>
-          {isDevelopmentMode && (
-            <span className="dev-badge">DEV MODE</span>
-          )}
         </div>
       </header>
       
       <main className="app-content">
-        {isDevelopmentMode && (
-          <div className="dev-notice">
-            <h3>🔧 Development Mode Active</h3>
-            <p>Using mock authentication data. This banner will not appear in production.</p>
-          </div>
-        )}
-        
         <div className="welcome-section">
           <h2>Welcome to Your Conversation Data Extractor</h2>
           <p>Extract valuable insights from your GoHighLevel conversations automatically.</p>

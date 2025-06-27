@@ -4,38 +4,10 @@ export class AuthService {
     this.isAuthenticated = false
   }
 
-  // Check if we're in mock mode
-  isMockMode() {
-    return import.meta.env.VITE_MOCK_AUTH === 'true'
-  }
-
-  // Get mock user data from environment variables
-  getMockUserData() {
-    return {
-      userId: import.meta.env.VITE_MOCK_USER_ID,
-      companyId: import.meta.env.VITE_MOCK_COMPANY_ID,
-      role: import.meta.env.VITE_MOCK_ROLE,
-      type: import.meta.env.VITE_MOCK_TYPE,
-      activeLocation: import.meta.env.VITE_MOCK_ACTIVE_LOCATION,
-      userName: import.meta.env.VITE_MOCK_USER_NAME,
-      email: import.meta.env.VITE_MOCK_EMAIL,
-      locationId: import.meta.env.VITE_MOCK_ACTIVE_LOCATION || import.meta.env.VITE_MOCK_COMPANY_ID
-    }
-  }
-
-  // Get user data using GHL SSO or mock data
+  // Get user data using GHL SSO
   async getUserData() {
     try {
-      // If in mock mode, return mock data immediately
-      if (this.isMockMode()) {
-        console.log('🔧 Using mock authentication data for development')
-        const mockUser = this.getMockUserData()
-        this.currentUser = mockUser
-        this.isAuthenticated = true
-        return mockUser
-      }
-
-      // Production flow - get encrypted data from parent window
+      // Get encrypted data from parent window
       const encryptedUserData = await this.getEncryptedUserData()
 
       // Send encrypted data to Netlify Function
@@ -88,14 +60,6 @@ export class AuthService {
   // Verify access to a specific location
   async verifyLocationAccess(locationId) {
     try {
-      // If in mock mode, simulate access verification
-      if (this.isMockMode()) {
-        console.log('🔧 Mock mode: Simulating location access verification')
-        const mockUser = this.getMockUserData()
-        return locationId === mockUser.activeLocation || locationId === mockUser.companyId
-      }
-
-      // Production flow - use Netlify Function
       const encryptedUserData = await this.getEncryptedUserData()
 
       const response = await fetch(`/.netlify/functions/auth-verify-location/${locationId}`, {
