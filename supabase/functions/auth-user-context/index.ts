@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { md5 } from "../_shared/md5.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -126,7 +127,7 @@ async function decryptSSOData(key: string) {
     
     console.log('Salt length:', salt.length, 'Cipher text length:', cipherText.length)
     
-    // Key derivation using MD5 (matching PHP's approach)
+    // Key derivation using proper MD5
     let result = new Uint8Array(0)
     while (result.length < (keySize + ivSize)) {
       const toHash = new Uint8Array([
@@ -135,10 +136,8 @@ async function decryptSSOData(key: string) {
         ...salt
       ])
       
-      // Use Web Crypto API for MD5 (note: MD5 is not directly available, using SHA-256 as fallback)
-      // For production, you might need to implement MD5 manually or use a library
-      const hashResult = await crypto.subtle.digest('SHA-256', toHash)
-      const hashArray = new Uint8Array(hashResult).slice(0, 16) // Take first 16 bytes to simulate MD5
+      // Use proper MD5 hash
+      const hashArray = md5(toHash)
       
       const newResult = new Uint8Array(result.length + hashArray.length)
       newResult.set(result)

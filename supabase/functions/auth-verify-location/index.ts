@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { md5 } from "../_shared/md5.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -108,7 +109,7 @@ async function decryptSSOData(key: string) {
     const salt = rawEncryptedData.slice(saltSize, blockSize)
     const cipherText = rawEncryptedData.slice(blockSize)
     
-    // Key derivation using the same logic as auth-user-context
+    // Key derivation using proper MD5
     let result = new Uint8Array(0)
     while (result.length < (keySize + ivSize)) {
       const toHash = new Uint8Array([
@@ -117,8 +118,8 @@ async function decryptSSOData(key: string) {
         ...salt
       ])
       
-      const hashResult = await crypto.subtle.digest('SHA-256', toHash)
-      const hashArray = new Uint8Array(hashResult).slice(0, 16)
+      // Use proper MD5 hash
+      const hashArray = md5(toHash)
       
       const newResult = new Uint8Array(result.length + hashArray.length)
       newResult.set(result)

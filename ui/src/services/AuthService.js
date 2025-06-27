@@ -19,6 +19,8 @@ export class AuthService {
         throw new Error('VITE_SUPABASE_URL environment variable is not set')
       }
 
+      console.log('Making request to:', `${supabaseUrl}/functions/v1/auth-user-context`)
+
       const response = await fetch(`${supabaseUrl}/functions/v1/auth-user-context`, {
         method: 'POST',
         headers: {
