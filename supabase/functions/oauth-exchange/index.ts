@@ -14,8 +14,12 @@ interface TokenResponse {
   refresh_token: string
   scope: string
   userType: string
-  companyId?: string
   locationId?: string
+  companyId?: string
+  approvedLocations?: string[]
+  userId?: string
+  planId?: string
+  isBulkInstallation?: string
 }
 
 serve(async (req: Request) => {
@@ -66,13 +70,9 @@ serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Get user information from GHL API
-    console.log('Fetching user information...')
-    const userInfo = await getUserInfo(tokenResponse.access_token, tokenResponse.locationId || tokenResponse.companyId!)
-    
     // Save configuration to database
     console.log('Saving configuration to database...')
-    await saveGHLConfiguration(supabase, tokenResponse, userInfo, state)
+    await saveGHLConfiguration(supabase, tokenResponse, state)
 
     console.log('OAuth exchange completed successfully')
 
@@ -82,7 +82,8 @@ serve(async (req: Request) => {
         message: "Installation completed successfully",
         userType: tokenResponse.userType,
         locationId: tokenResponse.locationId,
-        companyId: tokenResponse.companyId
+        companyId: tokenResponse.companyId,
+        approvedLocations: tokenResponse.approvedLocations
       }),
       {
         status: 200,
@@ -111,73 +112,62 @@ serve(async (req: Request) => {
 })
 
 async function exchangeCodeForToken(code: string): Promise<TokenResponse> {
-  const clientId = Deno.env.get('GHL_APP_CLIENT_ID')
-  const clientSecret = Deno.env.get('GHL_APP_CLIENT_SECRET')
+  const clientId = Deno.env.get('GHL_MARKETPLACE_CLIENT_ID')
+  const clientSecret = Deno.env.get('GHL_MARKETPLACE_CLIENT_SECRET')
   const apiDomain = Deno.env.get('GHL_API_DOMAIN') || 'https://services.leadconnectorhq.com'
 
   if (!clientId || !clientSecret) {
-    throw new Error('GHL_APP_CLIENT_ID and GHL_APP_CLIENT_SECRET must be set')
+    throw new Error('GHL_MARKETPLACE_CLIENT_ID and GHL_MARKETPLACE_CLIENT_SECRET must be set')
   }
 
   const tokenUrl = `${apiDomain}/oauth/token`
+  const redirectUri = `${Deno.env.get('SUPABASE_URL')?.replace('/functions/v1', '') || 'http://localhost:3000'}/callback/oauth`
   
+  // Prepare form data as URLSearchParams (application/x-www-form-urlencoded)
   const params = new URLSearchParams({
     client_id: clientId,
     client_secret: clientSecret,
     grant_type: 'authorization_code',
-    code: code
+    code: code,
+    redirect_uri: redirectUri
   })
+
+  console.log('Making token exchange request to:', tokenUrl)
+  console.log('Using redirect_uri:', redirectUri)
 
   const response = await fetch(tokenUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json'
     },
     body: params.toString()
   })
 
   if (!response.ok) {
     const errorText = await response.text()
-    console.error('Token exchange failed:', errorText)
+    console.error('Token exchange failed:', {
+      status: response.status,
+      statusText: response.statusText,
+      body: errorText
+    })
     throw new Error(`Token exchange failed: ${response.status} - ${errorText}`)
   }
 
   const tokenData = await response.json()
   console.log('Token exchange successful:', { 
-    userType: tokenData.userType, 
-    hasRefreshToken: !!tokenData.refresh_token 
+    userType: tokenData.userType,
+    locationId: tokenData.locationId,
+    companyId: tokenData.companyId,
+    hasRefreshToken: !!tokenData.refresh_token,
+    approvedLocations: tokenData.approvedLocations?.length || 0
   })
   
   return tokenData
 }
 
-async function getUserInfo(accessToken: string, resourceId: string) {
-  const apiDomain = Deno.env.get('GHL_API_DOMAIN') || 'https://services.leadconnectorhq.com'
-  
-  try {
-    // Try to get user info - this endpoint works for both company and location tokens
-    const response = await fetch(`${apiDomain}/users/search?companyId=${resourceId}`, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Version': '2021-07-28'
-      }
-    })
-
-    if (response.ok) {
-      const userData = await response.json()
-      console.log('User info retrieved successfully')
-      return userData
-    } else {
-      console.log('Could not fetch user info, using basic data')
-      return { users: [] }
-    }
-  } catch (error) {
-    console.log('Error fetching user info:', error.message)
-    return { users: [] }
-  }
-}
-
-async function saveGHLConfiguration(supabase: any, tokenData: TokenResponse, userInfo: any, state: string | null) {
+async function saveGHLConfiguration(supabase: any, tokenData: TokenResponse, state: string | null) {
+  // Use locationId as primary identifier, fallback to companyId
   const resourceId = tokenData.locationId || tokenData.companyId!
   
   // Parse state parameter if it contains user information
@@ -191,18 +181,23 @@ async function saveGHLConfiguration(supabase: any, tokenData: TokenResponse, use
     }
   }
 
+  // Calculate token expiration time
+  const expiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString()
+
   // Prepare configuration data
   const configData = {
     user_id: userId, // This might be null if we don't have user context
     ghl_account_id: resourceId,
-    client_id: Deno.env.get('GHL_APP_CLIENT_ID'),
+    client_id: Deno.env.get('GHL_MARKETPLACE_CLIENT_ID'),
     access_token: tokenData.access_token,
     refresh_token: tokenData.refresh_token,
-    token_expires_at: new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString(),
-    business_name: 'GoHighLevel Business', // Default name, can be updated later
+    token_expires_at: expiresAt,
+    business_name: `GHL ${tokenData.userType} - ${resourceId}`, // Default name
     is_active: true,
     created_by: userId
   }
+
+  console.log('Saving configuration for resource:', resourceId)
 
   // Insert or update configuration
   const { data, error } = await supabase
@@ -218,6 +213,6 @@ async function saveGHLConfiguration(supabase: any, tokenData: TokenResponse, use
     throw new Error(`Failed to save configuration: ${error.message}`)
   }
 
-  console.log('Configuration saved successfully:', data)
+  console.log('Configuration saved successfully for:', resourceId)
   return data
 }

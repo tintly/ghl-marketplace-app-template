@@ -4,9 +4,12 @@ function InstallationGuide({ user }) {
   const [copied, setCopied] = useState(false)
   
   const redirectUri = `${window.location.origin}/callback/oauth`
-  const clientId = 'your-ghl-client-id' // This should come from your GHL app settings
   
-  const authUrl = `https://marketplace.gohighlevel.com/oauth/chooselocation?response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&client_id=${clientId}&scope=conversations.readonly contacts.readonly&state=${encodeURIComponent(JSON.stringify({ userId: user?.userId }))}`
+  // Note: The actual client ID should come from your GHL marketplace app settings
+  // This is just a placeholder - you'll need to replace it with your real client ID
+  const clientId = 'your-ghl-marketplace-client-id'
+  
+  const authUrl = `https://marketplace.gohighlevel.com/oauth/chooselocation?response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&client_id=${clientId}&scope=conversations.readonly contacts.readonly locations.readonly&state=${encodeURIComponent(JSON.stringify({ userId: user?.userId }))}`
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text)
@@ -42,10 +45,10 @@ function InstallationGuide({ user }) {
 
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Step 2: Configure Your App Settings
+              Step 2: Configure Your Marketplace App Settings
             </h3>
             <p className="text-gray-700 mb-4">
-              In your GoHighLevel app settings, make sure to set the following redirect URI:
+              In your GoHighLevel marketplace app settings, make sure to set the following redirect URI:
             </p>
             <div className="bg-white border rounded-md p-3 font-mono text-sm">
               <div className="flex items-center justify-between">
@@ -62,7 +65,7 @@ function InstallationGuide({ user }) {
 
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <h3 className="text-lg font-semibold text-yellow-900 mb-2">
-              Required Permissions
+              Required OAuth Scopes
             </h3>
             <p className="text-yellow-800 mb-2">
               This app requires the following OAuth scopes:
@@ -81,9 +84,19 @@ function InstallationGuide({ user }) {
             <div className="text-green-800 space-y-2">
               <p>1. You'll be redirected to GoHighLevel to authorize the app</p>
               <p>2. Choose the location you want to integrate with</p>
-              <p>3. The app will receive access tokens and store them securely</p>
+              <p>3. The app will receive access tokens and store them securely in Supabase</p>
               <p>4. You'll be redirected back here to start using the data extractor</p>
             </div>
+          </div>
+
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-red-900 mb-2">
+              Important Setup Note
+            </h3>
+            <p className="text-red-800">
+              Make sure to replace <code className="bg-red-100 px-1 rounded">your-ghl-marketplace-client-id</code> 
+              in the installation link with your actual GoHighLevel marketplace app client ID.
+            </p>
           </div>
         </div>
       </div>
