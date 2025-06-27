@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react'
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { AuthService } from './services/AuthService'
+import { hasActiveGHLConfiguration } from './services/supabase'
 import DataExtractorApp from './components/DataExtractorApp'
+import OAuthCallback from './components/OAuthCallback'
+import InstallationGuide from './components/InstallationGuide'
 
 function App() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [hasConfiguration, setHasConfiguration] = useState(false)
   const [authService] = useState(new AuthService())
 
   useEffect(() => {
@@ -24,6 +29,19 @@ function App() {
       setUser(userData)
       
       console.log('User authenticated successfully:', userData)
+
+      // Check if user has any GHL configurations
+      if (userData.userId) {
+        try {
+          const hasConfig = await hasActiveGHLConfiguration(userData.userId)
+          setHasConfiguration(hasConfig)
+          console.log('User has GHL configuration:', hasConfig)
+        } catch (configError) {
+          console.log('Could not check GHL configuration:', configError.message)
+          setHasConfiguration(false)
+        }
+      }
+      
     } catch (error) {
       console.error('Authentication error:', error)
       setError(`Authentication failed: ${error.message}`)
@@ -75,7 +93,24 @@ function App() {
     )
   }
 
-  return <DataExtractorApp user={user} authService={authService} />
+  return (
+    <Router>
+      <Routes>
+        <Route 
+          path="/callback/oauth" 
+          element={<OAuthCallback />} 
+        />
+        <Route 
+          path="/" 
+          element={
+            hasConfiguration ? 
+              <DataExtractorApp user={user} authService={authService} /> :
+              <InstallationGuide user={user} />
+          } 
+        />
+      </Routes>
+    </Router>
+  )
 }
 
 export default App
