@@ -1,6 +1,6 @@
 import React from 'react'
 
-function DataExtractorApp({ user, authService }) {
+function DataExtractorApp({ user, authService, isDevMode = false }) {
   const getLocationDisplay = () => {
     if (user.activeLocation) {
       return `Location: ${user.activeLocation}`
@@ -19,6 +19,11 @@ function DataExtractorApp({ user, authService }) {
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                 {getLocationDisplay()}
               </span>
+              {isDevMode && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                  DEV MODE
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -32,6 +37,14 @@ function DataExtractorApp({ user, authService }) {
           <p className="text-lg text-gray-600">
             Extract valuable insights from your GoHighLevel conversations automatically.
           </p>
+          {isDevMode && (
+            <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p className="text-sm text-yellow-800">
+                <strong>Development Mode:</strong> You're running in development mode with mock user data. 
+                The app is configured to bypass GHL SSO authentication for testing purposes.
+              </p>
+            </div>
+          )}
         </div>
         
         <div className="bg-white rounded-lg shadow">

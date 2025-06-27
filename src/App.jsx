@@ -11,6 +11,7 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [hasConfiguration, setHasConfiguration] = useState(false)
+  const [isDevMode, setIsDevMode] = useState(false)
   const [authService] = useState(new AuthService())
 
   useEffect(() => {
@@ -30,15 +31,26 @@ function App() {
       
       console.log('User authenticated successfully:', userData)
 
+      // Check if we're in dev mode
+      const devMode = userData.devMode === true
+      setIsDevMode(devMode)
+
       // Check if user has any GHL configurations
       if (userData.userId) {
         try {
-          const hasConfig = await hasActiveGHLConfiguration(userData.userId)
-          setHasConfiguration(hasConfig)
-          console.log('User has GHL configuration:', hasConfig)
+          // In dev mode, assume we have configuration to skip installation guide
+          if (devMode) {
+            console.log('Dev mode enabled - skipping configuration check')
+            setHasConfiguration(true)
+          } else {
+            const hasConfig = await hasActiveGHLConfiguration(userData.userId)
+            setHasConfiguration(hasConfig)
+            console.log('User has GHL configuration:', hasConfig)
+          }
         } catch (configError) {
           console.log('Could not check GHL configuration:', configError.message)
-          setHasConfiguration(false)
+          // In dev mode, default to having configuration
+          setHasConfiguration(devMode)
         }
       }
       
@@ -61,7 +73,9 @@ function App() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading your data extractor...</p>
-          <p className="text-sm text-gray-500 mt-2">Connecting to GoHighLevel...</p>
+          <p className="text-sm text-gray-500 mt-2">
+            {isDevMode ? 'Running in development mode...' : 'Connecting to GoHighLevel...'}
+          </p>
         </div>
       </div>
     )
@@ -104,7 +118,7 @@ function App() {
           path="/" 
           element={
             hasConfiguration ? 
-              <DataExtractorApp user={user} authService={authService} /> :
+              <DataExtractorApp user={user} authService={authService} isDevMode={isDevMode} /> :
               <InstallationGuide user={user} />
           } 
         />
