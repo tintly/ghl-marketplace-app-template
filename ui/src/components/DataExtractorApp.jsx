@@ -1,44 +1,94 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 
-const DataExtractorApp = () => {
-  const [isLoading, setIsLoading] = useState(false)
+function DataExtractorApp({ user, authService }) {
+  const getLocationDisplay = () => {
+    if (user.activeLocation) {
+      return `Location: ${user.activeLocation}`
+    }
+    return `Company: ${user.companyId}`
+  }
+
+  const getContextTypeDisplay = () => {
+    return user.type === 'agency' ? 'Agency User' : 'Location User'
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4">
-        <header className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            GHL Data Extractor
-          </h1>
-          <p className="text-gray-600">
-            Extract and manage data from GoHighLevel
-          </p>
-        </header>
-
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="text-center">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">
-              Welcome to GHL Data Extractor
-            </h2>
-            <p className="text-gray-600 mb-6">
-              This application helps you extract and manage data from GoHighLevel using Supabase Edge Functions.
-            </p>
+    <div className="app-container">
+      <header className="app-header">
+        <h1>Data Extractor</h1>
+        <div className="user-info">
+          <span className="user-name">{user.userName}</span>
+          <span className="location-badge">{getLocationDisplay()}</span>
+          {authService.isDev() && (
+            <span className="dev-badge">DEV MODE</span>
+          )}
+        </div>
+      </header>
+      
+      <main className="app-content">
+        <div className="welcome-section">
+          <h2>Welcome to Your Conversation Data Extractor</h2>
+          <p>Extract valuable insights from your GoHighLevel conversations automatically.</p>
+          
+          <div className="stats-grid">
+            <div className="stat-card">
+              <h3>User ID</h3>
+              <p className="stat-value">{user.userId}</p>
+            </div>
             
-            {isLoading ? (
-              <div className="flex justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              </div>
-            ) : (
-              <button
-                onClick={() => setIsLoading(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
-              >
-                Get Started
-              </button>
-            )}
+            <div className="stat-card">
+              <h3>Location ID</h3>
+              <p className="stat-value">{user.locationId}</p>
+            </div>
+            
+            <div className="stat-card">
+              <h3>User Role</h3>
+              <p className="stat-value">{user.role}</p>
+            </div>
+            
+            <div className="stat-card">
+              <h3>Context Type</h3>
+              <p className="stat-value">{getContextTypeDisplay()}</p>
+            </div>
+
+            <div className="stat-card">
+              <h3>Email</h3>
+              <p className="stat-value">{user.email}</p>
+            </div>
+
+            <div className="stat-card">
+              <h3>Company ID</h3>
+              <p className="stat-value">{user.companyId}</p>
+            </div>
           </div>
         </div>
-      </div>
+        
+        <div className="features-section">
+          <h3>Available Features</h3>
+          <div className="feature-grid">
+            <div className="feature-card">
+              <div className="feature-icon">🔍</div>
+              <h4>Data Extraction</h4>
+              <p>Set up custom fields to extract from conversations</p>
+              <button className="feature-button">Configure</button>
+            </div>
+            
+            <div className="feature-card">
+              <div className="feature-icon">⚙️</div>
+              <h4>Rules & Triggers</h4>
+              <p>Define when and how data should be extracted</p>
+              <button className="feature-button">Manage</button>
+            </div>
+            
+            <div className="feature-card">
+              <div className="feature-icon">📊</div>
+              <h4>Analytics</h4>
+              <p>View extraction performance and insights</p>
+              <button className="feature-button">View Reports</button>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   )
 }
