@@ -4,7 +4,7 @@ export class AuthService {
     this.isAuthenticated = false
   }
 
-  // Get user data using GHL SSO or development mode
+  // Get user data using GHL SSO or standalone mode
   async getUserData() {
     try {
       console.log('Starting authentication process...')
@@ -34,8 +34,8 @@ export class AuthService {
         encryptedUserData = await this.getEncryptedUserData()
         console.log('Encrypted user data received from GHL SSO')
       } catch (ssoError) {
-        console.log('GHL SSO not available, proceeding with Edge Function call:', ssoError.message)
-        // Don't throw error here - let the Edge Function handle DEV_MODE
+        console.log('GHL SSO not available:', ssoError.message)
+        throw new Error('GHL SSO authentication required')
       }
 
       // Use Supabase Edge Function for SSO authentication
@@ -145,7 +145,8 @@ export class AuthService {
       try {
         encryptedUserData = await this.getEncryptedUserData()
       } catch (error) {
-        console.log('Using development mode for location verification')
+        console.log('Cannot verify location access without SSO data')
+        return false
       }
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL

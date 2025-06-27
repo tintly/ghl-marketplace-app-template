@@ -64,30 +64,11 @@ function DataExtractionModule({ user, authService }) {
       }
     }
     
-    // Check if it's a dev token (which shouldn't be used for real account)
-    if (config.access_token.startsWith('dev-')) {
-      return {
-        isValid: false,
-        status: 'dev_token_detected',
-        message: 'Development token detected. Please reinstall the app to get real GHL tokens.',
-        severity: 'error'
-      }
-    }
-    
     if (!config.refresh_token) {
       return {
         isValid: false,
         status: 'missing_refresh_token',
         message: 'Refresh token is missing. Please reinstall the app.',
-        severity: 'error'
-      }
-    }
-    
-    if (config.refresh_token.startsWith('dev-')) {
-      return {
-        isValid: false,
-        status: 'dev_refresh_token_detected',
-        message: 'Development refresh token detected. Please reinstall the app to get real GHL tokens.',
         severity: 'error'
       }
     }
@@ -127,7 +108,6 @@ function DataExtractionModule({ user, authService }) {
     console.log('User context:', {
       userId: user.userId,
       locationId: user.locationId,
-      devMode: user.devMode,
       configFound: user.configFound,
       configId: user.configId,
       tokenStatus: user.tokenStatus
@@ -158,8 +138,7 @@ function DataExtractionModule({ user, authService }) {
             businessName: locationData.business_name,
             hasAccessToken: !!locationData.access_token,
             hasRefreshToken: !!locationData.refresh_token,
-            tokenExpiry: locationData.token_expires_at,
-            isDevToken: locationData.access_token?.startsWith('dev-')
+            tokenExpiry: locationData.token_expires_at
           })
           
           // If found but no user_id, link it to current user
@@ -233,49 +212,8 @@ function DataExtractionModule({ user, authService }) {
       setCustomFields(fields)
     } catch (error) {
       console.error('Error loading custom fields:', error)
-      if (user.devMode) {
-        console.log('Using mock data due to error in dev mode')
-        setCustomFields(getMockCustomFields())
-      } else {
-        throw new Error('Failed to load custom fields from GoHighLevel')
-      }
+      throw new Error('Failed to load custom fields from GoHighLevel')
     }
-  }
-
-  const getMockCustomFields = () => {
-    return [
-      {
-        id: "mock-text-field",
-        name: "Customer Name",
-        model: "contact",
-        fieldKey: "contact.customer_name",
-        placeholder: "Enter customer name",
-        dataType: "TEXT",
-        position: 50,
-        standard: false
-      },
-      {
-        id: "mock-phone-field",
-        name: "Phone Number",
-        model: "contact",
-        fieldKey: "contact.phone_number",
-        placeholder: "",
-        dataType: "PHONE",
-        position: 100,
-        standard: false
-      },
-      {
-        id: "mock-service-field",
-        name: "Service Type",
-        model: "contact",
-        fieldKey: "contact.service_type",
-        placeholder: "",
-        dataType: "SINGLE_OPTIONS",
-        position: 150,
-        standard: false,
-        picklistOptions: ["Consultation", "Installation", "Maintenance", "Repair"]
-      }
-    ]
   }
 
   const loadExtractionFields = async (configId) => {
@@ -402,7 +340,6 @@ function DataExtractionModule({ user, authService }) {
         <div className="mt-3 text-xs text-yellow-700 space-y-1">
           <p><strong>User ID:</strong> {user.userId}</p>
           <p><strong>Location ID:</strong> {user.locationId}</p>
-          <p><strong>Dev Mode:</strong> {user.devMode ? 'Yes' : 'No'}</p>
           <p><strong>Config Found:</strong> {user.configFound ? 'Yes' : 'No'}</p>
           <p><strong>Config ID:</strong> {user.configId || 'None'}</p>
           <p><strong>Token Status:</strong> {user.tokenStatus || 'Unknown'}</p>
@@ -466,11 +403,6 @@ function DataExtractionModule({ user, authService }) {
           <p className="text-sm text-gray-600 mt-1">
             Configure which custom fields should be automatically populated by AI during conversations.
           </p>
-          {user.devMode && (
-            <div className="mt-2 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded">
-              Dev Mode: Using configuration ID {ghlConfig.id} for location {ghlConfig.ghl_account_id}
-            </div>
-          )}
           {tokenValidation && tokenValidation.isValid && (
             <div className="mt-2 text-xs text-green-700 bg-green-50 px-2 py-1 rounded">
               Token Status: {tokenValidation.message}

@@ -28,12 +28,11 @@ function AppContent() {
       
       console.log('Initializing app...')
       
-      // Get user data from GHL SSO or dev mode
+      // Get user data from GHL SSO or standalone mode
       const userData = await authService.getUserData()
       setUser(userData)
       
       console.log('User authenticated successfully:', userData)
-      console.log('Dev mode flag from auth:', userData.devMode)
       
     } catch (error) {
       console.error('Authentication error:', error)
@@ -60,7 +59,7 @@ function AppContent() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading your data extractor...</p>
           <p className="text-sm text-gray-500 mt-2">
-            {user?.devMode ? 'Running in development mode...' : 'Connecting to GoHighLevel...'}
+            {user?.standaloneMode ? 'Running in standalone mode...' : 'Connecting to GoHighLevel...'}
           </p>
         </div>
       </div>
@@ -95,7 +94,7 @@ function AppContent() {
 
   return (
     <Routes>
-      <Route path="/*" element={<DataExtractorApp user={user} authService={authService} isDevMode={user?.devMode} />} />
+      <Route path="/*" element={<DataExtractorApp user={user} authService={authService} />} />
     </Routes>
   )
 }

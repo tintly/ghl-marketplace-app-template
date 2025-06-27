@@ -5,7 +5,7 @@ import DataExtractionModule from './DataExtractionModule'
 import InstallationGuide from './InstallationGuide'
 import Navigation from './Navigation'
 
-function DataExtractorApp({ user, authService, isDevMode = false }) {
+function DataExtractorApp({ user, authService }) {
   const getLocationDisplay = () => {
     if (user.activeLocation) {
       return `Location: ${user.activeLocation}`
@@ -14,7 +14,6 @@ function DataExtractorApp({ user, authService, isDevMode = false }) {
   }
 
   const getUserModeDisplay = () => {
-    if (isDevMode) return 'DEV MODE'
     if (user.standaloneMode) return 'STANDALONE'
     return null
   }
@@ -29,18 +28,18 @@ function DataExtractorApp({ user, authService, isDevMode = false }) {
     window.location.reload()
   }
 
-  // Check if user needs OAuth installation (has dev tokens or missing tokens)
+  // Check if user needs OAuth installation (has missing tokens)
   const needsOAuthInstallation = () => {
     if (user.standaloneMode) return false // Already installed via OAuth
     
     // Check token validation from user context
     if (user.tokenValidation) {
       return !user.tokenValidation.isValid && 
-             ['missing_access_token', 'dev_token_detected', 'dev_refresh_token_detected'].includes(user.tokenValidation.status)
+             ['missing_access_token', 'missing_refresh_token'].includes(user.tokenValidation.status)
     }
     
     // Fallback check based on token status
-    return user.tokenStatus === 'missing' || user.tokenStatus === 'dev_token_detected'
+    return user.tokenStatus === 'missing'
   }
 
   return (
@@ -55,9 +54,7 @@ function DataExtractorApp({ user, authService, isDevMode = false }) {
                 {getLocationDisplay()}
               </span>
               {getUserModeDisplay() && (
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  isDevMode ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
-                }`}>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                   {getUserModeDisplay()}
                 </span>
               )}
@@ -82,7 +79,7 @@ function DataExtractorApp({ user, authService, isDevMode = false }) {
         {!needsOAuthInstallation() && <Navigation />}
         
         <Routes>
-          <Route path="/" element={<DashboardHome isDevMode={isDevMode} user={user} needsOAuth={needsOAuthInstallation()} />} />
+          <Route path="/" element={<DashboardHome user={user} needsOAuth={needsOAuthInstallation()} />} />
           <Route path="/data-extraction" element={
             needsOAuthInstallation() ? (
               <div className="text-center py-8">
@@ -98,7 +95,7 @@ function DataExtractorApp({ user, authService, isDevMode = false }) {
   )
 }
 
-function DashboardHome({ isDevMode, user, needsOAuth }) {
+function DashboardHome({ user, needsOAuth }) {
   if (needsOAuth) {
     return (
       <div className="space-y-8">
@@ -123,14 +120,6 @@ function DashboardHome({ isDevMode, user, needsOAuth }) {
         <p className="text-lg text-gray-600">
           Extract valuable insights from your GoHighLevel conversations automatically.
         </p>
-        {isDevMode && (
-          <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <p className="text-sm text-yellow-800">
-              <strong>Development Mode:</strong> You're running in development mode with real GHL account integration. 
-              Make sure you have proper OAuth tokens installed for full functionality.
-            </p>
-          </div>
-        )}
         {user.standaloneMode && (
           <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
             <p className="text-sm text-green-800">

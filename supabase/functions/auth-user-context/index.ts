@@ -1,11 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { md5 } from "../_shared/md5.ts"
-import { 
-  DEV_MODE, 
-  getDevUserContext, 
-  validateRealAccountTokens,
-  shouldCreateDevConfig
-} from "../_shared/dev-config.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -36,71 +30,6 @@ Deno.serve(async (req: Request) => {
 
   try {
     console.log('=== AUTH REQUEST START ===')
-    
-    // Check if we're in development mode
-    if (DEV_MODE) {
-      console.log('Development mode enabled - using real GHL account with proper token validation')
-      
-      const userContext = getDevUserContext()
-      
-      // Initialize Supabase client
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-      
-      if (!supabaseUrl || !supabaseServiceKey) {
-        console.error('Missing Supabase environment variables')
-        return new Response(
-          JSON.stringify({
-            success: true,
-            user: {
-              ...userContext,
-              devMode: true,
-              configError: 'Missing Supabase environment variables'
-            }
-          }),
-          {
-            status: 200,
-            headers: {
-              "Content-Type": "application/json",
-              ...corsHeaders,
-            },
-          }
-        )
-      }
-      
-      const supabase = createClient(supabaseUrl, supabaseServiceKey)
-      
-      // Check for existing configuration with real tokens
-      const configResult = await validateRealAccountConfiguration(supabase, userContext)
-      
-      console.log('=== AUTH REQUEST COMPLETE ===')
-      console.log('Final result:', {
-        userId: userContext.userId,
-        email: userContext.email,
-        configResult: configResult ? 'Found' : 'Missing'
-      })
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          user: {
-            ...userContext,
-            devMode: true,
-            configFound: !!configResult,
-            configId: configResult?.id || null,
-            tokenStatus: configResult?.tokenStatus || 'missing',
-            tokenValidation: configResult?.tokenValidation || null
-          }
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            ...corsHeaders,
-          },
-        }
-      )
-    }
     
     // Production mode - handle SSO decryption
     const { key } = await req.json()
@@ -145,7 +74,7 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     
     // Validate production configuration
-    const configResult = await validateRealAccountConfiguration(supabase, userContext)
+    const configResult = await validateConfiguration(supabase, userContext)
 
     return new Response(
       JSON.stringify({
@@ -186,9 +115,9 @@ Deno.serve(async (req: Request) => {
   }
 })
 
-async function validateRealAccountConfiguration(supabase: any, userContext: any) {
+async function validateConfiguration(supabase: any, userContext: any) {
   try {
-    console.log('=== REAL ACCOUNT CONFIGURATION VALIDATION ===')
+    console.log('=== CONFIGURATION VALIDATION ===')
     console.log('User context:', {
       userId: userContext.userId,
       locationId: userContext.locationId,
@@ -214,12 +143,11 @@ async function validateRealAccountConfiguration(supabase: any, userContext: any)
         businessName: existingConfig.business_name,
         hasAccessToken: !!existingConfig.access_token,
         hasRefreshToken: !!existingConfig.refresh_token,
-        tokenExpiry: existingConfig.token_expires_at,
-        isDevToken: existingConfig.access_token?.startsWith('dev-')
+        tokenExpiry: existingConfig.token_expires_at
       })
       
-      // Validate token status using the real account validation
-      const tokenValidation = validateRealAccountTokens(existingConfig)
+      // Validate token status
+      const tokenValidation = validateTokenStatus(existingConfig)
       console.log('Token validation result:', tokenValidation)
       
       // If configuration exists but no user_id, link it
@@ -279,6 +207,55 @@ async function validateRealAccountConfiguration(supabase: any, userContext: any)
         severity: 'error'
       }
     }
+  }
+}
+
+function validateTokenStatus(config: any) {
+  if (!config.access_token) {
+    return {
+      isValid: false,
+      status: 'missing_access_token',
+      message: 'Access token is missing. Please reinstall the app.',
+      severity: 'error'
+    }
+  }
+  
+  if (!config.refresh_token) {
+    return {
+      isValid: false,
+      status: 'missing_refresh_token',
+      message: 'Refresh token is missing. Please reinstall the app.',
+      severity: 'error'
+    }
+  }
+  
+  if (config.token_expires_at) {
+    const expiryDate = new Date(config.token_expires_at)
+    const now = new Date()
+    const hoursUntilExpiry = (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60)
+    
+    if (hoursUntilExpiry < 0) {
+      return {
+        isValid: false,
+        status: 'expired',
+        message: 'Access token has expired. The system will attempt to refresh it automatically.',
+        severity: 'warning'
+      }
+    } else if (hoursUntilExpiry < 24) {
+      return {
+        isValid: true,
+        status: 'expiring_soon',
+        message: `Access token expires in ${Math.round(hoursUntilExpiry)} hours.`,
+        severity: 'info'
+      }
+    }
+  }
+  
+  return {
+    isValid: true,
+    status: 'valid',
+    message: 'Access token is valid and ready for use.',
+    severity: 'success'
   }
 }
 
