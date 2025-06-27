@@ -108,13 +108,38 @@ function DataExtractionModule({ user, authService }) {
     console.log('User context:', {
       userId: user.userId,
       locationId: user.locationId,
-      configFound: user.configFound,
+      configValidated: user.configValidated,
       configId: user.configId,
       tokenStatus: user.tokenStatus
     })
 
     try {
-      // Try to find by ghl_account_id (location ID)
+      // Strategy 1: If we have a configId from auth, try to fetch it directly
+      if (user.configId) {
+        console.log('Attempting direct config fetch by ID:', user.configId)
+        
+        const { data: directConfig, error: directError } = await supabase
+          .from('ghl_configurations')
+          .select('*')
+          .eq('id', user.configId)
+          .eq('is_active', true)
+          .maybeSingle()
+
+        if (directError) {
+          console.error('Error fetching config by ID:', directError)
+        } else if (directConfig) {
+          console.log('Found config by direct ID lookup:', {
+            id: directConfig.id,
+            userId: directConfig.user_id,
+            businessName: directConfig.business_name,
+            hasAccessToken: !!directConfig.access_token,
+            hasRefreshToken: !!directConfig.refresh_token
+          })
+          return directConfig
+        }
+      }
+
+      // Strategy 2: Try to find by ghl_account_id (location ID)
       if (user.locationId) {
         console.log('Finding config by ghl_account_id:', user.locationId)
         
@@ -169,7 +194,7 @@ function DataExtractionModule({ user, authService }) {
         }
       }
 
-      // Try to find by user_id as fallback
+      // Strategy 3: Try to find by user_id as fallback
       console.log('Finding config by user_id:', user.userId)
       
       const { data: userData, error: userError } = await supabase
@@ -302,7 +327,8 @@ function DataExtractionModule({ user, authService }) {
   }
 
   const handleReinstallApp = () => {
-    window.open('https://marketplace.gohighlevel.com', '_blank')
+    const EXACT_INSTALL_URL = 'https://marketplace.leadconnectorhq.com/oauth/chooselocation?response_type=code&redirect_uri=https%3A%2F%2Feloquent-moonbeam-8a5386.netlify.app%2Foauth%2Fcallback&client_id=685c90c16a67491ca1f5f7de-mcf0wxc1&scope=conversations.readonly+conversations%2Fmessage.readonly+conversations%2Freports.readonly+contacts.readonly+contacts.write+locations.readonly+locations%2FcustomFields.readonly+locations%2FcustomFields.write+oauth.readonly+oauth.write'
+    window.open(EXACT_INSTALL_URL, '_blank')
   }
 
   if (loading) {
@@ -332,15 +358,14 @@ function DataExtractionModule({ user, authService }) {
   if (!ghlConfig) {
     return (
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <h3 className="text-yellow-800 font-medium">No Configuration Found</h3>
+        <h3 className="text-yellow-800 font-medium">Configuration Issue</h3>
         <p className="text-yellow-600 text-sm mt-1">
-          No GoHighLevel configuration found for this location. 
-          Please install the app via the GoHighLevel marketplace to get proper access tokens.
+          {configError || 'Unable to load GoHighLevel configuration.'}
         </p>
         <div className="mt-3 text-xs text-yellow-700 space-y-1">
           <p><strong>User ID:</strong> {user.userId}</p>
           <p><strong>Location ID:</strong> {user.locationId}</p>
-          <p><strong>Config Found:</strong> {user.configFound ? 'Yes' : 'No'}</p>
+          <p><strong>Config Validated:</strong> {user.configValidated ? 'Yes' : 'No'}</p>
           <p><strong>Config ID:</strong> {user.configId || 'None'}</p>
           <p><strong>Token Status:</strong> {user.tokenStatus || 'Unknown'}</p>
           {configError && (
@@ -358,7 +383,7 @@ function DataExtractionModule({ user, authService }) {
             onClick={handleReinstallApp}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
           >
-            Install App
+            Reinstall App
           </button>
         </div>
       </div>
@@ -403,6 +428,9 @@ function DataExtractionModule({ user, authService }) {
           <p className="text-sm text-gray-600 mt-1">
             Configure which custom fields should be automatically populated by AI during conversations.
           </p>
+          <div className="mt-2 text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded">
+            Config ID: {ghlConfig.id} | Location: {ghlConfig.ghl_account_id}
+          </div>
           {tokenValidation && tokenValidation.isValid && (
             <div className="mt-2 text-xs text-green-700 bg-green-50 px-2 py-1 rounded">
               Token Status: {tokenValidation.message}
