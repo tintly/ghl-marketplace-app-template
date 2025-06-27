@@ -2,6 +2,7 @@ import React from 'react'
 import { Routes, Route } from 'react-router-dom'
 import UserLinking from './UserLinking'
 import DataExtractionModule from './DataExtractionModule'
+import InstallationGuide from './InstallationGuide'
 import Navigation from './Navigation'
 
 function DataExtractorApp({ user, authService, isDevMode = false }) {
@@ -21,6 +22,25 @@ function DataExtractorApp({ user, authService, isDevMode = false }) {
   const handleLinkingComplete = () => {
     // Refresh the page or update state to reflect the linked configuration
     window.location.reload()
+  }
+
+  const handleInstallationComplete = () => {
+    // Refresh the page to reload with new tokens
+    window.location.reload()
+  }
+
+  // Check if user needs OAuth installation (has dev tokens or missing tokens)
+  const needsOAuthInstallation = () => {
+    if (user.standaloneMode) return false // Already installed via OAuth
+    
+    // Check token validation from user context
+    if (user.tokenValidation) {
+      return !user.tokenValidation.isValid && 
+             ['missing_access_token', 'dev_token_detected', 'dev_refresh_token_detected'].includes(user.tokenValidation.status)
+    }
+    
+    // Fallback check based on token status
+    return user.tokenStatus === 'missing' || user.tokenStatus === 'dev_token_detected'
   }
 
   return (
@@ -47,17 +67,30 @@ function DataExtractorApp({ user, authService, isDevMode = false }) {
       </header>
       
       <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        {/* Show installation guide if OAuth setup is needed */}
+        {needsOAuthInstallation() && (
+          <div className="mb-8">
+            <InstallationGuide user={user} onInstallationComplete={handleInstallationComplete} />
+          </div>
+        )}
+        
         {/* User Linking Component - shows if there are unlinked configurations */}
-        {!user.standaloneMode && (
+        {!user.standaloneMode && !needsOAuthInstallation() && (
           <UserLinking user={user} onLinkingComplete={handleLinkingComplete} />
         )}
         
-        <Navigation />
+        {!needsOAuthInstallation() && <Navigation />}
         
         <Routes>
-          <Route path="/" element={<DashboardHome isDevMode={isDevMode} user={user} />} />
+          <Route path="/" element={<DashboardHome isDevMode={isDevMode} user={user} needsOAuth={needsOAuthInstallation()} />} />
           <Route path="/data-extraction" element={
-            <DataExtractionModule user={user} authService={authService} />
+            needsOAuthInstallation() ? (
+              <div className="text-center py-8">
+                <p className="text-gray-600">Please complete the OAuth installation first.</p>
+              </div>
+            ) : (
+              <DataExtractionModule user={user} authService={authService} />
+            )
           } />
         </Routes>
       </main>
@@ -65,7 +98,22 @@ function DataExtractorApp({ user, authService, isDevMode = false }) {
   )
 }
 
-function DashboardHome({ isDevMode, user }) {
+function DashboardHome({ isDevMode, user, needsOAuth }) {
+  if (needsOAuth) {
+    return (
+      <div className="space-y-8">
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">
+            Setup Required
+          </h2>
+          <p className="text-lg text-gray-600">
+            Complete the OAuth installation above to start extracting data from your GoHighLevel conversations.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-8">
       <div className="mb-8">
@@ -78,8 +126,8 @@ function DashboardHome({ isDevMode, user }) {
         {isDevMode && (
           <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <p className="text-sm text-yellow-800">
-              <strong>Development Mode:</strong> You're running in development mode with mock user data. 
-              The app is configured to bypass GHL SSO authentication for testing purposes.
+              <strong>Development Mode:</strong> You're running in development mode with real GHL account integration. 
+              Make sure you have proper OAuth tokens installed for full functionality.
             </p>
           </div>
         )}
@@ -87,7 +135,7 @@ function DashboardHome({ isDevMode, user }) {
           <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
             <p className="text-sm text-green-800">
               <strong>Standalone Mode:</strong> You're using this app as a standalone installation. 
-              This installation was completed via OAuth and doesn't require GHL SSO.
+              This installation was completed via OAuth and has proper access tokens.
             </p>
             <p className="text-xs text-green-700 mt-1">
               Installed: {new Date(user.installedAt).toLocaleString()}

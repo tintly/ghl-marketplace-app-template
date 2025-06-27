@@ -197,27 +197,64 @@ async function saveGHLConfiguration(supabase: any, tokenData: TokenResponse, sta
     refresh_token: tokenData.refresh_token,
     token_expires_at: expiresAt,
     business_name: `GHL ${tokenData.userType} - ${resourceId}`, // Default name
-    business_description: 'OAuth installation - user context will be linked when accessed through GHL',
+    business_description: 'OAuth installation with real GHL access tokens',
     is_active: true,
     created_by: userId // This can also be null
   }
 
   console.log('Saving configuration for resource:', resourceId, 'with user_id:', userId || 'null')
 
-  // Insert or update configuration using the unique constraint
-  const { data, error } = await supabase
+  // Check if configuration already exists
+  const { data: existingConfig, error: checkError } = await supabase
     .from('ghl_configurations')
-    .upsert(configData, {
-      onConflict: 'ghl_account_id',
-      ignoreDuplicates: false
-    })
-    .select()
+    .select('*')
+    .eq('ghl_account_id', resourceId)
+    .maybeSingle()
 
-  if (error) {
-    console.error('Database error:', error)
-    throw new Error(`Failed to save configuration: ${error.message}`)
+  if (checkError) {
+    console.error('Error checking existing config:', checkError)
+    throw new Error(`Failed to check existing configuration: ${checkError.message}`)
   }
 
-  console.log('Configuration saved successfully for:', resourceId)
-  return data
+  if (existingConfig) {
+    console.log('Updating existing configuration with new OAuth tokens')
+    
+    // Update existing configuration with new tokens
+    const { data: updatedConfig, error: updateError } = await supabase
+      .from('ghl_configurations')
+      .update({
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token,
+        token_expires_at: expiresAt,
+        client_id: Deno.env.get('GHL_MARKETPLACE_CLIENT_ID'),
+        business_description: 'OAuth installation with real GHL access tokens - updated',
+        updated_at: new Date().toISOString(),
+        // Link to user if provided in state
+        ...(userId && !existingConfig.user_id ? { user_id: userId } : {})
+      })
+      .eq('ghl_account_id', resourceId)
+      .select()
+
+    if (updateError) {
+      console.error('Database update error:', updateError)
+      throw new Error(`Failed to update configuration: ${updateError.message}`)
+    }
+
+    console.log('Configuration updated successfully for:', resourceId)
+    return updatedConfig
+  } else {
+    // Insert new configuration
+    const { data: newConfig, error: insertError } = await supabase
+      .from('ghl_configurations')
+      .insert(configData)
+      .select()
+
+    if (insertError) {
+      console.error('Database insert error:', insertError)
+      throw new Error(`Failed to save configuration: ${insertError.message}`)
+    }
+
+    console.log('New configuration saved successfully for:', resourceId)
+    return newConfig
+  }
 }
