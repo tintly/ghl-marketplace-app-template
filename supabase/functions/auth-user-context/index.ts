@@ -31,7 +31,7 @@ serve(async (req: Request) => {
   }
 
   try {
-    console.log('Processing auth request...')
+    console.log('=== AUTH REQUEST START ===')
     
     // Check if we're in development mode
     if (DEV_MODE) {
@@ -42,8 +42,11 @@ serve(async (req: Request) => {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!
       const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       
-      console.log('Supabase URL:', supabaseUrl ? 'Set' : 'Missing')
-      console.log('Service Key:', supabaseServiceKey ? 'Set' : 'Missing')
+      console.log('Environment check:', {
+        supabaseUrl: supabaseUrl ? 'Set' : 'Missing',
+        serviceKey: supabaseServiceKey ? 'Set' : 'Missing',
+        devMode: DEV_MODE
+      })
       
       if (!supabaseUrl || !supabaseServiceKey) {
         console.error('Missing Supabase environment variables')
@@ -68,11 +71,12 @@ serve(async (req: Request) => {
       
       const supabase = createClient(supabaseUrl, supabaseServiceKey)
       
-      // Create or update dev configuration
+      // Create or update dev configuration with detailed error handling
       const configResult = await ensureDevConfiguration(supabase, userContext)
       
-      console.log('Dev user context created:', { 
-        userId: userContext.userId, 
+      console.log('=== AUTH REQUEST COMPLETE ===')
+      console.log('Final result:', {
+        userId: userContext.userId,
         email: userContext.email,
         configResult: configResult ? 'Success' : 'Failed'
       })
@@ -83,7 +87,8 @@ serve(async (req: Request) => {
           user: {
             ...userContext,
             devMode: true,
-            configCreated: !!configResult
+            configCreated: !!configResult,
+            configId: configResult?.id || null
           }
         }),
         {
@@ -146,9 +151,16 @@ serve(async (req: Request) => {
       }
     )
   } catch (error) {
-    console.error("SSO decryption error:", error)
+    console.error("=== AUTH REQUEST ERROR ===")
+    console.error("Error type:", typeof error)
+    console.error("Error message:", error.message)
+    console.error("Error stack:", error.stack)
+    
     return new Response(
-      JSON.stringify({ error: `Failed to decrypt SSO data: ${error.message}` }),
+      JSON.stringify({ 
+        error: `Failed to process auth request: ${error.message}`,
+        details: error.toString()
+      }),
       {
         status: 400,
         headers: {
@@ -162,71 +174,101 @@ serve(async (req: Request) => {
 
 async function ensureDevConfiguration(supabase: any, userContext: any) {
   try {
-    console.log('=== Starting dev configuration creation ===')
+    console.log('=== DEV CONFIGURATION START ===')
     console.log('User context:', {
       userId: userContext.userId,
       locationId: userContext.locationId,
       email: userContext.email
     })
     
-    // Test database connection first
-    console.log('Testing database connection...')
-    const { data: testData, error: testError } = await supabase
-      .from('ghl_configurations')
-      .select('count(*)')
-      .limit(1)
+    // Test database connection with a simple query
+    console.log('Step 1: Testing database connection...')
+    try {
+      const { data: healthCheck, error: healthError } = await supabase
+        .from('ghl_configurations')
+        .select('id')
+        .limit(1)
 
-    if (testError) {
-      console.error('Database connection test failed:', testError)
-      throw new Error(`Database connection failed: ${testError.message}`)
-    }
-    
-    console.log('Database connection successful')
-    
-    // Check if configuration already exists
-    console.log('Checking for existing configuration...')
-    const { data: existingConfig, error: checkError } = await supabase
-      .from('ghl_configurations')
-      .select('*')
-      .eq('ghl_account_id', userContext.locationId)
-      .maybeSingle()
-
-    if (checkError) {
-      console.error('Error checking existing config:', checkError)
-      throw new Error(`Failed to check existing configuration: ${checkError.message}`)
-    }
-    
-    if (existingConfig) {
-      console.log('Found existing configuration:', existingConfig.id)
-      
-      // If exists but no user_id, update it
-      if (!existingConfig.user_id) {
-        console.log('Linking existing config to user...')
-        const { data: updatedConfig, error: updateError } = await supabase
-          .from('ghl_configurations')
-          .update({ 
-            user_id: userContext.userId,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingConfig.id)
-          .select()
-          .single()
-
-        if (updateError) {
-          console.error('Failed to link config:', updateError)
-          return existingConfig // Return original even if linking fails
-        }
-        
-        console.log('Successfully linked config to user')
-        return updatedConfig
+      if (healthError) {
+        console.error('Database health check failed:', {
+          code: healthError.code,
+          message: healthError.message,
+          details: healthError.details,
+          hint: healthError.hint
+        })
+        throw new Error(`Database connection failed: ${healthError.message}`)
       }
       
-      console.log('Configuration already properly linked')
-      return existingConfig
+      console.log('Database connection successful')
+    } catch (dbError) {
+      console.error('Database connection test failed:', dbError)
+      throw new Error(`Database unavailable: ${dbError.message}`)
+    }
+    
+    // Check if configuration already exists
+    console.log('Step 2: Checking for existing configuration...')
+    try {
+      const { data: existingConfig, error: checkError } = await supabase
+        .from('ghl_configurations')
+        .select('*')
+        .eq('ghl_account_id', userContext.locationId)
+        .maybeSingle()
+
+      if (checkError) {
+        console.error('Error checking existing config:', {
+          code: checkError.code,
+          message: checkError.message,
+          details: checkError.details
+        })
+        throw new Error(`Failed to check existing configuration: ${checkError.message}`)
+      }
+      
+      if (existingConfig) {
+        console.log('Found existing configuration:', {
+          id: existingConfig.id,
+          userId: existingConfig.user_id,
+          businessName: existingConfig.business_name
+        })
+        
+        // If exists but no user_id, update it
+        if (!existingConfig.user_id) {
+          console.log('Step 2a: Linking existing config to user...')
+          const { data: updatedConfig, error: updateError } = await supabase
+            .from('ghl_configurations')
+            .update({ 
+              user_id: userContext.userId,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingConfig.id)
+            .select()
+            .single()
+
+          if (updateError) {
+            console.error('Failed to link config:', {
+              code: updateError.code,
+              message: updateError.message,
+              details: updateError.details
+            })
+            // Return original config even if linking fails
+            return existingConfig
+          }
+          
+          console.log('Successfully linked config to user')
+          return updatedConfig
+        }
+        
+        console.log('Configuration already properly linked')
+        return existingConfig
+      }
+      
+      console.log('No existing configuration found')
+    } catch (checkError) {
+      console.error('Error in configuration check:', checkError)
+      throw checkError
     }
 
     // Create new configuration
-    console.log('Creating new dev configuration...')
+    console.log('Step 3: Creating new dev configuration...')
     const configData = {
       user_id: userContext.userId,
       ghl_account_id: userContext.locationId,
@@ -248,46 +290,68 @@ async function ensureDevConfiguration(supabase: any, userContext: any) {
       created_by: userContext.userId
     }
 
-    console.log('Inserting configuration...')
+    console.log('Configuration data prepared:', {
+      user_id: configData.user_id,
+      ghl_account_id: configData.ghl_account_id,
+      business_name: configData.business_name
+    })
 
-    const { data: newConfig, error: insertError } = await supabase
-      .from('ghl_configurations')
-      .insert(configData)
-      .select()
-      .single()
+    try {
+      const { data: newConfig, error: insertError } = await supabase
+        .from('ghl_configurations')
+        .insert(configData)
+        .select()
+        .single()
 
-    if (insertError) {
-      console.error('=== INSERT ERROR ===')
-      console.error('Error code:', insertError.code)
-      console.error('Error message:', insertError.message)
-      console.error('Error details:', insertError.details)
-      console.error('Error hint:', insertError.hint)
-      
-      // Check if it's a unique constraint violation
-      if (insertError.code === '23505') {
-        console.log('Unique constraint violation - trying to fetch existing record')
-        const { data: existingAfterError, error: fetchError } = await supabase
-          .from('ghl_configurations')
-          .select('*')
-          .eq('ghl_account_id', userContext.locationId)
-          .single()
-          
-        if (!fetchError && existingAfterError) {
-          console.log('Found existing record after constraint violation')
-          return existingAfterError
+      if (insertError) {
+        console.error('=== INSERT ERROR DETAILS ===')
+        console.error('Error code:', insertError.code)
+        console.error('Error message:', insertError.message)
+        console.error('Error details:', insertError.details)
+        console.error('Error hint:', insertError.hint)
+        console.error('Full error object:', JSON.stringify(insertError, null, 2))
+        
+        // Check if it's a unique constraint violation
+        if (insertError.code === '23505') {
+          console.log('Unique constraint violation - attempting to fetch existing record')
+          try {
+            const { data: existingAfterError, error: fetchError } = await supabase
+              .from('ghl_configurations')
+              .select('*')
+              .eq('ghl_account_id', userContext.locationId)
+              .single()
+              
+            if (!fetchError && existingAfterError) {
+              console.log('Found existing record after constraint violation:', existingAfterError.id)
+              return existingAfterError
+            } else {
+              console.error('Failed to fetch existing record:', fetchError)
+            }
+          } catch (fetchError) {
+            console.error('Error fetching after constraint violation:', fetchError)
+          }
         }
+        
+        throw new Error(`Database insert failed: ${insertError.message} (Code: ${insertError.code})`)
       }
-      
-      throw new Error(`Database insert failed: ${insertError.message}`)
-    }
 
-    console.log('=== SUCCESS ===')
-    console.log('Dev configuration created successfully:', newConfig.id)
-    return newConfig
+      console.log('=== SUCCESS ===')
+      console.log('Dev configuration created successfully:', {
+        id: newConfig.id,
+        ghl_account_id: newConfig.ghl_account_id,
+        user_id: newConfig.user_id
+      })
+      return newConfig
+      
+    } catch (insertError) {
+      console.error('Insert operation failed:', insertError)
+      throw insertError
+    }
     
   } catch (error) {
     console.error('=== CONFIGURATION CREATION FAILED ===')
     console.error('Error type:', typeof error)
+    console.error('Error name:', error.name)
     console.error('Error message:', error.message)
     console.error('Error stack:', error.stack)
     

@@ -15,6 +15,7 @@ function DataExtractionModule({ user, authService }) {
   const [editingField, setEditingField] = useState(null)
   const [ghlConfig, setGhlConfig] = useState(null)
   const [configError, setConfigError] = useState(null)
+  const [retryCount, setRetryCount] = useState(0)
 
   useEffect(() => {
     loadData()
@@ -46,16 +47,19 @@ function DataExtractionModule({ user, authService }) {
   }
 
   const getGHLConfiguration = async () => {
-    console.log('Looking for GHL configuration...', {
+    console.log('=== CONFIGURATION LOOKUP START ===')
+    console.log('User context:', {
       userId: user.userId,
       locationId: user.locationId,
-      devMode: user.devMode
+      devMode: user.devMode,
+      configCreated: user.configCreated,
+      configId: user.configId
     })
 
     try {
       // Strategy 1: Try to find by ghl_account_id (location ID) first
       if (user.locationId) {
-        console.log('Trying to find config by ghl_account_id:', user.locationId)
+        console.log('Strategy 1: Finding config by ghl_account_id:', user.locationId)
         
         const { data: locationData, error: locationError } = await supabase
           .from('ghl_configurations')
@@ -65,10 +69,18 @@ function DataExtractionModule({ user, authService }) {
           .maybeSingle()
 
         if (locationError) {
-          console.error('Error querying by ghl_account_id:', locationError)
+          console.error('Error querying by ghl_account_id:', {
+            code: locationError.code,
+            message: locationError.message,
+            details: locationError.details
+          })
           setConfigError(`Database query failed: ${locationError.message}`)
         } else if (locationData) {
-          console.log('Found config by ghl_account_id:', locationData.id)
+          console.log('Found config by ghl_account_id:', {
+            id: locationData.id,
+            userId: locationData.user_id,
+            businessName: locationData.business_name
+          })
           
           // If found but no user_id, link it to current user
           if (!locationData.user_id) {
@@ -99,7 +111,7 @@ function DataExtractionModule({ user, authService }) {
       }
 
       // Strategy 2: Try to find by user_id
-      console.log('Trying to find config by user_id:', user.userId)
+      console.log('Strategy 2: Finding config by user_id:', user.userId)
       
       const { data: userData, error: userError } = await supabase
         .from('ghl_configurations')
@@ -118,23 +130,26 @@ function DataExtractionModule({ user, authService }) {
 
       // Strategy 3: In dev mode, try to create configuration if none exists
       if (user.devMode) {
-        console.log('Dev mode: No configuration found, attempting to create one...')
-        setConfigError('No configuration found. In dev mode, this should be created automatically by the auth system.')
+        console.log('Strategy 3: Dev mode - attempting to create configuration...')
         
-        // Wait a moment and try again - the auth system might still be creating it
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        
-        const { data: retryData, error: retryError } = await supabase
-          .from('ghl_configurations')
-          .select('*')
-          .eq('ghl_account_id', user.locationId)
-          .eq('is_active', true)
-          .maybeSingle()
-
-        if (!retryError && retryData) {
-          console.log('Found config on retry:', retryData.id)
-          setConfigError(null)
-          return retryData
+        if (retryCount < 3) {
+          console.log(`Retry attempt ${retryCount + 1}/3 - waiting for auth system to create config...`)
+          setConfigError(`No configuration found. Attempting to create one... (Attempt ${retryCount + 1}/3)`)
+          
+          // Wait and retry
+          setTimeout(() => {
+            setRetryCount(prev => prev + 1)
+            loadData()
+          }, 2000)
+          
+          return null
+        } else {
+          console.log('Max retries reached, attempting manual creation...')
+          const manualConfig = await createDevConfiguration()
+          if (manualConfig) {
+            setRetryCount(0) // Reset retry count on success
+            return manualConfig
+          }
         }
       }
 
@@ -146,6 +161,77 @@ function DataExtractionModule({ user, authService }) {
     } catch (error) {
       console.error('Unexpected error in getGHLConfiguration:', error)
       setConfigError(`Unexpected error: ${error.message}`)
+      return null
+    }
+  }
+
+  const createDevConfiguration = async () => {
+    try {
+      console.log('=== MANUAL DEV CONFIG CREATION ===')
+      
+      const configData = {
+        user_id: user.userId,
+        ghl_account_id: user.locationId,
+        client_id: 'dev-client-id',
+        client_secret: 'dev-client-secret',
+        access_token: 'dev-access-token',
+        refresh_token: 'dev-refresh-token',
+        token_expires_at: new Date(Date.now() + (365 * 24 * 60 * 60 * 1000)).toISOString(),
+        business_name: 'Development Business',
+        business_address: '123 Dev Street',
+        business_phone: '+1-555-0123',
+        business_email: user.email,
+        business_website: 'https://dev.example.com',
+        business_description: 'Development environment business for testing',
+        target_audience: 'Developers and testers',
+        services_offered: 'Software development and testing services',
+        business_context: 'This is a development environment configuration for testing purposes',
+        is_active: true,
+        created_by: user.userId
+      }
+
+      console.log('Creating config with data:', {
+        user_id: configData.user_id,
+        ghl_account_id: configData.ghl_account_id,
+        business_name: configData.business_name
+      })
+
+      const { data: newConfig, error: insertError } = await supabase
+        .from('ghl_configurations')
+        .insert(configData)
+        .select()
+        .single()
+
+      if (insertError) {
+        console.error('Manual config creation failed:', {
+          code: insertError.code,
+          message: insertError.message,
+          details: insertError.details
+        })
+        
+        // If unique constraint violation, try to fetch existing
+        if (insertError.code === '23505') {
+          const { data: existing } = await supabase
+            .from('ghl_configurations')
+            .select('*')
+            .eq('ghl_account_id', user.locationId)
+            .single()
+          
+          if (existing) {
+            console.log('Found existing config after constraint violation')
+            return existing
+          }
+        }
+        
+        throw new Error(`Failed to create configuration: ${insertError.message}`)
+      }
+
+      console.log('Manual config creation successful:', newConfig.id)
+      return newConfig
+      
+    } catch (error) {
+      console.error('Manual config creation error:', error)
+      setConfigError(`Failed to create configuration: ${error.message}`)
       return null
     }
   }
@@ -309,6 +395,11 @@ function DataExtractionModule({ user, authService }) {
     }
   }
 
+  const handleRetryConfiguration = () => {
+    setRetryCount(0)
+    loadData()
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -345,16 +436,29 @@ function DataExtractionModule({ user, authService }) {
           <p><strong>User ID:</strong> {user.userId}</p>
           <p><strong>Location ID:</strong> {user.locationId}</p>
           <p><strong>Dev Mode:</strong> {user.devMode ? 'Yes' : 'No'}</p>
+          <p><strong>Config Created:</strong> {user.configCreated ? 'Yes' : 'No'}</p>
+          <p><strong>Config ID:</strong> {user.configId || 'None'}</p>
+          <p><strong>Retry Count:</strong> {retryCount}/3</p>
           {configError && (
             <p><strong>Error:</strong> {configError}</p>
           )}
         </div>
-        <button
-          onClick={loadData}
-          className="mt-3 bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
-        >
-          Retry Loading
-        </button>
+        <div className="mt-3 space-x-2">
+          <button
+            onClick={handleRetryConfiguration}
+            className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
+          >
+            Retry Loading
+          </button>
+          {user.devMode && (
+            <button
+              onClick={createDevConfiguration}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
+            >
+              Force Create Config
+            </button>
+          )}
+        </div>
       </div>
     )
   }
