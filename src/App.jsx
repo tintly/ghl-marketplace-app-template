@@ -31,26 +31,26 @@ function App() {
       
       console.log('User authenticated successfully:', userData)
 
-      // Check if we're in dev mode
+      // Check if we're in dev mode - this comes from the edge function response
       const devMode = userData.devMode === true
       setIsDevMode(devMode)
+      console.log('Dev mode status:', devMode)
 
-      // Check if user has any GHL configurations
-      if (userData.userId) {
-        try {
-          // In dev mode, assume we have configuration to skip installation guide
-          if (devMode) {
-            console.log('Dev mode enabled - skipping configuration check')
-            setHasConfiguration(true)
-          } else {
+      // In dev mode, skip database checks and assume we have configuration
+      if (devMode) {
+        console.log('Dev mode enabled - bypassing configuration check')
+        setHasConfiguration(true)
+      } else {
+        // Only check database in production mode
+        if (userData.userId) {
+          try {
             const hasConfig = await hasActiveGHLConfiguration(userData.userId)
             setHasConfiguration(hasConfig)
             console.log('User has GHL configuration:', hasConfig)
+          } catch (configError) {
+            console.log('Could not check GHL configuration:', configError.message)
+            setHasConfiguration(false)
           }
-        } catch (configError) {
-          console.log('Could not check GHL configuration:', configError.message)
-          // In dev mode, default to having configuration
-          setHasConfiguration(devMode)
         }
       }
       
@@ -106,6 +106,8 @@ function App() {
       </div>
     )
   }
+
+  console.log('Rendering app with:', { hasConfiguration, isDevMode })
 
   return (
     <Router>
