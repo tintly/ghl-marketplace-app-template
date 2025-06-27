@@ -11,7 +11,6 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [hasConfiguration, setHasConfiguration] = useState(false)
-  const [isDevMode, setIsDevMode] = useState(false)
   const [authService] = useState(new AuthService())
 
   useEffect(() => {
@@ -30,27 +29,22 @@ function App() {
       setUser(userData)
       
       console.log('User authenticated successfully:', userData)
+      console.log('Dev mode flag from auth:', userData.devMode)
 
       // Check if we're in dev mode - this comes from the edge function response
-      const devMode = userData.devMode === true
-      setIsDevMode(devMode)
-      console.log('Dev mode status:', devMode)
+      const isDevMode = userData.devMode === true
+      console.log('Is dev mode:', isDevMode)
 
-      // In dev mode, skip database checks and assume we have configuration
-      if (devMode) {
-        console.log('Dev mode enabled - bypassing configuration check')
-        setHasConfiguration(true)
-      } else {
-        // Only check database in production mode
-        if (userData.userId) {
-          try {
-            const hasConfig = await hasActiveGHLConfiguration(userData.userId)
-            setHasConfiguration(hasConfig)
-            console.log('User has GHL configuration:', hasConfig)
-          } catch (configError) {
-            console.log('Could not check GHL configuration:', configError.message)
-            setHasConfiguration(false)
-          }
+      // In dev mode, we should have a configuration created by the edge function
+      // In production mode, check if user has any GHL configurations
+      if (userData.userId) {
+        try {
+          const hasConfig = await hasActiveGHLConfiguration(userData.userId)
+          setHasConfiguration(hasConfig)
+          console.log('User has GHL configuration:', hasConfig)
+        } catch (configError) {
+          console.log('Could not check GHL configuration:', configError.message)
+          setHasConfiguration(false)
         }
       }
       
@@ -74,7 +68,7 @@ function App() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading your data extractor...</p>
           <p className="text-sm text-gray-500 mt-2">
-            {isDevMode ? 'Running in development mode...' : 'Connecting to GoHighLevel...'}
+            {user?.devMode ? 'Running in development mode...' : 'Connecting to GoHighLevel...'}
           </p>
         </div>
       </div>
@@ -107,7 +101,11 @@ function App() {
     )
   }
 
-  console.log('Rendering app with:', { hasConfiguration, isDevMode })
+  console.log('Final render decision:', { 
+    hasConfiguration, 
+    devMode: user?.devMode,
+    userId: user?.userId 
+  })
 
   return (
     <Router>
@@ -120,7 +118,7 @@ function App() {
           path="/" 
           element={
             hasConfiguration ? 
-              <DataExtractorApp user={user} authService={authService} isDevMode={isDevMode} /> :
+              <DataExtractorApp user={user} authService={authService} isDevMode={user?.devMode} /> :
               <InstallationGuide user={user} />
           } 
         />
