@@ -1,44 +1,22 @@
 {
-  "name": "ghl-marketplace-app-template",
+  "name": "ghl-data-extractor",
   "version": "1.0.0",
-  "description": "A boilerplate for creating GHL marketplace apps",
-  "main": "src/index.ts",
+  "description": "A GoHighLevel data extraction app using Supabase Edge Functions",
   "scripts": {
-    "build": "npm run build-ui && npx tsc && mkdir -p ./dist/ui && cp -r ./ui/dist/* ./dist/ui/",
-    "build-ui": "cd ui && npm install && npm run build && cd ../",
-    "start": "node dist/index.js",
-    "dev": "npm run build && node dist/index.js"
+    "dev": "cd ui && npm run dev",
+    "build": "cd ui && npm install && npm run build",
+    "preview": "cd ui && npm run preview"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/GoHighLevel/ghl-marketplace-app-template.git"
+    "url": "git+https://github.com/your-username/ghl-data-extractor.git"
   },
   "keywords": [
-    "boilerplate",
-    "ghl"
+    "gohighlevel",
+    "data-extraction",
+    "supabase",
+    "react"
   ],
-  "author": "GHL",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/GoHighLevel/ghl-marketplace-app-template/issues"
-  },
-  "homepage": "https://github.com/GoHighLevel/ghl-marketplace-app-template#readme",
-  "dependencies": {
-    "axios": "^1.5.1",
-    "body-parser": "^1.20.2",
-    "cors": "^2.8.5",
-    "crypto-js": "^4.1.1",
-    "dotenv": "^16.3.1",
-    "express": "^4.18.2",
-    "qs": "^6.11.2"
-  },
-  "devDependencies": {
-    "@types/cors": "^2.8.14",
-    "@types/crypto-js": "^4.1.2",
-    "@types/express": "^4.17.18",
-    "@types/node": "^20.8.2",
-    "@types/qs": "^6.9.8",
-    "ts-node-dev": "^2.0.0",
-    "typescript": "^5.2.2"
-  }
+  "author": "Your Name",
+  "license": "MIT"
 }

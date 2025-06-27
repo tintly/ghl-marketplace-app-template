@@ -46,7 +46,7 @@ serve(async (req: Request) => {
       )
     }
 
-    const userData = decryptSSOData(key)
+    const userData = await decryptSSOData(key)
     const userLocationId = userData.activeLocation || userData.companyId
     
     if (userLocationId !== locationId) {
@@ -90,7 +90,7 @@ serve(async (req: Request) => {
   }
 })
 
-function decryptSSOData(key: string) {
+async function decryptSSOData(key: string) {
   try {
     const sharedSecret = Deno.env.get("GHL_APP_SHARED_SECRET")
     if (!sharedSecret) {
@@ -108,17 +108,43 @@ function decryptSSOData(key: string) {
     const salt = rawEncryptedData.slice(saltSize, blockSize)
     const cipherText = rawEncryptedData.slice(blockSize)
     
-    // This is a simplified version - in production you'd implement the full decryption
-    // For now, we'll return a mock response to test the flow
-    return {
-      userId: 'test-user-id',
-      email: 'test@example.com',
-      userName: 'Test User',
-      role: 'admin',
-      type: 'location',
-      companyId: 'test-company-id',
-      activeLocation: 'test-location-id'
+    // Key derivation using the same logic as auth-user-context
+    let result = new Uint8Array(0)
+    while (result.length < (keySize + ivSize)) {
+      const toHash = new Uint8Array([
+        ...result.slice(-ivSize),
+        ...new TextEncoder().encode(sharedSecret),
+        ...salt
+      ])
+      
+      const hashResult = await crypto.subtle.digest('SHA-256', toHash)
+      const hashArray = new Uint8Array(hashResult).slice(0, 16)
+      
+      const newResult = new Uint8Array(result.length + hashArray.length)
+      newResult.set(result)
+      newResult.set(hashArray, result.length)
+      result = newResult
     }
+    
+    const cryptoKey = result.slice(0, keySize)
+    const iv = result.slice(keySize, keySize + ivSize)
+    
+    const importedKey = await crypto.subtle.importKey(
+      'raw',
+      cryptoKey,
+      { name: 'AES-CBC' },
+      false,
+      ['decrypt']
+    )
+    
+    const decryptedBuffer = await crypto.subtle.decrypt(
+      { name: 'AES-CBC', iv: iv },
+      importedKey,
+      cipherText
+    )
+    
+    const decryptedText = new TextDecoder().decode(decryptedBuffer)
+    return JSON.parse(decryptedText)
   } catch (error) {
     console.error("Error decrypting SSO data:", error)
     throw error

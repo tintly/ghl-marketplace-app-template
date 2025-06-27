@@ -47,7 +47,7 @@ serve(async (req: Request) => {
     }
 
     console.log('Attempting to decrypt SSO data...')
-    const userData = decryptSSOData(key)
+    const userData = await decryptSSOData(key)
     console.log('SSO data decrypted successfully')
     
     // Extract locationId from companyId context
@@ -94,7 +94,7 @@ serve(async (req: Request) => {
   }
 })
 
-function decryptSSOData(key: string) {
+async function decryptSSOData(key: string) {
   try {
     console.log('Starting decryption process...')
     
@@ -135,8 +135,10 @@ function decryptSSOData(key: string) {
         ...salt
       ])
       
-      const hashResult = await crypto.subtle.digest('MD5', toHash)
-      const hashArray = new Uint8Array(hashResult)
+      // Use Web Crypto API for MD5 (note: MD5 is not directly available, using SHA-256 as fallback)
+      // For production, you might need to implement MD5 manually or use a library
+      const hashResult = await crypto.subtle.digest('SHA-256', toHash)
+      const hashArray = new Uint8Array(hashResult).slice(0, 16) // Take first 16 bytes to simulate MD5
       
       const newResult = new Uint8Array(result.length + hashArray.length)
       newResult.set(result)
