@@ -81,7 +81,7 @@ function App() {
     )
   }
 
-  // Always show the main app - no installation guide logic
+  // Router with both main app and OAuth callback routes
   return (
     <Router>
       <Routes>
