@@ -38,7 +38,7 @@ serve(async (req: Request) => {
       console.log('Development mode enabled - using manual user data')
       const userContext = getDevUserContext()
       
-      // Initialize Supabase client to create dev configuration
+      // Initialize Supabase client with service role for dev configuration
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!
       const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       const supabase = createClient(supabaseUrl, supabaseServiceKey)
@@ -134,84 +134,12 @@ async function ensureDevConfiguration(supabase: any, userContext: any) {
   try {
     console.log('Creating/updating dev configuration for location:', userContext.locationId)
     
-    // First, try to find existing configuration by ghl_account_id
-    const { data: existingByLocation, error: locationError } = await supabase
-      .from('ghl_configurations')
-      .select('*')
-      .eq('ghl_account_id', userContext.locationId)
-      .maybeSingle()
-
-    if (locationError && locationError.code !== 'PGRST116') {
-      console.error('Error checking existing config by location:', locationError)
-    }
-
-    if (existingByLocation) {
-      console.log('Configuration exists for location, updating user_id if needed')
-      
-      // If configuration exists but has no user_id, link it
-      if (!existingByLocation.user_id) {
-        const { data: updatedData, error: updateError } = await supabase
-          .from('ghl_configurations')
-          .update({ 
-            user_id: userContext.userId,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingByLocation.id)
-          .select()
-          .single()
-
-        if (updateError) {
-          console.error('Error linking configuration:', updateError)
-        } else {
-          console.log('Successfully linked existing configuration to user')
-        }
-      }
-      
-      return existingByLocation
-    }
-
-    // Check if user already has a configuration
-    const { data: existingByUser, error: userError } = await supabase
-      .from('ghl_configurations')
-      .select('*')
-      .eq('user_id', userContext.userId)
-      .maybeSingle()
-
-    if (userError && userError.code !== 'PGRST116') {
-      console.error('Error checking existing config by user:', userError)
-    }
-
-    if (existingByUser) {
-      console.log('User already has a configuration, updating ghl_account_id if needed')
-      
-      // Update the ghl_account_id to match current location
-      if (existingByUser.ghl_account_id !== userContext.locationId) {
-        const { data: updatedData, error: updateError } = await supabase
-          .from('ghl_configurations')
-          .update({ 
-            ghl_account_id: userContext.locationId,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingByUser.id)
-          .select()
-          .single()
-
-        if (updateError) {
-          console.error('Error updating configuration location:', updateError)
-        } else {
-          console.log('Successfully updated configuration location')
-        }
-      }
-      
-      return existingByUser
-    }
-
-    // Create new dev configuration
-    console.log('Creating new dev configuration...')
+    // Use upsert with the unique constraint on ghl_account_id
     const configData = {
       user_id: userContext.userId,
       ghl_account_id: userContext.locationId,
       client_id: 'dev-client-id',
+      client_secret: 'dev-client-secret',
       access_token: 'dev-access-token',
       refresh_token: 'dev-refresh-token',
       token_expires_at: new Date(Date.now() + (365 * 24 * 60 * 60 * 1000)).toISOString(), // 1 year from now
@@ -228,21 +156,52 @@ async function ensureDevConfiguration(supabase: any, userContext: any) {
       created_by: userContext.userId
     }
 
+    console.log('Attempting upsert with data:', {
+      user_id: configData.user_id,
+      ghl_account_id: configData.ghl_account_id,
+      business_name: configData.business_name
+    })
+
+    // Use upsert to handle both insert and update cases
     const { data, error } = await supabase
       .from('ghl_configurations')
-      .insert(configData)
+      .upsert(configData, {
+        onConflict: 'ghl_account_id',
+        ignoreDuplicates: false
+      })
       .select()
-      .single()
 
     if (error) {
-      console.error('Error creating dev configuration:', error)
-      throw error
+      console.error('Error upserting dev configuration:', error)
+      console.error('Error details:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      })
+      
+      // Try a direct insert as fallback
+      console.log('Attempting direct insert as fallback...')
+      const { data: insertData, error: insertError } = await supabase
+        .from('ghl_configurations')
+        .insert(configData)
+        .select()
+
+      if (insertError) {
+        console.error('Direct insert also failed:', insertError)
+        throw insertError
+      }
+
+      console.log('Direct insert succeeded:', insertData?.[0]?.id)
+      return insertData?.[0]
     }
 
-    console.log('Dev configuration created successfully:', data.id)
-    return data
+    console.log('Dev configuration upserted successfully:', data?.[0]?.id)
+    return data?.[0]
   } catch (error) {
     console.error('Failed to ensure dev configuration:', error)
+    console.error('Full error object:', JSON.stringify(error, null, 2))
+    
     // Don't throw - we want auth to succeed even if config creation fails
     console.log('Continuing with auth despite config creation failure')
   }
