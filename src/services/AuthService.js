@@ -34,10 +34,8 @@ export class AuthService {
         encryptedUserData = await this.getEncryptedUserData()
         console.log('Encrypted user data received from GHL SSO')
       } catch (ssoError) {
-        console.log('GHL SSO not available, checking for standalone installation:', ssoError.message)
-        
-        // If no SSO and no recent installation, this might be a direct access attempt
-        throw new Error('This app must be accessed through GoHighLevel or installed via OAuth first')
+        console.log('GHL SSO not available, proceeding with Edge Function call:', ssoError.message)
+        // Don't throw error here - let the Edge Function handle DEV_MODE
       }
 
       // Use Supabase Edge Function for SSO authentication
