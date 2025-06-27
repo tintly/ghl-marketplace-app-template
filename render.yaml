@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: ghl-data-extractor
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GHL_APP_CLIENT_ID
+        sync: false
+      - key: GHL_APP_CLIENT_SECRET
+        sync: false
+      - key: GHL_APP_SHARED_SECRET
+        sync: false
+      - key: GHL_API_DOMAIN
+        value: https://services.leadconnectorhq.com
+      - key: PORT
+        value: 10000
