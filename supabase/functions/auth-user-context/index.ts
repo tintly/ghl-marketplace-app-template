@@ -132,26 +132,82 @@ serve(async (req: Request) => {
 
 async function ensureDevConfiguration(supabase: any, userContext: any) {
   try {
-    console.log('Creating/updating dev configuration...')
+    console.log('Creating/updating dev configuration for location:', userContext.locationId)
     
-    // Check if dev configuration already exists
-    const { data: existing, error: selectError } = await supabase
+    // First, try to find existing configuration by ghl_account_id
+    const { data: existingByLocation, error: locationError } = await supabase
+      .from('ghl_configurations')
+      .select('*')
+      .eq('ghl_account_id', userContext.locationId)
+      .maybeSingle()
+
+    if (locationError && locationError.code !== 'PGRST116') {
+      console.error('Error checking existing config by location:', locationError)
+    }
+
+    if (existingByLocation) {
+      console.log('Configuration exists for location, updating user_id if needed')
+      
+      // If configuration exists but has no user_id, link it
+      if (!existingByLocation.user_id) {
+        const { data: updatedData, error: updateError } = await supabase
+          .from('ghl_configurations')
+          .update({ 
+            user_id: userContext.userId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingByLocation.id)
+          .select()
+          .single()
+
+        if (updateError) {
+          console.error('Error linking configuration:', updateError)
+        } else {
+          console.log('Successfully linked existing configuration to user')
+        }
+      }
+      
+      return existingByLocation
+    }
+
+    // Check if user already has a configuration
+    const { data: existingByUser, error: userError } = await supabase
       .from('ghl_configurations')
       .select('*')
       .eq('user_id', userContext.userId)
-      .eq('ghl_account_id', userContext.locationId)
-      .single()
+      .maybeSingle()
 
-    if (selectError && selectError.code !== 'PGRST116') {
-      console.error('Error checking existing config:', selectError)
+    if (userError && userError.code !== 'PGRST116') {
+      console.error('Error checking existing config by user:', userError)
     }
 
-    if (existing) {
-      console.log('Dev configuration already exists')
-      return existing
+    if (existingByUser) {
+      console.log('User already has a configuration, updating ghl_account_id if needed')
+      
+      // Update the ghl_account_id to match current location
+      if (existingByUser.ghl_account_id !== userContext.locationId) {
+        const { data: updatedData, error: updateError } = await supabase
+          .from('ghl_configurations')
+          .update({ 
+            ghl_account_id: userContext.locationId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingByUser.id)
+          .select()
+          .single()
+
+        if (updateError) {
+          console.error('Error updating configuration location:', updateError)
+        } else {
+          console.log('Successfully updated configuration location')
+        }
+      }
+      
+      return existingByUser
     }
 
     // Create new dev configuration
+    console.log('Creating new dev configuration...')
     const configData = {
       user_id: userContext.userId,
       ghl_account_id: userContext.locationId,
@@ -188,6 +244,7 @@ async function ensureDevConfiguration(supabase: any, userContext: any) {
   } catch (error) {
     console.error('Failed to ensure dev configuration:', error)
     // Don't throw - we want auth to succeed even if config creation fails
+    console.log('Continuing with auth despite config creation failure')
   }
 }
 
