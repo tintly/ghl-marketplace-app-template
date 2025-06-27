@@ -3,7 +3,7 @@ import React, { useState } from 'react'
 function InstallationGuide({ user, onInstallationComplete }) {
   const [copied, setCopied] = useState(false)
   
-  // Use the EXACT URL you provided
+  // Use the EXACT URL you provided - no variables or construction
   const installUrl = 'https://marketplace.leadconnectorhq.com/oauth/chooselocation?response_type=code&redirect_uri=https%3A%2F%2Feloquent-moonbeam-8a5386.netlify.app%2Foauth%2Fcallback&client_id=685c90c16a67491ca1f5f7de-mcf0wxc1&scope=conversations.readonly+conversations%2Fmessage.readonly+conversations%2Freports.readonly+contacts.readonly+contacts.write+locations.readonly+locations%2FcustomFields.readonly+locations%2FcustomFields.write+oauth.readonly+oauth.write'
 
   const copyToClipboard = (text) => {
@@ -13,7 +13,12 @@ function InstallationGuide({ user, onInstallationComplete }) {
   }
 
   const handleInstallClick = () => {
-    window.open(installUrl, '_blank', 'noopener,noreferrer')
+    // Force the exact URL to open in a new window
+    const newWindow = window.open(installUrl, '_blank', 'noopener,noreferrer')
+    if (!newWindow) {
+      // Fallback if popup blocked
+      window.location.href = installUrl
+    }
   }
 
   return (
@@ -41,7 +46,7 @@ function InstallationGuide({ user, onInstallationComplete }) {
               Install GoHighLevel Integration
             </button>
             <p className="text-xs text-blue-600 mt-2">
-              This will open in a new tab and redirect to your deployed app after installation.
+              This will open the exact OAuth URL in a new tab.
             </p>
           </div>
 
@@ -84,7 +89,7 @@ function InstallationGuide({ user, onInstallationComplete }) {
 
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Installation URL
+              Installation URL (for verification)
             </h3>
             <div className="bg-white border rounded-md p-3 font-mono text-xs break-all">
               <div className="flex items-start justify-between">
@@ -125,6 +130,22 @@ function InstallationGuide({ user, onInstallationComplete }) {
               <p>5. You'll be redirected to your deployed app with working tokens</p>
               <p>6. Your existing configuration will be updated with real tokens</p>
             </div>
+          </div>
+
+          {/* Debug section to verify URL */}
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-red-900 mb-2">
+              Debug: Verify Install URL
+            </h3>
+            <p className="text-red-800 text-sm mb-2">
+              The button above should open this exact URL:
+            </p>
+            <div className="bg-white border rounded-md p-2 text-xs font-mono break-all">
+              https://marketplace.leadconnectorhq.com/oauth/chooselocation?response_type=code&redirect_uri=https%3A%2F%2Feloquent-moonbeam-8a5386.netlify.app%2Foauth%2Fcallback&client_id=685c90c16a67491ca1f5f7de-mcf0wxc1&scope=conversations.readonly+conversations%2Fmessage.readonly+conversations%2Freports.readonly+contacts.readonly+contacts.write+locations.readonly+locations%2FcustomFields.readonly+locations%2FcustomFields.write+oauth.readonly+oauth.write
+            </div>
+            <p className="text-red-800 text-xs mt-2">
+              If it redirects to marketplace.gohighlevel.com instead, there's a browser redirect happening.
+            </p>
           </div>
         </div>
       </div>
