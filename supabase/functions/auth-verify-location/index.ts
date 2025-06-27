@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { md5 } from "../_shared/md5.ts"
+import { DEV_MODE, DEV_USER_DATA } from "../_shared/dev-config.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -32,6 +33,41 @@ serve(async (req: Request) => {
     const url = new URL(req.url)
     const pathParts = url.pathname.split('/')
     const locationId = pathParts[pathParts.length - 1]
+    
+    // Check if we're in development mode
+    if (DEV_MODE) {
+      console.log('Development mode enabled - using manual location verification')
+      const userLocationId = DEV_USER_DATA.activeLocation || DEV_USER_DATA.companyId
+      
+      if (userLocationId !== locationId) {
+        return new Response(
+          JSON.stringify({ error: "Access denied to this location" }),
+          {
+            status: 403,
+            headers: {
+              "Content-Type": "application/json",
+              ...corsHeaders,
+            },
+          }
+        )
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          hasAccess: true,
+          devMode: true
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            ...corsHeaders,
+          },
+        }
+      )
+    }
+    
     const { key } = await req.json()
     
     if (!key || !locationId) {

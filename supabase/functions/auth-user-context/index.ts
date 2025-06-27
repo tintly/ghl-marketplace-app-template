@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { md5 } from "../_shared/md5.ts"
+import { DEV_MODE, getDevUserContext } from "../_shared/dev-config.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,6 +31,29 @@ serve(async (req: Request) => {
 
   try {
     console.log('Processing auth request...')
+    
+    // Check if we're in development mode
+    if (DEV_MODE) {
+      console.log('Development mode enabled - using manual user data')
+      const userContext = getDevUserContext()
+      
+      console.log('Dev user context created:', { userId: userContext.userId, email: userContext.email })
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          user: userContext,
+          devMode: true
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            ...corsHeaders,
+          },
+        }
+      )
+    }
     
     const { key } = await req.json()
     
