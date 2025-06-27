@@ -15,6 +15,12 @@ export class AuthService {
         throw new Error('VITE_SUPABASE_URL environment variable is not set')
       }
 
+      // Check if we're on the OAuth callback page - if so, skip SSO
+      if (window.location.pathname === '/callback/oauth') {
+        console.log('On OAuth callback page, skipping SSO authentication')
+        throw new Error('OAuth callback page - SSO not needed')
+      }
+
       // Try to get encrypted data from parent window (for GHL SSO)
       let encryptedUserData = null
       try {

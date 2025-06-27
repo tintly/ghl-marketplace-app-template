@@ -1,18 +1,25 @@
 import React, { useState, useEffect } from 'react'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
 import { AuthService } from './services/AuthService'
 import DataExtractorApp from './components/DataExtractorApp'
 import OAuthCallback from './components/OAuthCallback'
 
-function App() {
+function AppContent() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [authService] = useState(new AuthService())
+  const location = useLocation()
 
   useEffect(() => {
+    // Skip authentication for OAuth callback page
+    if (location.pathname === '/callback/oauth') {
+      setLoading(false)
+      return
+    }
+    
     initializeApp()
-  }, [])
+  }, [location.pathname])
 
   const initializeApp = async () => {
     try {
@@ -39,6 +46,11 @@ function App() {
   const retryAuth = () => {
     console.log('Retrying authentication...')
     initializeApp()
+  }
+
+  // Don't show loading/error states for OAuth callback
+  if (location.pathname === '/callback/oauth') {
+    return <OAuthCallback />
   }
 
   if (loading) {
@@ -81,18 +93,15 @@ function App() {
     )
   }
 
-  // Router with both main app and OAuth callback routes
+  return <DataExtractorApp user={user} authService={authService} isDevMode={user?.devMode} />
+}
+
+function App() {
   return (
     <Router>
       <Routes>
-        <Route 
-          path="/callback/oauth" 
-          element={<OAuthCallback />} 
-        />
-        <Route 
-          path="/" 
-          element={<DataExtractorApp user={user} authService={authService} isDevMode={user?.devMode} />} 
-        />
+        <Route path="/callback/oauth" element={<OAuthCallback />} />
+        <Route path="/*" element={<AppContent />} />
       </Routes>
     </Router>
   )
