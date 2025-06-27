@@ -14,6 +14,7 @@ function DataExtractionModule({ user, authService }) {
   const [showForm, setShowForm] = useState(false)
   const [editingField, setEditingField] = useState(null)
   const [ghlConfig, setGhlConfig] = useState(null)
+  const [configError, setConfigError] = useState(null)
 
   useEffect(() => {
     loadData()
@@ -23,6 +24,7 @@ function DataExtractionModule({ user, authService }) {
     try {
       setLoading(true)
       setError(null)
+      setConfigError(null)
 
       // Get GHL configuration
       const config = await getGHLConfiguration()
@@ -50,69 +52,102 @@ function DataExtractionModule({ user, authService }) {
       devMode: user.devMode
     })
 
-    // Strategy 1: Try to find by ghl_account_id (location ID) first
-    if (user.locationId) {
-      console.log('Trying to find config by ghl_account_id:', user.locationId)
+    try {
+      // Strategy 1: Try to find by ghl_account_id (location ID) first
+      if (user.locationId) {
+        console.log('Trying to find config by ghl_account_id:', user.locationId)
+        
+        const { data: locationData, error: locationError } = await supabase
+          .from('ghl_configurations')
+          .select('*')
+          .eq('ghl_account_id', user.locationId)
+          .eq('is_active', true)
+          .maybeSingle()
+
+        if (locationError) {
+          console.error('Error querying by ghl_account_id:', locationError)
+          setConfigError(`Database query failed: ${locationError.message}`)
+        } else if (locationData) {
+          console.log('Found config by ghl_account_id:', locationData.id)
+          
+          // If found but no user_id, link it to current user
+          if (!locationData.user_id) {
+            console.log('Config found but not linked to user, linking now...')
+            
+            const { data: updatedData, error: updateError } = await supabase
+              .from('ghl_configurations')
+              .update({ 
+                user_id: user.userId,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', locationData.id)
+              .select()
+              .single()
+
+            if (updateError) {
+              console.error('Failed to link configuration:', updateError)
+              setConfigError(`Failed to link configuration: ${updateError.message}`)
+              return locationData // Return original data even if linking fails
+            }
+
+            console.log('Successfully linked config to user')
+            return updatedData
+          }
+
+          return locationData
+        }
+      }
+
+      // Strategy 2: Try to find by user_id
+      console.log('Trying to find config by user_id:', user.userId)
       
-      const { data: locationData, error: locationError } = await supabase
+      const { data: userData, error: userError } = await supabase
         .from('ghl_configurations')
         .select('*')
-        .eq('ghl_account_id', user.locationId)
+        .eq('user_id', user.userId)
         .eq('is_active', true)
         .maybeSingle()
 
-      if (locationError) {
-        console.error('Error querying by ghl_account_id:', locationError)
-      } else if (locationData) {
-        console.log('Found config by ghl_account_id:', locationData.id)
-        
-        // If found but no user_id, link it to current user
-        if (!locationData.user_id) {
-          console.log('Config found but not linked to user, linking now...')
-          
-          const { data: updatedData, error: updateError } = await supabase
-            .from('ghl_configurations')
-            .update({ 
-              user_id: user.userId,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', locationData.id)
-            .select()
-            .single()
-
-          if (updateError) {
-            console.error('Failed to link configuration:', updateError)
-            return locationData // Return original data even if linking fails
-          }
-
-          console.log('Successfully linked config to user')
-          return updatedData
-        }
-
-        return locationData
+      if (userError) {
+        console.error('Error querying by user_id:', userError)
+        setConfigError(`Database query failed: ${userError.message}`)
+      } else if (userData) {
+        console.log('Found config by user_id:', userData.id)
+        return userData
       }
+
+      // Strategy 3: In dev mode, try to create configuration if none exists
+      if (user.devMode) {
+        console.log('Dev mode: No configuration found, attempting to create one...')
+        setConfigError('No configuration found. In dev mode, this should be created automatically by the auth system.')
+        
+        // Wait a moment and try again - the auth system might still be creating it
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        
+        const { data: retryData, error: retryError } = await supabase
+          .from('ghl_configurations')
+          .select('*')
+          .eq('ghl_account_id', user.locationId)
+          .eq('is_active', true)
+          .maybeSingle()
+
+        if (!retryError && retryData) {
+          console.log('Found config on retry:', retryData.id)
+          setConfigError(null)
+          return retryData
+        }
+      }
+
+      // No configuration found
+      console.log('No configuration found for user')
+      setConfigError('No configuration found. This should be created automatically.')
+      return null
+
+    } catch (error) {
+      console.error('Unexpected error in getGHLConfiguration:', error)
+      setConfigError(`Unexpected error: ${error.message}`)
+      return null
     }
-
-    // Strategy 2: Try to find by user_id
-    console.log('Trying to find config by user_id:', user.userId)
-    
-    const { data: userData, error: userError } = await supabase
-      .from('ghl_configurations')
-      .select('*')
-      .eq('user_id', user.userId)
-      .eq('is_active', true)
-      .maybeSingle()
-
-    if (userError) {
-      console.error('Error querying by user_id:', userError)
-    } else if (userData) {
-      console.log('Found config by user_id:', userData.id)
-      return userData
-    }
-
-    // No configuration found - do not attempt to create from frontend
-    console.log('No configuration found for user')
-    return null
   }
 
   const loadCustomFields = async (config) => {
@@ -310,6 +345,9 @@ function DataExtractionModule({ user, authService }) {
           <p><strong>User ID:</strong> {user.userId}</p>
           <p><strong>Location ID:</strong> {user.locationId}</p>
           <p><strong>Dev Mode:</strong> {user.devMode ? 'Yes' : 'No'}</p>
+          {configError && (
+            <p><strong>Error:</strong> {configError}</p>
+          )}
         </div>
         <button
           onClick={loadData}

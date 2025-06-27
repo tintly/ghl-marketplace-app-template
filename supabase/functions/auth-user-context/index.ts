@@ -41,15 +41,40 @@ serve(async (req: Request) => {
       // Initialize Supabase client with service role for dev configuration
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!
       const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      
+      console.log('Supabase URL:', supabaseUrl ? 'Set' : 'Missing')
+      console.log('Service Key:', supabaseServiceKey ? 'Set' : 'Missing')
+      
+      if (!supabaseUrl || !supabaseServiceKey) {
+        console.error('Missing Supabase environment variables')
+        return new Response(
+          JSON.stringify({
+            success: true,
+            user: {
+              ...userContext,
+              devMode: true,
+              configError: 'Missing Supabase environment variables'
+            }
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              ...corsHeaders,
+            },
+          }
+        )
+      }
+      
       const supabase = createClient(supabaseUrl, supabaseServiceKey)
       
       // Create or update dev configuration
-      const configCreated = await ensureDevConfiguration(supabase, userContext)
+      const configResult = await ensureDevConfiguration(supabase, userContext)
       
       console.log('Dev user context created:', { 
         userId: userContext.userId, 
         email: userContext.email,
-        configCreated: !!configCreated
+        configResult: configResult ? 'Success' : 'Failed'
       })
 
       return new Response(
@@ -57,7 +82,8 @@ serve(async (req: Request) => {
           success: true,
           user: {
             ...userContext,
-            devMode: true  // Explicitly set devMode flag
+            devMode: true,
+            configCreated: !!configResult
           }
         }),
         {
@@ -143,7 +169,21 @@ async function ensureDevConfiguration(supabase: any, userContext: any) {
       email: userContext.email
     })
     
-    // First, check if configuration already exists
+    // Test database connection first
+    console.log('Testing database connection...')
+    const { data: testData, error: testError } = await supabase
+      .from('ghl_configurations')
+      .select('count(*)')
+      .limit(1)
+
+    if (testError) {
+      console.error('Database connection test failed:', testError)
+      throw new Error(`Database connection failed: ${testError.message}`)
+    }
+    
+    console.log('Database connection successful')
+    
+    // Check if configuration already exists
     console.log('Checking for existing configuration...')
     const { data: existingConfig, error: checkError } = await supabase
       .from('ghl_configurations')
@@ -153,7 +193,10 @@ async function ensureDevConfiguration(supabase: any, userContext: any) {
 
     if (checkError) {
       console.error('Error checking existing config:', checkError)
-    } else if (existingConfig) {
+      throw new Error(`Failed to check existing configuration: ${checkError.message}`)
+    }
+    
+    if (existingConfig) {
       console.log('Found existing configuration:', existingConfig.id)
       
       // If exists but no user_id, update it
@@ -171,7 +214,7 @@ async function ensureDevConfiguration(supabase: any, userContext: any) {
 
         if (updateError) {
           console.error('Failed to link config:', updateError)
-          return existingConfig
+          return existingConfig // Return original even if linking fails
         }
         
         console.log('Successfully linked config to user')
@@ -205,11 +248,7 @@ async function ensureDevConfiguration(supabase: any, userContext: any) {
       created_by: userContext.userId
     }
 
-    console.log('Inserting configuration with data:', {
-      user_id: configData.user_id,
-      ghl_account_id: configData.ghl_account_id,
-      business_name: configData.business_name
-    })
+    console.log('Inserting configuration...')
 
     const { data: newConfig, error: insertError } = await supabase
       .from('ghl_configurations')
@@ -223,7 +262,6 @@ async function ensureDevConfiguration(supabase: any, userContext: any) {
       console.error('Error message:', insertError.message)
       console.error('Error details:', insertError.details)
       console.error('Error hint:', insertError.hint)
-      console.error('Full error:', JSON.stringify(insertError, null, 2))
       
       // Check if it's a unique constraint violation
       if (insertError.code === '23505') {
@@ -240,7 +278,7 @@ async function ensureDevConfiguration(supabase: any, userContext: any) {
         }
       }
       
-      throw insertError
+      throw new Error(`Database insert failed: ${insertError.message}`)
     }
 
     console.log('=== SUCCESS ===')
@@ -252,7 +290,6 @@ async function ensureDevConfiguration(supabase: any, userContext: any) {
     console.error('Error type:', typeof error)
     console.error('Error message:', error.message)
     console.error('Error stack:', error.stack)
-    console.error('Full error object:', JSON.stringify(error, null, 2))
     
     // Return null instead of throwing to allow auth to continue
     console.log('Returning null to allow auth to continue despite config failure')
