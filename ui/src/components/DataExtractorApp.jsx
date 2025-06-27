@@ -19,9 +19,6 @@ function DataExtractorApp({ user, authService }) {
         <div className="user-info">
           <span className="user-name">{user.userName}</span>
           <span className="location-badge">{getLocationDisplay()}</span>
-          {authService.isDev() && (
-            <span className="dev-badge">DEV MODE</span>
-          )}
         </div>
       </header>
       

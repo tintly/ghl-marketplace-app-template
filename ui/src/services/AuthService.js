@@ -2,20 +2,13 @@ export class AuthService {
   constructor() {
     this.currentUser = null
     this.isAuthenticated = false
-    this.isDevelopmentMode = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === 'true'
   }
 
-  // Get user data using GHL SSO or development mode
+  // Get user data using GHL SSO
   async getUserData() {
     try {
       console.log('Starting authentication process...')
       
-      // In development mode, we'll handle authentication differently
-      if (this.isDevelopmentMode) {
-        console.log('Development mode detected - skipping SSO authentication')
-        throw new Error('DEV_MODE') // This will be caught and handled by the App component
-      }
-
       // Get encrypted data from parent window
       const encryptedUserData = await this.getEncryptedUserData()
       console.log('Encrypted user data received')
@@ -56,14 +49,6 @@ export class AuthService {
       console.error('Failed to fetch user data:', error)
       throw error
     }
-  }
-
-  // Development mode login with sample data
-  async loginWithSampleData(userData) {
-    console.log('Logging in with sample data:', userData)
-    this.currentUser = userData
-    this.isAuthenticated = true
-    return userData
   }
 
   // Extract the encrypted user data logic into separate method
@@ -109,12 +94,6 @@ export class AuthService {
   // Verify access to a specific location
   async verifyLocationAccess(locationId) {
     try {
-      // In development mode, always return true
-      if (this.isDevelopmentMode) {
-        console.log('Development mode - skipping location access verification')
-        return true
-      }
-
       const encryptedUserData = await this.getEncryptedUserData()
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 
@@ -145,9 +124,5 @@ export class AuthService {
 
   isUserAuthenticated() {
     return this.isAuthenticated
-  }
-
-  isDev() {
-    return this.isDevelopmentMode
   }
 }
