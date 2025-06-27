@@ -13,7 +13,7 @@ function AppContent() {
 
   useEffect(() => {
     // Skip authentication for OAuth callback page
-    if (location.pathname === '/callback/oauth') {
+    if (location.pathname === '/oauth/callback') {
       setLoading(false)
       return
     }
@@ -49,7 +49,7 @@ function AppContent() {
   }
 
   // Don't show loading/error states for OAuth callback
-  if (location.pathname === '/callback/oauth') {
+  if (location.pathname === '/oauth/callback') {
     return <OAuthCallback />
   }
 
@@ -100,7 +100,7 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/callback/oauth" element={<OAuthCallback />} />
+        <Route path="/oauth/callback" element={<OAuthCallback />} />
         <Route path="/*" element={<AppContent />} />
       </Routes>
     </Router>

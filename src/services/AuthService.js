@@ -16,7 +16,7 @@ export class AuthService {
       }
 
       // Check if we're on the OAuth callback page - if so, skip SSO
-      if (window.location.pathname === '/callback/oauth') {
+      if (window.location.pathname === '/oauth/callback') {
         console.log('On OAuth callback page, skipping SSO authentication')
         throw new Error('OAuth callback page - SSO not needed')
       }
