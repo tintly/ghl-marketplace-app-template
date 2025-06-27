@@ -110,51 +110,7 @@ function DataExtractionModule({ user, authService }) {
       return userData
     }
 
-    // Strategy 3: In dev mode, create a configuration if none exists
-    if (user.devMode && user.locationId) {
-      console.log('Dev mode: No config found, creating one...')
-      
-      try {
-        const newConfig = {
-          user_id: user.userId,
-          ghl_account_id: user.locationId,
-          client_id: 'dev-client-id',
-          access_token: 'dev-access-token',
-          refresh_token: 'dev-refresh-token',
-          token_expires_at: new Date(Date.now() + (365 * 24 * 60 * 60 * 1000)).toISOString(),
-          business_name: 'Development Business',
-          business_address: '123 Dev Street',
-          business_phone: '+1-555-0123',
-          business_email: user.email,
-          business_website: 'https://dev.example.com',
-          business_description: 'Development environment business for testing',
-          target_audience: 'Developers and testers',
-          services_offered: 'Software development and testing services',
-          business_context: 'This is a development environment configuration for testing purposes',
-          is_active: true,
-          created_by: user.userId
-        }
-
-        const { data: createdData, error: createError } = await supabase
-          .from('ghl_configurations')
-          .insert(newConfig)
-          .select()
-          .single()
-
-        if (createError) {
-          console.error('Failed to create dev configuration:', createError)
-          throw new Error('Failed to create development configuration')
-        }
-
-        console.log('Created dev configuration:', createdData.id)
-        return createdData
-      } catch (createError) {
-        console.error('Error creating dev config:', createError)
-        throw new Error('Failed to create development configuration')
-      }
-    }
-
-    // No configuration found
+    // No configuration found - do not attempt to create from frontend
     console.log('No configuration found for user')
     return null
   }
@@ -348,7 +304,7 @@ function DataExtractionModule({ user, authService }) {
         <h3 className="text-yellow-800 font-medium">No Configuration Found</h3>
         <p className="text-yellow-600 text-sm mt-1">
           No GoHighLevel configuration found for this location. 
-          {user.devMode && ' In dev mode, a configuration should be automatically created.'}
+          {user.devMode && ' The configuration should be created automatically by the auth system.'}
         </p>
         <div className="mt-3 text-xs text-yellow-700 space-y-1">
           <p><strong>User ID:</strong> {user.userId}</p>
