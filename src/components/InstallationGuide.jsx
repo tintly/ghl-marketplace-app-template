@@ -3,32 +3,17 @@ import React, { useState } from 'react'
 function InstallationGuide({ user, onInstallationComplete }) {
   const [copied, setCopied] = useState(false)
   
-  // Use the exact redirect URI from your marketplace app configuration
-  const redirectUri = 'https://eloquent-moonbeam-8a5386.netlify.app/oauth/callback'
-  
-  // Use the actual client ID from your marketplace app
-  const clientId = '685c90c16a67491ca1f5f7de-mcf0wxc1'
-  
-  // Use the exact scopes from your installation link
-  const scopes = [
-    'conversations.readonly',
-    'conversations/message.readonly', 
-    'conversations/reports.readonly',
-    'contacts.readonly',
-    'contacts.write',
-    'locations.readonly',
-    'locations/customFields.readonly',
-    'locations/customFields.write',
-    'oauth.readonly',
-    'oauth.write'
-  ].join(' ')
-  
-  const authUrl = `https://marketplace.gohighlevel.com/oauth/chooselocation?response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&client_id=${clientId}&scope=${encodeURIComponent(scopes)}&state=${encodeURIComponent(JSON.stringify({ userId: user?.userId }))}`
+  // Use the EXACT URL you provided
+  const installUrl = 'https://marketplace.leadconnectorhq.com/oauth/chooselocation?response_type=code&redirect_uri=https%3A%2F%2Feloquent-moonbeam-8a5386.netlify.app%2Foauth%2Fcallback&client_id=685c90c16a67491ca1f5f7de-mcf0wxc1&scope=conversations.readonly+conversations%2Fmessage.readonly+conversations%2Freports.readonly+contacts.readonly+contacts.write+locations.readonly+locations%2FcustomFields.readonly+locations%2FcustomFields.write+oauth.readonly+oauth.write'
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleInstallClick = () => {
+    window.open(installUrl, '_blank', 'noopener,noreferrer')
   }
 
   return (
@@ -46,17 +31,15 @@ function InstallationGuide({ user, onInstallationComplete }) {
             <p className="text-blue-800 mb-4">
               Click the button below to authorize this app to access your GoHighLevel data and get real access tokens.
             </p>
-            <a
-              href={authUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              onClick={handleInstallClick}
               className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-colors"
             >
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
               Install GoHighLevel Integration
-            </a>
+            </button>
             <p className="text-xs text-blue-600 mt-2">
               This will open in a new tab and redirect to your deployed app after installation.
             </p>
@@ -101,6 +84,23 @@ function InstallationGuide({ user, onInstallationComplete }) {
 
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Installation URL
+            </h3>
+            <div className="bg-white border rounded-md p-3 font-mono text-xs break-all">
+              <div className="flex items-start justify-between">
+                <span className="text-gray-800 flex-1 mr-2">{installUrl}</span>
+                <button
+                  onClick={() => copyToClipboard(installUrl)}
+                  className="ml-2 px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
+                >
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
               Current Status
             </h3>
             <div className="text-gray-700 space-y-1 text-sm">
@@ -108,20 +108,8 @@ function InstallationGuide({ user, onInstallationComplete }) {
               <p><strong>Location ID:</strong> {user?.locationId}</p>
               <p><strong>Dev Mode:</strong> {user?.devMode ? 'Yes' : 'No'}</p>
               <p><strong>Token Status:</strong> {user?.tokenStatus || 'Unknown'}</p>
-              <p><strong>Client ID:</strong> {clientId}</p>
-              <p><strong>Redirect URI:</strong> {redirectUri}</p>
-            </div>
-          </div>
-
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Development vs Production
-            </h3>
-            <div className="text-gray-700 space-y-2 text-sm">
-              <p>• <strong>Local Development:</strong> You're currently running on localhost:3000</p>
-              <p>• <strong>OAuth Redirect:</strong> The installation will redirect to your deployed app at {redirectUri}</p>
-              <p>• <strong>After Installation:</strong> Visit your deployed app to use the new tokens</p>
-              <p>• <strong>Token Sync:</strong> The tokens will be available in both local and deployed environments</p>
+              <p><strong>Client ID:</strong> 685c90c16a67491ca1f5f7de-mcf0wxc1</p>
+              <p><strong>Redirect URI:</strong> https://eloquent-moonbeam-8a5386.netlify.app/oauth/callback</p>
             </div>
           </div>
 
