@@ -73,9 +73,9 @@ export class AuthService {
   async handleStandaloneMode(installationData) {
     console.log('Handling standalone mode with installation data:', installationData)
     
-    // Create a mock user object for standalone mode
+    // Create a user object for standalone mode using the actual userId from OAuth
     const standaloneUser = {
-      userId: `oauth_${installationData.locationId || installationData.companyId}`,
+      userId: installationData.userId || `oauth_${installationData.locationId || installationData.companyId}`,
       email: 'oauth-user@example.com',
       userName: 'OAuth User',
       role: 'admin',
@@ -84,7 +84,10 @@ export class AuthService {
       locationId: installationData.locationId || installationData.companyId,
       activeLocation: installationData.locationId,
       standaloneMode: true,
-      installedAt: installationData.installedAt
+      installedAt: installationData.installedAt,
+      configId: installationData.configId,
+      configValidated: true,
+      tokenStatus: 'valid'
     }
 
     this.currentUser = standaloneUser

@@ -56,7 +56,9 @@ function OAuthCallback() {
       localStorage.setItem('ghl_installation', JSON.stringify({
         locationId: result.locationId,
         companyId: result.companyId,
+        userId: result.userId, // Include the userId from token response
         userType: result.userType,
+        configId: result.configId,
         installedAt: new Date().toISOString()
       }))
       
@@ -130,11 +132,17 @@ function OAuthCallback() {
           <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-4">
             <div className="text-sm text-green-800">
               <p><strong>Type:</strong> {installationData.userType}</p>
+              {installationData.userId && (
+                <p><strong>User ID:</strong> {installationData.userId}</p>
+              )}
               {installationData.locationId && (
                 <p><strong>Location ID:</strong> {installationData.locationId}</p>
               )}
               {installationData.companyId && (
                 <p><strong>Company ID:</strong> {installationData.companyId}</p>
+              )}
+              {installationData.configId && (
+                <p><strong>Config ID:</strong> {installationData.configId}</p>
               )}
             </div>
           </div>
