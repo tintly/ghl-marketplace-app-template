@@ -2,6 +2,7 @@ export class AuthService {
   constructor() {
     this.currentUser = null
     this.isAuthenticated = false
+    this.supabaseUrl = import.meta.env.VITE_SUPABASE_URL
   }
 
   // Check if we're in mock mode
@@ -19,7 +20,6 @@ export class AuthService {
       activeLocation: import.meta.env.VITE_MOCK_ACTIVE_LOCATION,
       userName: import.meta.env.VITE_MOCK_USER_NAME,
       email: import.meta.env.VITE_MOCK_EMAIL,
-      // Set locationId based on activeLocation or companyId (as per your backend logic)
       locationId: import.meta.env.VITE_MOCK_ACTIVE_LOCATION || import.meta.env.VITE_MOCK_COMPANY_ID
     }
   }
@@ -39,11 +39,13 @@ export class AuthService {
       // Production flow - get encrypted data from parent window
       const encryptedUserData = await this.getEncryptedUserData()
 
-      // Send encrypted data to backend for decryption
-      const response = await fetch('/api/auth/user-context', {
+      // Send encrypted data to Supabase Edge Function
+      const apiUrl = `${this.supabaseUrl}/functions/v1/auth-user-context`
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
         },
         body: JSON.stringify({ key: encryptedUserData })
       })
@@ -93,17 +95,18 @@ export class AuthService {
       if (this.isMockMode()) {
         console.log('🔧 Mock mode: Simulating location access verification')
         const mockUser = this.getMockUserData()
-        // Grant access if the locationId matches activeLocation or companyId
         return locationId === mockUser.activeLocation || locationId === mockUser.companyId
       }
 
-      // Production flow
+      // Production flow - use Supabase Edge Function
       const encryptedUserData = await this.getEncryptedUserData()
+      const apiUrl = `${this.supabaseUrl}/functions/v1/auth-verify-location/${locationId}`
 
-      const response = await fetch(`/api/auth/verify-location/${locationId}`, {
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
         },
         body: JSON.stringify({ key: encryptedUserData })
       })
