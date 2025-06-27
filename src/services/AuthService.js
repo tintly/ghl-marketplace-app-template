@@ -21,16 +21,26 @@ export class AuthService {
         throw new Error('OAuth callback page - SSO not needed')
       }
 
+      // Check if we just completed an OAuth installation
+      const installationData = localStorage.getItem('ghl_installation')
+      if (installationData) {
+        console.log('Found recent OAuth installation, using standalone mode')
+        return this.handleStandaloneMode(JSON.parse(installationData))
+      }
+
       // Try to get encrypted data from parent window (for GHL SSO)
       let encryptedUserData = null
       try {
         encryptedUserData = await this.getEncryptedUserData()
         console.log('Encrypted user data received from GHL SSO')
       } catch (ssoError) {
-        console.log('GHL SSO not available, will try development mode:', ssoError.message)
+        console.log('GHL SSO not available, checking for standalone installation:', ssoError.message)
+        
+        // If no SSO and no recent installation, this might be a direct access attempt
+        throw new Error('This app must be accessed through GoHighLevel or installed via OAuth first')
       }
 
-      // Use Supabase Edge Function
+      // Use Supabase Edge Function for SSO authentication
       const response = await fetch(`${supabaseUrl}/functions/v1/auth-user-context`, {
         method: 'POST',
         headers: {
@@ -61,15 +71,44 @@ export class AuthService {
     }
   }
 
+  // Handle standalone mode for OAuth installations
+  async handleStandaloneMode(installationData) {
+    console.log('Handling standalone mode with installation data:', installationData)
+    
+    // Create a mock user object for standalone mode
+    const standaloneUser = {
+      userId: `oauth_${installationData.locationId || installationData.companyId}`,
+      email: 'oauth-user@example.com',
+      userName: 'OAuth User',
+      role: 'admin',
+      type: installationData.userType || 'location',
+      companyId: installationData.companyId,
+      locationId: installationData.locationId || installationData.companyId,
+      activeLocation: installationData.locationId,
+      standaloneMode: true,
+      installedAt: installationData.installedAt
+    }
+
+    this.currentUser = standaloneUser
+    this.isAuthenticated = true
+    
+    // Clear the installation data after a delay to allow for page refreshes
+    setTimeout(() => {
+      localStorage.removeItem('ghl_installation')
+    }, 60000) // Clear after 1 minute
+    
+    return standaloneUser
+  }
+
   // Extract the encrypted user data logic into separate method
   async getEncryptedUserData() {
     return new Promise((resolve, reject) => {
       console.log('Requesting user data from parent window...')
       
       const timeout = setTimeout(() => {
-        console.log('Timeout waiting for user data from parent window - this is expected in development mode')
+        console.log('Timeout waiting for user data from parent window')
         reject(new Error('Timeout waiting for user data from parent window'))
-      }, 5000) // Reduced timeout since we expect this to fail in dev mode
+      }, 5000)
 
       // Request user data from parent window
       window.parent.postMessage({ message: 'REQUEST_USER_DATA' }, '*')
@@ -99,6 +138,11 @@ export class AuthService {
   // Verify access to a specific location
   async verifyLocationAccess(locationId) {
     try {
+      // If in standalone mode, always allow access to the installed location
+      if (this.currentUser?.standaloneMode) {
+        return this.currentUser.locationId === locationId
+      }
+
       let encryptedUserData = null
       try {
         encryptedUserData = await this.getEncryptedUserData()

@@ -6,6 +6,7 @@ function OAuthCallback() {
   const [status, setStatus] = useState('processing')
   const [message, setMessage] = useState('Processing your installation...')
   const [error, setError] = useState(null)
+  const [installationData, setInstallationData] = useState(null)
 
   useEffect(() => {
     handleOAuthCallback()
@@ -46,9 +47,18 @@ function OAuthCallback() {
       }
 
       const result = await response.json()
+      setInstallationData(result)
       
       setStatus('success')
       setMessage('Installation completed successfully!')
+      
+      // Store installation info in localStorage for the main app
+      localStorage.setItem('ghl_installation', JSON.stringify({
+        locationId: result.locationId,
+        companyId: result.companyId,
+        userType: result.userType,
+        installedAt: new Date().toISOString()
+      }))
       
       // Redirect to main app after a short delay
       setTimeout(() => {
@@ -115,6 +125,20 @@ function OAuthCallback() {
         </h2>
         
         <p className="text-gray-600 mb-4">{message}</p>
+        
+        {installationData && status === 'success' && (
+          <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-4">
+            <div className="text-sm text-green-800">
+              <p><strong>Type:</strong> {installationData.userType}</p>
+              {installationData.locationId && (
+                <p><strong>Location ID:</strong> {installationData.locationId}</p>
+              )}
+              {installationData.companyId && (
+                <p><strong>Company ID:</strong> {installationData.companyId}</p>
+              )}
+            </div>
+          </div>
+        )}
         
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">

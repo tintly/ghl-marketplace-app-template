@@ -9,6 +9,12 @@ function DataExtractorApp({ user, authService, isDevMode = false }) {
     return `Company: ${user.companyId}`
   }
 
+  const getUserModeDisplay = () => {
+    if (isDevMode) return 'DEV MODE'
+    if (user.standaloneMode) return 'STANDALONE'
+    return null
+  }
+
   const handleLinkingComplete = () => {
     // Refresh the page or update state to reflect the linked configuration
     window.location.reload()
@@ -25,9 +31,11 @@ function DataExtractorApp({ user, authService, isDevMode = false }) {
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                 {getLocationDisplay()}
               </span>
-              {isDevMode && (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                  DEV MODE
+              {getUserModeDisplay() && (
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  isDevMode ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+                }`}>
+                  {getUserModeDisplay()}
                 </span>
               )}
             </div>
@@ -37,7 +45,9 @@ function DataExtractorApp({ user, authService, isDevMode = false }) {
       
       <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         {/* User Linking Component - shows if there are unlinked configurations */}
-        <UserLinking user={user} onLinkingComplete={handleLinkingComplete} />
+        {!user.standaloneMode && (
+          <UserLinking user={user} onLinkingComplete={handleLinkingComplete} />
+        )}
         
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-gray-900 mb-2">
@@ -51,6 +61,17 @@ function DataExtractorApp({ user, authService, isDevMode = false }) {
               <p className="text-sm text-yellow-800">
                 <strong>Development Mode:</strong> You're running in development mode with mock user data. 
                 The app is configured to bypass GHL SSO authentication for testing purposes.
+              </p>
+            </div>
+          )}
+          {user.standaloneMode && (
+            <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
+              <p className="text-sm text-green-800">
+                <strong>Standalone Mode:</strong> You're using this app as a standalone installation. 
+                This installation was completed via OAuth and doesn't require GHL SSO.
+              </p>
+              <p className="text-xs text-green-700 mt-1">
+                Installed: {new Date(user.installedAt).toLocaleString()}
               </p>
             </div>
           )}
