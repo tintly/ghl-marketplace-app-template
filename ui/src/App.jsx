@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { AuthService } from './services/AuthService'
 import DataExtractorApp from './components/DataExtractorApp'
+import DevModeLogin from './components/DevModeLogin'
 
 function App() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [showDevLogin, setShowDevLogin] = useState(false)
   const [authService] = useState(new AuthService())
 
   useEffect(() => {
@@ -26,7 +28,33 @@ function App() {
       console.log('User authenticated successfully:', userData)
     } catch (error) {
       console.error('Authentication error:', error)
+      
+      // Check if this is development mode
+      if (error.message === 'DEV_MODE' || authService.isDev()) {
+        console.log('Switching to development mode')
+        setShowDevLogin(true)
+        setLoading(false)
+        return
+      }
+      
       setError(`Authentication failed: ${error.message}. Please ensure you are accessing this from within GoHighLevel and that the app is properly configured.`)
+    } finally {
+      if (!showDevLogin) {
+        setLoading(false)
+      }
+    }
+  }
+
+  const handleDevLogin = async (userData) => {
+    try {
+      setLoading(true)
+      const authenticatedUser = await authService.loginWithSampleData(userData)
+      setUser(authenticatedUser)
+      setShowDevLogin(false)
+      console.log('Development login successful:', authenticatedUser)
+    } catch (error) {
+      console.error('Development login error:', error)
+      setError('Failed to login with sample data')
     } finally {
       setLoading(false)
     }
@@ -34,7 +62,14 @@ function App() {
 
   const retryAuth = () => {
     console.log('Retrying authentication...');
+    setShowDevLogin(false)
     initializeApp()
+  }
+
+  const switchToDevMode = () => {
+    console.log('Switching to development mode...');
+    setError(null)
+    setShowDevLogin(true)
   }
 
   if (loading) {
@@ -45,6 +80,10 @@ function App() {
         <p className="loading-subtext">Connecting to GoHighLevel...</p>
       </div>
     )
+  }
+
+  if (showDevLogin) {
+    return <DevModeLogin onLogin={handleDevLogin} />
   }
 
   if (error) {
@@ -61,7 +100,10 @@ function App() {
             <li>Try refreshing the page</li>
           </ul>
         </div>
-        <button onClick={retryAuth} className="retry-button">Retry Authentication</button>
+        <div className="error-actions">
+          <button onClick={retryAuth} className="retry-button">Retry Authentication</button>
+          <button onClick={switchToDevMode} className="dev-button">Use Development Mode</button>
+        </div>
       </div>
     )
   }
