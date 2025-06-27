@@ -15,16 +15,16 @@ export interface DevUserData {
 // Set DEV_MODE to true to use manual user data instead of SSO decryption
 export const DEV_MODE = Deno.env.get("DEV_MODE") === "true"
 
-// Manual user data for development - replace with your actual details
+// Manual user data for development - using your actual GHL details
 export const DEV_USER_DATA: DevUserData = {
-  userId: Deno.env.get("DEV_USER_ID") || "user_12345",
-  email: Deno.env.get("DEV_USER_EMAIL") || "test@example.com", 
-  userName: Deno.env.get("DEV_USER_NAME") || "Test User",
+  userId: Deno.env.get("DEV_USER_ID") || "qNgrB0T9EG975nt0FVQk",
+  email: Deno.env.get("DEV_USER_EMAIL") || "mark@tintly.io", 
+  userName: Deno.env.get("DEV_USER_NAME") || "Mark Tintly",
   role: Deno.env.get("DEV_USER_ROLE") || "admin",
-  type: Deno.env.get("DEV_USER_TYPE") || "location",
-  companyId: Deno.env.get("DEV_COMPANY_ID") || "comp_67890",
-  locationId: Deno.env.get("DEV_LOCATION_ID") || "loc_54321",
-  activeLocation: Deno.env.get("DEV_ACTIVE_LOCATION") || "loc_54321"
+  type: Deno.env.get("DEV_USER_TYPE") || "agency",
+  companyId: Deno.env.get("DEV_COMPANY_ID") || "09fYwmPmgONYOfaasklt",
+  locationId: Deno.env.get("DEV_LOCATION_ID") || "4beIyWyWrcoPRD7PEN5G",
+  activeLocation: Deno.env.get("DEV_ACTIVE_LOCATION") || "4beIyWyWrcoPRD7PEN5G"
 }
 
 export function getDevUserContext() {
