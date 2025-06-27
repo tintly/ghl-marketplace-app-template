@@ -7,31 +7,37 @@ export class AuthService {
   // Get user data using GHL SSO
   async getUserData() {
     try {
-      console.log('Starting authentication process...');
+      console.log('Starting authentication process...')
       
       // Get encrypted data from parent window
       const encryptedUserData = await this.getEncryptedUserData()
-      console.log('Encrypted user data received');
+      console.log('Encrypted user data received')
 
-      // Send encrypted data to Netlify Function
-      const response = await fetch('/.netlify/functions/auth-user-context', {
+      // Send encrypted data to Supabase Edge Function
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+      if (!supabaseUrl) {
+        throw new Error('VITE_SUPABASE_URL environment variable is not set')
+      }
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/auth-user-context`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
         },
         body: JSON.stringify({ key: encryptedUserData })
       })
 
-      console.log('Auth response status:', response.status);
+      console.log('Auth response status:', response.status)
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Auth response error:', errorText);
-        throw new Error(`Authentication failed: ${response.status} - ${errorText}`);
+        const errorText = await response.text()
+        console.error('Auth response error:', errorText)
+        throw new Error(`Authentication failed: ${response.status} - ${errorText}`)
       }
 
       const result = await response.json()
-      console.log('Authentication successful:', result);
+      console.log('Authentication successful:', result)
       
       this.currentUser = result.user
       this.isAuthenticated = true
@@ -46,10 +52,10 @@ export class AuthService {
   // Extract the encrypted user data logic into separate method
   async getEncryptedUserData() {
     return new Promise((resolve, reject) => {
-      console.log('Requesting user data from parent window...');
+      console.log('Requesting user data from parent window...')
       
       const timeout = setTimeout(() => {
-        console.error('Timeout waiting for user data from parent window');
+        console.error('Timeout waiting for user data from parent window')
         reject(new Error('Timeout waiting for user data from parent window. Please ensure you are accessing this app from within GoHighLevel.'))
       }, 15000) // Increased timeout to 15 seconds
 
@@ -58,17 +64,17 @@ export class AuthService {
 
       // Listen for the response
       const messageHandler = ({ data, origin }) => {
-        console.log('Received message from parent:', { message: data.message, origin });
+        console.log('Received message from parent:', { message: data.message, origin })
         
         if (data.message === 'REQUEST_USER_DATA_RESPONSE') {
           clearTimeout(timeout)
           window.removeEventListener('message', messageHandler)
           
           if (data.payload) {
-            console.log('User data payload received');
+            console.log('User data payload received')
             resolve(data.payload)
           } else {
-            console.error('No payload in user data response');
+            console.error('No payload in user data response')
             reject(new Error('No user data payload received'))
           }
         }
@@ -87,11 +93,13 @@ export class AuthService {
   async verifyLocationAccess(locationId) {
     try {
       const encryptedUserData = await this.getEncryptedUserData()
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 
-      const response = await fetch(`/.netlify/functions/auth-verify-location/${locationId}`, {
+      const response = await fetch(`${supabaseUrl}/functions/v1/auth-verify-location/${locationId}`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
         },
         body: JSON.stringify({ key: encryptedUserData })
       })

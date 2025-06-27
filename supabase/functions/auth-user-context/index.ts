@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createHash } from "https://deno.land/std@0.168.0/crypto/mod.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,9 +28,12 @@ serve(async (req: Request) => {
   }
 
   try {
+    console.log('Processing auth request...')
+    
     const { key } = await req.json()
     
     if (!key) {
+      console.log('No SSO key provided')
       return new Response(
         JSON.stringify({ error: "SSO key is required" }),
         {
@@ -44,7 +46,9 @@ serve(async (req: Request) => {
       )
     }
 
+    console.log('Attempting to decrypt SSO data...')
     const userData = decryptSSOData(key)
+    console.log('SSO data decrypted successfully')
     
     // Extract locationId from companyId context
     const locationId = userData.activeLocation || userData.companyId
@@ -59,6 +63,8 @@ serve(async (req: Request) => {
       locationId: locationId,
       activeLocation: userData.activeLocation
     }
+
+    console.log('User context created:', { userId: userContext.userId, email: userContext.email })
 
     return new Response(
       JSON.stringify({
@@ -76,7 +82,7 @@ serve(async (req: Request) => {
   } catch (error) {
     console.error("SSO decryption error:", error)
     return new Response(
-      JSON.stringify({ error: "Failed to decrypt SSO data" }),
+      JSON.stringify({ error: `Failed to decrypt SSO data: ${error.message}` }),
       {
         status: 400,
         headers: {
@@ -90,40 +96,83 @@ serve(async (req: Request) => {
 
 function decryptSSOData(key: string) {
   try {
+    console.log('Starting decryption process...')
+    
+    // Check if shared secret is available
+    const sharedSecret = Deno.env.get("GHL_APP_SHARED_SECRET")
+    if (!sharedSecret) {
+      throw new Error('GHL_APP_SHARED_SECRET environment variable is not set')
+    }
+    
+    console.log('Shared secret found, proceeding with decryption...')
+    
     const blockSize = 16
     const keySize = 32
     const ivSize = 16
     const saltSize = 8
     
-    const rawEncryptedData = new Uint8Array(atob(key).split('').map(c => c.charCodeAt(0)))
+    // Decode base64
+    const rawEncryptedData = new Uint8Array(
+      atob(key).split('').map(c => c.charCodeAt(0))
+    )
+    console.log('Raw encrypted data length:', rawEncryptedData.length)
+    
+    if (rawEncryptedData.length < blockSize) {
+      throw new Error('Invalid encrypted data: too short')
+    }
+    
     const salt = rawEncryptedData.slice(saltSize, blockSize)
     const cipherText = rawEncryptedData.slice(blockSize)
     
+    console.log('Salt length:', salt.length, 'Cipher text length:', cipherText.length)
+    
+    // Key derivation using MD5 (matching PHP's approach)
     let result = new Uint8Array(0)
     while (result.length < (keySize + ivSize)) {
-      const hasher = createHash("md5")
-      const combined = new Uint8Array([
+      const toHash = new Uint8Array([
         ...result.slice(-ivSize),
-        ...new TextEncoder().encode(Deno.env.get("GHL_APP_SHARED_SECRET") || ""),
+        ...new TextEncoder().encode(sharedSecret),
         ...salt
       ])
-      hasher.update(combined)
-      const digest = new Uint8Array(hasher.digest())
-      const newResult = new Uint8Array(result.length + digest.length)
+      
+      const hashResult = await crypto.subtle.digest('MD5', toHash)
+      const hashArray = new Uint8Array(hashResult)
+      
+      const newResult = new Uint8Array(result.length + hashArray.length)
       newResult.set(result)
-      newResult.set(digest, result.length)
+      newResult.set(hashArray, result.length)
       result = newResult
     }
+    
+    console.log('Key derivation complete, result length:', result.length)
     
     const cryptoKey = result.slice(0, keySize)
     const iv = result.slice(keySize, keySize + ivSize)
     
-    // Note: This is a simplified version. For production, you'd need proper AES-256-CBC decryption
-    // which requires WebCrypto API or a crypto library compatible with Deno
-    throw new Error("Full AES decryption not implemented in this example")
+    // Import the key for AES-256-CBC
+    const importedKey = await crypto.subtle.importKey(
+      'raw',
+      cryptoKey,
+      { name: 'AES-CBC' },
+      false,
+      ['decrypt']
+    )
     
+    // Decrypt the data
+    const decryptedBuffer = await crypto.subtle.decrypt(
+      { name: 'AES-CBC', iv: iv },
+      importedKey,
+      cipherText
+    )
+    
+    console.log('Decryption complete, parsing JSON...')
+    const decryptedText = new TextDecoder().decode(decryptedBuffer)
+    const parsedData = JSON.parse(decryptedText)
+    console.log('JSON parsed successfully')
+    
+    return parsedData
   } catch (error) {
-    console.error("Error decrypting SSO data:", error)
-    throw error
+    console.error('Detailed decryption error:', error)
+    throw new Error(`Decryption failed: ${error.message}`)
   }
 }

@@ -29,7 +29,8 @@ serve(async (req: Request) => {
 
   try {
     const url = new URL(req.url)
-    const locationId = url.pathname.split('/').pop()
+    const pathParts = url.pathname.split('/')
+    const locationId = pathParts[pathParts.length - 1]
     const { key } = await req.json()
     
     if (!key || !locationId) {
@@ -45,9 +46,22 @@ serve(async (req: Request) => {
       )
     }
 
-    // For now, we'll simulate the verification since full decryption is complex in Deno
-    // In production, you'd implement the full decryption logic
+    const userData = decryptSSOData(key)
+    const userLocationId = userData.activeLocation || userData.companyId
     
+    if (userLocationId !== locationId) {
+      return new Response(
+        JSON.stringify({ error: "Access denied to this location" }),
+        {
+          status: 403,
+          headers: {
+            "Content-Type": "application/json",
+            ...corsHeaders,
+          },
+        }
+      )
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -75,3 +89,38 @@ serve(async (req: Request) => {
     )
   }
 })
+
+function decryptSSOData(key: string) {
+  try {
+    const sharedSecret = Deno.env.get("GHL_APP_SHARED_SECRET")
+    if (!sharedSecret) {
+      throw new Error('GHL_APP_SHARED_SECRET environment variable is not set')
+    }
+    
+    const blockSize = 16
+    const keySize = 32
+    const ivSize = 16
+    const saltSize = 8
+    
+    const rawEncryptedData = new Uint8Array(
+      atob(key).split('').map(c => c.charCodeAt(0))
+    )
+    const salt = rawEncryptedData.slice(saltSize, blockSize)
+    const cipherText = rawEncryptedData.slice(blockSize)
+    
+    // This is a simplified version - in production you'd implement the full decryption
+    // For now, we'll return a mock response to test the flow
+    return {
+      userId: 'test-user-id',
+      email: 'test@example.com',
+      userName: 'Test User',
+      role: 'admin',
+      type: 'location',
+      companyId: 'test-company-id',
+      activeLocation: 'test-location-id'
+    }
+  } catch (error) {
+    console.error("Error decrypting SSO data:", error)
+    throw error
+  }
+}
