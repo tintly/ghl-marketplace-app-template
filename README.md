@@ -106,12 +106,12 @@ Single Sign-On (SSO) is a centralized authentication method that streamlines acc
 
 ## Vue 3 Web Application
 
-This project includes a Vue 3 web application located in the `ui` folder under the `src` directory. The Vue application is designed to be served by the Express.js server.You can use this UI section to build custom pages. To work with the Vue 3 application, follow these steps:
+This project includes a Vue 3 web application located in the `ui` folder at the project root. The Vue application is designed to be served by the Express.js server. You can use this UI section to build custom pages. To work with the Vue 3 application, follow these steps:
 
 1. Navigate to the `ui` folder:
 
    ```bash
-   cd src/ui
+   cd ui
    ```
 
 2. Install the Vue application dependencies:
@@ -131,7 +131,7 @@ This project includes a Vue 3 web application located in the `ui` folder under t
 4. Start the Express server (if not already running):
 
    ```bash
-   cd ../../   # Navigate back to the project root directory
+   cd ../   # Navigate back to the project root directory
    npm start
    ```
 
