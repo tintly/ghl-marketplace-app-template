@@ -8,10 +8,6 @@ function DataExtractorApp({ user, authService }) {
     return `Company: ${user.companyId}`
   }
 
-  const getContextTypeDisplay = () => {
-    return user.type === 'agency' ? 'Agency User' : 'Location User'
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm border-b">
@@ -36,38 +32,6 @@ function DataExtractorApp({ user, authService }) {
           <p className="text-lg text-gray-600">
             Extract valuable insights from your GoHighLevel conversations automatically.
           </p>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">User ID</h3>
-            <p className="mt-2 text-lg font-semibold text-gray-900 break-all">{user.userId}</p>
-          </div>
-          
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Location ID</h3>
-            <p className="mt-2 text-lg font-semibold text-gray-900 break-all">{user.locationId}</p>
-          </div>
-          
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">User Role</h3>
-            <p className="mt-2 text-lg font-semibold text-gray-900">{user.role}</p>
-          </div>
-          
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Context Type</h3>
-            <p className="mt-2 text-lg font-semibold text-gray-900">{getContextTypeDisplay()}</p>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Email</h3>
-            <p className="mt-2 text-lg font-semibold text-gray-900 break-all">{user.email}</p>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Company ID</h3>
-            <p className="mt-2 text-lg font-semibold text-gray-900 break-all">{user.companyId}</p>
-          </div>
         </div>
         
         <div className="bg-white rounded-lg shadow">
