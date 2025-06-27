@@ -1,7 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { md5 } from "../_shared/md5.ts"
-import { DEV_MODE, getDevUserContext, validateDevEnvironment } from "../_shared/dev-config.ts"
+import { 
+  DEV_MODE, 
+  getDevUserContext, 
+  validateRealAccountTokens,
+  shouldCreateDevConfig
+} from "../_shared/dev-config.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,41 +40,13 @@ serve(async (req: Request) => {
     
     // Check if we're in development mode
     if (DEV_MODE) {
-      console.log('Development mode enabled - validating environment safety...')
+      console.log('Development mode enabled - using real GHL account with proper token validation')
       
-      // Validate that dev mode isn't using production IDs
-      try {
-        validateDevEnvironment()
-      } catch (validationError) {
-        console.error('DEV ENVIRONMENT VALIDATION FAILED:', validationError.message)
-        return new Response(
-          JSON.stringify({ 
-            error: "Development environment validation failed",
-            details: validationError.message,
-            critical: true
-          }),
-          {
-            status: 400,
-            headers: {
-              "Content-Type": "application/json",
-              ...corsHeaders,
-            },
-          }
-        )
-      }
-      
-      console.log('Development environment validated - using safe test data')
       const userContext = getDevUserContext()
       
-      // Initialize Supabase client with service role for dev configuration
+      // Initialize Supabase client
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!
       const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-      
-      console.log('Environment check:', {
-        supabaseUrl: supabaseUrl ? 'Set' : 'Missing',
-        serviceKey: supabaseServiceKey ? 'Set' : 'Missing',
-        devMode: DEV_MODE
-      })
       
       if (!supabaseUrl || !supabaseServiceKey) {
         console.error('Missing Supabase environment variables')
@@ -94,14 +71,14 @@ serve(async (req: Request) => {
       
       const supabase = createClient(supabaseUrl, supabaseServiceKey)
       
-      // Create or update dev configuration with detailed error handling
-      const configResult = await ensureDevConfiguration(supabase, userContext)
+      // Check for existing configuration with real tokens
+      const configResult = await validateRealAccountConfiguration(supabase, userContext)
       
       console.log('=== AUTH REQUEST COMPLETE ===')
       console.log('Final result:', {
         userId: userContext.userId,
         email: userContext.email,
-        configResult: configResult ? 'Success' : 'Failed'
+        configResult: configResult ? 'Found' : 'Missing'
       })
 
       return new Response(
@@ -110,8 +87,10 @@ serve(async (req: Request) => {
           user: {
             ...userContext,
             devMode: true,
-            configCreated: !!configResult,
-            configId: configResult?.id || null
+            configFound: !!configResult,
+            configId: configResult?.id || null,
+            tokenStatus: configResult?.tokenStatus || 'missing',
+            tokenValidation: configResult?.tokenValidation || null
           }
         }),
         {
@@ -161,13 +140,13 @@ serve(async (req: Request) => {
 
     console.log('User context created:', { userId: userContext.userId, email: userContext.email })
 
-    // Initialize Supabase to validate/create configuration
+    // Initialize Supabase to validate configuration
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     
-    // Ensure production configuration exists and has valid tokens
-    const configResult = await ensureProductionConfiguration(supabase, userContext)
+    // Validate production configuration
+    const configResult = await validateRealAccountConfiguration(supabase, userContext)
 
     return new Response(
       JSON.stringify({
@@ -176,7 +155,8 @@ serve(async (req: Request) => {
           ...userContext,
           configValidated: !!configResult,
           configId: configResult?.id || null,
-          tokenStatus: configResult?.tokenStatus || 'unknown'
+          tokenStatus: configResult?.tokenStatus || 'unknown',
+          tokenValidation: configResult?.tokenValidation || null
         }
       }),
       {
@@ -189,9 +169,7 @@ serve(async (req: Request) => {
     )
   } catch (error) {
     console.error("=== AUTH REQUEST ERROR ===")
-    console.error("Error type:", typeof error)
     console.error("Error message:", error.message)
-    console.error("Error stack:", error.stack)
     
     return new Response(
       JSON.stringify({ 
@@ -209,9 +187,9 @@ serve(async (req: Request) => {
   }
 })
 
-async function ensureProductionConfiguration(supabase: any, userContext: any) {
+async function validateRealAccountConfiguration(supabase: any, userContext: any) {
   try {
-    console.log('=== PRODUCTION CONFIGURATION VALIDATION ===')
+    console.log('=== REAL ACCOUNT CONFIGURATION VALIDATION ===')
     console.log('User context:', {
       userId: userContext.userId,
       locationId: userContext.locationId,
@@ -237,12 +215,13 @@ async function ensureProductionConfiguration(supabase: any, userContext: any) {
         businessName: existingConfig.business_name,
         hasAccessToken: !!existingConfig.access_token,
         hasRefreshToken: !!existingConfig.refresh_token,
-        tokenExpiry: existingConfig.token_expires_at
+        tokenExpiry: existingConfig.token_expires_at,
+        isDevToken: existingConfig.access_token?.startsWith('dev-')
       })
       
-      // Validate token status
-      const tokenStatus = validateTokenStatus(existingConfig)
-      console.log('Token validation result:', tokenStatus)
+      // Validate token status using the real account validation
+      const tokenValidation = validateRealAccountTokens(existingConfig)
+      console.log('Token validation result:', tokenValidation)
       
       // If configuration exists but no user_id, link it
       if (!existingConfig.user_id) {
@@ -259,235 +238,48 @@ async function ensureProductionConfiguration(supabase: any, userContext: any) {
 
         if (updateError) {
           console.error('Failed to link config:', updateError)
-          return { ...existingConfig, tokenStatus }
+          return { 
+            ...existingConfig, 
+            tokenStatus: 'link_failed',
+            tokenValidation 
+          }
         }
         
         console.log('Successfully linked config to user')
-        return { ...updatedConfig, tokenStatus }
-      }
-      
-      return { ...existingConfig, tokenStatus }
-    }
-    
-    console.log('No existing configuration found - this should be created via OAuth flow')
-    return null
-    
-  } catch (error) {
-    console.error('Error in production configuration validation:', error)
-    return null
-  }
-}
-
-function validateTokenStatus(config: any) {
-  if (!config.access_token) {
-    return 'missing_access_token'
-  }
-  
-  if (!config.refresh_token) {
-    return 'missing_refresh_token'
-  }
-  
-  if (config.token_expires_at) {
-    const expiryDate = new Date(config.token_expires_at)
-    const now = new Date()
-    const hoursUntilExpiry = (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60)
-    
-    if (hoursUntilExpiry < 0) {
-      return 'expired'
-    } else if (hoursUntilExpiry < 24) {
-      return 'expiring_soon'
-    }
-  }
-  
-  return 'valid'
-}
-
-async function ensureDevConfiguration(supabase: any, userContext: any) {
-  try {
-    console.log('=== DEV CONFIGURATION START ===')
-    console.log('User context:', {
-      userId: userContext.userId,
-      locationId: userContext.locationId,
-      email: userContext.email
-    })
-    
-    // Test database connection with a simple query
-    console.log('Step 1: Testing database connection...')
-    try {
-      const { data: healthCheck, error: healthError } = await supabase
-        .from('ghl_configurations')
-        .select('id')
-        .limit(1)
-
-      if (healthError) {
-        console.error('Database health check failed:', {
-          code: healthError.code,
-          message: healthError.message,
-          details: healthError.details,
-          hint: healthError.hint
-        })
-        throw new Error(`Database connection failed: ${healthError.message}`)
-      }
-      
-      console.log('Database connection successful')
-    } catch (dbError) {
-      console.error('Database connection test failed:', dbError)
-      throw new Error(`Database unavailable: ${dbError.message}`)
-    }
-    
-    // Check if configuration already exists
-    console.log('Step 2: Checking for existing configuration...')
-    try {
-      const { data: existingConfig, error: checkError } = await supabase
-        .from('ghl_configurations')
-        .select('*')
-        .eq('ghl_account_id', userContext.locationId)
-        .maybeSingle()
-
-      if (checkError) {
-        console.error('Error checking existing config:', {
-          code: checkError.code,
-          message: checkError.message,
-          details: checkError.details
-        })
-        throw new Error(`Failed to check existing configuration: ${checkError.message}`)
-      }
-      
-      if (existingConfig) {
-        console.log('Found existing configuration:', {
-          id: existingConfig.id,
-          userId: existingConfig.user_id,
-          businessName: existingConfig.business_name
-        })
-        
-        // If exists but no user_id, update it
-        if (!existingConfig.user_id) {
-          console.log('Step 2a: Linking existing config to user...')
-          const { data: updatedConfig, error: updateError } = await supabase
-            .from('ghl_configurations')
-            .update({ 
-              user_id: userContext.userId,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existingConfig.id)
-            .select()
-            .single()
-
-          if (updateError) {
-            console.error('Failed to link config:', {
-              code: updateError.code,
-              message: updateError.message,
-              details: updateError.details
-            })
-            // Return original config even if linking fails
-            return existingConfig
-          }
-          
-          console.log('Successfully linked config to user')
-          return updatedConfig
+        return { 
+          ...updatedConfig, 
+          tokenStatus: 'linked',
+          tokenValidation 
         }
-        
-        console.log('Configuration already properly linked')
-        return existingConfig
       }
       
-      console.log('No existing configuration found')
-    } catch (checkError) {
-      console.error('Error in configuration check:', checkError)
-      throw checkError
-    }
-
-    // Create new configuration
-    console.log('Step 3: Creating new dev configuration...')
-    const configData = {
-      user_id: userContext.userId,
-      ghl_account_id: userContext.locationId,
-      client_id: 'dev-client-id',
-      client_secret: 'dev-client-secret',
-      access_token: 'dev-access-token-' + Date.now(),
-      refresh_token: 'dev-refresh-token-' + Date.now(),
-      token_expires_at: new Date(Date.now() + (365 * 24 * 60 * 60 * 1000)).toISOString(),
-      business_name: 'Development Business',
-      business_address: '123 Dev Street',
-      business_phone: '+1-555-0123',
-      business_email: userContext.email,
-      business_website: 'https://dev.example.com',
-      business_description: 'Development environment business for testing',
-      target_audience: 'Developers and testers',
-      services_offered: 'Software development and testing services',
-      business_context: 'This is a development environment configuration for testing purposes',
-      is_active: true,
-      created_by: userContext.userId
-    }
-
-    console.log('Configuration data prepared:', {
-      user_id: configData.user_id,
-      ghl_account_id: configData.ghl_account_id,
-      business_name: configData.business_name
-    })
-
-    try {
-      const { data: newConfig, error: insertError } = await supabase
-        .from('ghl_configurations')
-        .insert(configData)
-        .select()
-        .single()
-
-      if (insertError) {
-        console.error('=== INSERT ERROR DETAILS ===')
-        console.error('Error code:', insertError.code)
-        console.error('Error message:', insertError.message)
-        console.error('Error details:', insertError.details)
-        console.error('Error hint:', insertError.hint)
-        console.error('Full error object:', JSON.stringify(insertError, null, 2))
-        
-        // Check if it's a unique constraint violation
-        if (insertError.code === '23505') {
-          console.log('Unique constraint violation - attempting to fetch existing record')
-          try {
-            const { data: existingAfterError, error: fetchError } = await supabase
-              .from('ghl_configurations')
-              .select('*')
-              .eq('ghl_account_id', userContext.locationId)
-              .single()
-              
-            if (!fetchError && existingAfterError) {
-              console.log('Found existing record after constraint violation:', existingAfterError.id)
-              return existingAfterError
-            } else {
-              console.error('Failed to fetch existing record:', fetchError)
-            }
-          } catch (fetchError) {
-            console.error('Error fetching after constraint violation:', fetchError)
-          }
-        }
-        
-        throw new Error(`Database insert failed: ${insertError.message} (Code: ${insertError.code})`)
+      return { 
+        ...existingConfig, 
+        tokenStatus: 'found',
+        tokenValidation 
       }
-
-      console.log('=== SUCCESS ===')
-      console.log('Dev configuration created successfully:', {
-        id: newConfig.id,
-        ghl_account_id: newConfig.ghl_account_id,
-        user_id: newConfig.user_id
-      })
-      return newConfig
-      
-    } catch (insertError) {
-      console.error('Insert operation failed:', insertError)
-      throw insertError
+    }
+    
+    console.log('No existing configuration found')
+    return {
+      tokenStatus: 'missing',
+      tokenValidation: {
+        isValid: false,
+        message: 'No configuration found. Please install the app via OAuth.',
+        severity: 'error'
+      }
     }
     
   } catch (error) {
-    console.error('=== CONFIGURATION CREATION FAILED ===')
-    console.error('Error type:', typeof error)
-    console.error('Error name:', error.name)
-    console.error('Error message:', error.message)
-    console.error('Error stack:', error.stack)
-    
-    // Return null instead of throwing to allow auth to continue
-    console.log('Returning null to allow auth to continue despite config failure')
-    return null
+    console.error('Error in configuration validation:', error)
+    return {
+      tokenStatus: 'error',
+      tokenValidation: {
+        isValid: false,
+        message: `Configuration validation failed: ${error.message}`,
+        severity: 'error'
+      }
+    }
   }
 }
 

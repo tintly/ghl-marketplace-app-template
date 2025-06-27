@@ -15,8 +15,7 @@ function DataExtractionModule({ user, authService }) {
   const [editingField, setEditingField] = useState(null)
   const [ghlConfig, setGhlConfig] = useState(null)
   const [configError, setConfigError] = useState(null)
-  const [retryCount, setRetryCount] = useState(0)
-  const [tokenStatus, setTokenStatus] = useState(null)
+  const [tokenValidation, setTokenValidation] = useState(null)
 
   useEffect(() => {
     loadData()
@@ -33,18 +32,18 @@ function DataExtractionModule({ user, authService }) {
       setGhlConfig(config)
 
       if (config) {
-        // Check token status
-        const status = validateTokenStatus(config)
-        setTokenStatus(status)
+        // Validate token status
+        const validation = validateTokenStatus(config)
+        setTokenValidation(validation)
         
-        if (status.isValid) {
+        if (validation.isValid) {
           // Load custom fields and extraction fields in parallel
           await Promise.all([
             loadCustomFields(config),
             loadExtractionFields(config.id)
           ])
         } else {
-          setConfigError(`Token issue: ${status.message}`)
+          setConfigError(`Token issue: ${validation.message}`)
         }
       }
     } catch (error) {
@@ -60,7 +59,17 @@ function DataExtractionModule({ user, authService }) {
       return {
         isValid: false,
         status: 'missing_access_token',
-        message: 'Access token is missing. Please reinstall the app or contact support.',
+        message: 'Access token is missing. Please reinstall the app.',
+        severity: 'error'
+      }
+    }
+    
+    // Check if it's a dev token (which shouldn't be used for real account)
+    if (config.access_token.startsWith('dev-')) {
+      return {
+        isValid: false,
+        status: 'dev_token_detected',
+        message: 'Development token detected. Please reinstall the app to get real GHL tokens.',
         severity: 'error'
       }
     }
@@ -70,6 +79,15 @@ function DataExtractionModule({ user, authService }) {
         isValid: false,
         status: 'missing_refresh_token',
         message: 'Refresh token is missing. Please reinstall the app.',
+        severity: 'error'
+      }
+    }
+    
+    if (config.refresh_token.startsWith('dev-')) {
+      return {
+        isValid: false,
+        status: 'dev_refresh_token_detected',
+        message: 'Development refresh token detected. Please reinstall the app to get real GHL tokens.',
         severity: 'error'
       }
     }
@@ -99,7 +117,7 @@ function DataExtractionModule({ user, authService }) {
     return {
       isValid: true,
       status: 'valid',
-      message: 'Access token is valid.',
+      message: 'Access token is valid and ready for use.',
       severity: 'success'
     }
   }
@@ -110,15 +128,15 @@ function DataExtractionModule({ user, authService }) {
       userId: user.userId,
       locationId: user.locationId,
       devMode: user.devMode,
-      configCreated: user.configCreated,
+      configFound: user.configFound,
       configId: user.configId,
       tokenStatus: user.tokenStatus
     })
 
     try {
-      // Strategy 1: Try to find by ghl_account_id (location ID) first
+      // Try to find by ghl_account_id (location ID)
       if (user.locationId) {
-        console.log('Strategy 1: Finding config by ghl_account_id:', user.locationId)
+        console.log('Finding config by ghl_account_id:', user.locationId)
         
         const { data: locationData, error: locationError } = await supabase
           .from('ghl_configurations')
@@ -128,20 +146,20 @@ function DataExtractionModule({ user, authService }) {
           .maybeSingle()
 
         if (locationError) {
-          console.error('Error querying by ghl_account_id:', {
-            code: locationError.code,
-            message: locationError.message,
-            details: locationError.details
-          })
+          console.error('Error querying by ghl_account_id:', locationError)
           setConfigError(`Database query failed: ${locationError.message}`)
-        } else if (locationData) {
+          return null
+        } 
+        
+        if (locationData) {
           console.log('Found config by ghl_account_id:', {
             id: locationData.id,
             userId: locationData.user_id,
             businessName: locationData.business_name,
             hasAccessToken: !!locationData.access_token,
             hasRefreshToken: !!locationData.refresh_token,
-            tokenExpiry: locationData.token_expires_at
+            tokenExpiry: locationData.token_expires_at,
+            isDevToken: locationData.access_token?.startsWith('dev-')
           })
           
           // If found but no user_id, link it to current user
@@ -172,8 +190,8 @@ function DataExtractionModule({ user, authService }) {
         }
       }
 
-      // Strategy 2: Try to find by user_id
-      console.log('Strategy 2: Finding config by user_id:', user.userId)
+      // Try to find by user_id as fallback
+      console.log('Finding config by user_id:', user.userId)
       
       const { data: userData, error: userError } = await supabase
         .from('ghl_configurations')
@@ -185,44 +203,20 @@ function DataExtractionModule({ user, authService }) {
       if (userError) {
         console.error('Error querying by user_id:', userError)
         setConfigError(`Database query failed: ${userError.message}`)
-      } else if (userData) {
+        return null
+      } 
+      
+      if (userData) {
         console.log('Found config by user_id:', userData.id)
         return userData
       }
 
-      // Strategy 3: In dev mode, try to create configuration if none exists
-      if (user.devMode) {
-        console.log('Strategy 3: Dev mode - attempting to create configuration...')
-        
-        if (retryCount < 3) {
-          console.log(`Retry attempt ${retryCount + 1}/3 - waiting for auth system to create config...`)
-          setConfigError(`No configuration found. Attempting to create one... (Attempt ${retryCount + 1}/3)`)
-          
-          // Wait and retry
-          setTimeout(() => {
-            setRetryCount(prev => prev + 1)
-            loadData()
-          }, 2000)
-          
-          return null
-        } else {
-          console.log('Max retries reached, attempting manual creation...')
-          const manualConfig = await createDevConfiguration()
-          if (manualConfig) {
-            setRetryCount(0) // Reset retry count on success
-            return manualConfig
-          }
-        }
-      } else {
-        // Production mode - configuration should exist from OAuth flow
-        setConfigError(
-          'No configuration found for this location. ' +
-          'Please ensure the app is properly installed via the GoHighLevel marketplace.'
-        )
-      }
-
       // No configuration found
       console.log('No configuration found for user')
+      setConfigError(
+        'No configuration found for this location. ' +
+        'Please install the app via the GoHighLevel marketplace to get proper access tokens.'
+      )
       return null
 
     } catch (error) {
@@ -232,94 +226,11 @@ function DataExtractionModule({ user, authService }) {
     }
   }
 
-  const createDevConfiguration = async () => {
-    try {
-      console.log('=== MANUAL DEV CONFIG CREATION ===')
-      
-      const configData = {
-        user_id: user.userId,
-        ghl_account_id: user.locationId,
-        client_id: 'dev-client-id',
-        client_secret: 'dev-client-secret',
-        access_token: 'dev-access-token-' + Date.now(),
-        refresh_token: 'dev-refresh-token-' + Date.now(),
-        token_expires_at: new Date(Date.now() + (365 * 24 * 60 * 60 * 1000)).toISOString(),
-        business_name: 'Development Business',
-        business_address: '123 Dev Street',
-        business_phone: '+1-555-0123',
-        business_email: user.email,
-        business_website: 'https://dev.example.com',
-        business_description: 'Development environment business for testing',
-        target_audience: 'Developers and testers',
-        services_offered: 'Software development and testing services',
-        business_context: 'This is a development environment configuration for testing purposes',
-        is_active: true,
-        created_by: user.userId
-      }
-
-      console.log('Creating config with data:', {
-        user_id: configData.user_id,
-        ghl_account_id: configData.ghl_account_id,
-        business_name: configData.business_name
-      })
-
-      const { data: newConfig, error: insertError } = await supabase
-        .from('ghl_configurations')
-        .insert(configData)
-        .select()
-        .single()
-
-      if (insertError) {
-        console.error('Manual config creation failed:', {
-          code: insertError.code,
-          message: insertError.message,
-          details: insertError.details
-        })
-        
-        // If unique constraint violation, try to fetch existing
-        if (insertError.code === '23505') {
-          const { data: existing } = await supabase
-            .from('ghl_configurations')
-            .select('*')
-            .eq('ghl_account_id', user.locationId)
-            .single()
-          
-          if (existing) {
-            console.log('Found existing config after constraint violation')
-            return existing
-          }
-        }
-        
-        throw new Error(`Failed to create configuration: ${insertError.message}`)
-      }
-
-      console.log('Manual config creation successful:', newConfig.id)
-      return newConfig
-      
-    } catch (error) {
-      console.error('Manual config creation error:', error)
-      setConfigError(`Failed to create configuration: ${error.message}`)
-      return null
-    }
-  }
-
   const loadCustomFields = async (config) => {
     try {
-      // In dev mode, use mock data if API call fails
-      if (user.devMode) {
-        try {
-          const ghlService = new GHLApiService(config.access_token)
-          const fields = await ghlService.getCustomFields(config.ghl_account_id)
-          setCustomFields(fields)
-        } catch (error) {
-          console.log('API call failed in dev mode, using mock data:', error.message)
-          setCustomFields(getMockCustomFields())
-        }
-      } else {
-        const ghlService = new GHLApiService(config.access_token)
-        const fields = await ghlService.getCustomFields(config.ghl_account_id)
-        setCustomFields(fields)
-      }
+      const ghlService = new GHLApiService(config.access_token)
+      const fields = await ghlService.getCustomFields(config.ghl_account_id)
+      setCustomFields(fields)
     } catch (error) {
       console.error('Error loading custom fields:', error)
       if (user.devMode) {
@@ -363,16 +274,6 @@ function DataExtractionModule({ user, authService }) {
         position: 150,
         standard: false,
         picklistOptions: ["Consultation", "Installation", "Maintenance", "Repair"]
-      },
-      {
-        id: "mock-date-field",
-        name: "Appointment Date",
-        model: "contact",
-        fieldKey: "contact.appointment_date",
-        placeholder: "",
-        dataType: "DATE",
-        position: 200,
-        standard: false
       }
     ]
   }
@@ -462,9 +363,8 @@ function DataExtractionModule({ user, authService }) {
     }
   }
 
-  const handleRetryConfiguration = () => {
-    setRetryCount(0)
-    loadData()
+  const handleReinstallApp = () => {
+    window.open('https://marketplace.gohighlevel.com', '_blank')
   }
 
   if (loading) {
@@ -497,38 +397,32 @@ function DataExtractionModule({ user, authService }) {
         <h3 className="text-yellow-800 font-medium">No Configuration Found</h3>
         <p className="text-yellow-600 text-sm mt-1">
           No GoHighLevel configuration found for this location. 
-          {user.devMode 
-            ? ' The configuration should be created automatically by the auth system.'
-            : ' Please ensure the app is properly installed via the GoHighLevel marketplace.'
-          }
+          Please install the app via the GoHighLevel marketplace to get proper access tokens.
         </p>
         <div className="mt-3 text-xs text-yellow-700 space-y-1">
           <p><strong>User ID:</strong> {user.userId}</p>
           <p><strong>Location ID:</strong> {user.locationId}</p>
           <p><strong>Dev Mode:</strong> {user.devMode ? 'Yes' : 'No'}</p>
-          <p><strong>Config Created:</strong> {user.configCreated ? 'Yes' : 'No'}</p>
+          <p><strong>Config Found:</strong> {user.configFound ? 'Yes' : 'No'}</p>
           <p><strong>Config ID:</strong> {user.configId || 'None'}</p>
           <p><strong>Token Status:</strong> {user.tokenStatus || 'Unknown'}</p>
-          <p><strong>Retry Count:</strong> {retryCount}/3</p>
           {configError && (
             <p><strong>Error:</strong> {configError}</p>
           )}
         </div>
         <div className="mt-3 space-x-2">
           <button
-            onClick={handleRetryConfiguration}
+            onClick={loadData}
             className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
           >
             Retry Loading
           </button>
-          {user.devMode && (
-            <button
-              onClick={createDevConfiguration}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
-            >
-              Force Create Config
-            </button>
-          )}
+          <button
+            onClick={handleReinstallApp}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
+          >
+            Install App
+          </button>
         </div>
       </div>
     )
@@ -537,26 +431,26 @@ function DataExtractionModule({ user, authService }) {
   return (
     <div className="space-y-6">
       {/* Token Status Alert */}
-      {tokenStatus && !tokenStatus.isValid && (
+      {tokenValidation && !tokenValidation.isValid && (
         <div className={`border rounded-lg p-4 ${
-          tokenStatus.severity === 'error' 
+          tokenValidation.severity === 'error' 
             ? 'bg-red-50 border-red-200' 
             : 'bg-yellow-50 border-yellow-200'
         }`}>
           <h3 className={`font-medium ${
-            tokenStatus.severity === 'error' ? 'text-red-800' : 'text-yellow-800'
+            tokenValidation.severity === 'error' ? 'text-red-800' : 'text-yellow-800'
           }`}>
             Token Issue Detected
           </h3>
           <p className={`text-sm mt-1 ${
-            tokenStatus.severity === 'error' ? 'text-red-600' : 'text-yellow-600'
+            tokenValidation.severity === 'error' ? 'text-red-600' : 'text-yellow-600'
           }`}>
-            {tokenStatus.message}
+            {tokenValidation.message}
           </p>
-          {tokenStatus.severity === 'error' && (
+          {tokenValidation.severity === 'error' && (
             <div className="mt-3">
               <button
-                onClick={() => window.open('https://marketplace.gohighlevel.com', '_blank')}
+                onClick={handleReinstallApp}
                 className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
               >
                 Reinstall App
@@ -573,13 +467,13 @@ function DataExtractionModule({ user, authService }) {
             Configure which custom fields should be automatically populated by AI during conversations.
           </p>
           {user.devMode && (
-            <div className="mt-2 text-xs text-yellow-700 bg-yellow-50 px-2 py-1 rounded">
+            <div className="mt-2 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded">
               Dev Mode: Using configuration ID {ghlConfig.id} for location {ghlConfig.ghl_account_id}
             </div>
           )}
-          {tokenStatus && tokenStatus.isValid && (
+          {tokenValidation && tokenValidation.isValid && (
             <div className="mt-2 text-xs text-green-700 bg-green-50 px-2 py-1 rounded">
-              Token Status: {tokenStatus.message}
+              Token Status: {tokenValidation.message}
             </div>
           )}
         </div>
