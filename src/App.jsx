@@ -93,7 +93,11 @@ function AppContent() {
     )
   }
 
-  return <DataExtractorApp user={user} authService={authService} isDevMode={user?.devMode} />
+  return (
+    <Routes>
+      <Route path="/*" element={<DataExtractorApp user={user} authService={authService} isDevMode={user?.devMode} />} />
+    </Routes>
+  )
 }
 
 function App() {

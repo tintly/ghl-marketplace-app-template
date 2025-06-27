@@ -1,5 +1,8 @@
 import React from 'react'
+import { Routes, Route } from 'react-router-dom'
 import UserLinking from './UserLinking'
+import DataExtractionModule from './DataExtractionModule'
+import Navigation from './Navigation'
 
 function DataExtractorApp({ user, authService, isDevMode = false }) {
   const getLocationDisplay = () => {
@@ -49,70 +52,88 @@ function DataExtractorApp({ user, authService, isDevMode = false }) {
           <UserLinking user={user} onLinkingComplete={handleLinkingComplete} />
         )}
         
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">
-            Welcome to Your Conversation Data Extractor
-          </h2>
-          <p className="text-lg text-gray-600">
-            Extract valuable insights from your GoHighLevel conversations automatically.
-          </p>
-          {isDevMode && (
-            <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <p className="text-sm text-yellow-800">
-                <strong>Development Mode:</strong> You're running in development mode with mock user data. 
-                The app is configured to bypass GHL SSO authentication for testing purposes.
-              </p>
-            </div>
-          )}
-          {user.standaloneMode && (
-            <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
-              <p className="text-sm text-green-800">
-                <strong>Standalone Mode:</strong> You're using this app as a standalone installation. 
-                This installation was completed via OAuth and doesn't require GHL SSO.
-              </p>
-              <p className="text-xs text-green-700 mt-1">
-                Installed: {new Date(user.installedAt).toLocaleString()}
-              </p>
-            </div>
-          )}
-        </div>
+        <Navigation />
         
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">Available Features</h3>
+        <Routes>
+          <Route path="/" element={<DashboardHome isDevMode={isDevMode} user={user} />} />
+          <Route path="/data-extraction" element={
+            <DataExtractionModule user={user} authService={authService} />
+          } />
+        </Routes>
+      </main>
+    </div>
+  )
+}
+
+function DashboardHome({ isDevMode, user }) {
+  return (
+    <div className="space-y-8">
+      <div className="mb-8">
+        <h2 className="text-3xl font-bold text-gray-900 mb-2">
+          Welcome to Your Conversation Data Extractor
+        </h2>
+        <p className="text-lg text-gray-600">
+          Extract valuable insights from your GoHighLevel conversations automatically.
+        </p>
+        {isDevMode && (
+          <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <p className="text-sm text-yellow-800">
+              <strong>Development Mode:</strong> You're running in development mode with mock user data. 
+              The app is configured to bypass GHL SSO authentication for testing purposes.
+            </p>
           </div>
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center p-6 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
-                <div className="text-4xl mb-4">🔍</div>
-                <h4 className="text-lg font-semibold text-gray-900 mb-2">Data Extraction</h4>
-                <p className="text-gray-600 mb-4">Set up custom fields to extract from conversations</p>
-                <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors">
-                  Configure
-                </button>
-              </div>
-              
-              <div className="text-center p-6 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
-                <div className="text-4xl mb-4">⚙️</div>
-                <h4 className="text-lg font-semibold text-gray-900 mb-2">Rules & Triggers</h4>
-                <p className="text-gray-600 mb-4">Define when and how data should be extracted</p>
-                <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors">
-                  Manage
-                </button>
-              </div>
-              
-              <div className="text-center p-6 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
-                <div className="text-4xl mb-4">📊</div>
-                <h4 className="text-lg font-semibold text-gray-900 mb-2">Analytics</h4>
-                <p className="text-gray-600 mb-4">View extraction performance and insights</p>
-                <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors">
-                  View Reports
-                </button>
-              </div>
+        )}
+        {user.standaloneMode && (
+          <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
+            <p className="text-sm text-green-800">
+              <strong>Standalone Mode:</strong> You're using this app as a standalone installation. 
+              This installation was completed via OAuth and doesn't require GHL SSO.
+            </p>
+            <p className="text-xs text-green-700 mt-1">
+              Installed: {new Date(user.installedAt).toLocaleString()}
+            </p>
+          </div>
+        )}
+      </div>
+      
+      <div className="bg-white rounded-lg shadow">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-medium text-gray-900">Available Features</h3>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="text-center p-6 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
+              <div className="text-4xl mb-4">🔍</div>
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">Data Extraction</h4>
+              <p className="text-gray-600 mb-4">Set up custom fields to extract from conversations</p>
+              <a
+                href="/data-extraction"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors inline-block"
+              >
+                Configure
+              </a>
+            </div>
+            
+            <div className="text-center p-6 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
+              <div className="text-4xl mb-4">⚙️</div>
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">Rules & Triggers</h4>
+              <p className="text-gray-600 mb-4">Define when and how data should be extracted</p>
+              <button className="bg-gray-400 text-white px-4 py-2 rounded-md cursor-not-allowed">
+                Coming Soon
+              </button>
+            </div>
+            
+            <div className="text-center p-6 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
+              <div className="text-4xl mb-4">📊</div>
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">Analytics</h4>
+              <p className="text-gray-600 mb-4">View extraction performance and insights</p>
+              <button className="bg-gray-400 text-white px-4 py-2 rounded-md cursor-not-allowed">
+                Coming Soon
+              </button>
             </div>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   )
 }
