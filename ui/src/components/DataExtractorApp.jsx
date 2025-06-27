@@ -1,11 +1,22 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 function DataExtractorApp({ user, authService }) {
+  const [isDevelopmentMode, setIsDevelopmentMode] = useState(false)
+
+  useEffect(() => {
+    // Check if we're in development mode
+    setIsDevelopmentMode(authService.isMockMode())
+  }, [authService])
+
   const getLocationDisplay = () => {
     if (user.activeLocation) {
       return `Location: ${user.activeLocation}`
     }
     return `Company: ${user.companyId}`
+  }
+
+  const getContextTypeDisplay = () => {
+    return user.type === 'agency' ? 'Agency User' : 'Location User'
   }
 
   return (
@@ -15,15 +26,30 @@ function DataExtractorApp({ user, authService }) {
         <div className="user-info">
           <span className="user-name">{user.userName}</span>
           <span className="location-badge">{getLocationDisplay()}</span>
+          {isDevelopmentMode && (
+            <span className="dev-badge">DEV MODE</span>
+          )}
         </div>
       </header>
       
       <main className="app-content">
+        {isDevelopmentMode && (
+          <div className="dev-notice">
+            <h3>🔧 Development Mode Active</h3>
+            <p>Using mock authentication data. This banner will not appear in production.</p>
+          </div>
+        )}
+        
         <div className="welcome-section">
           <h2>Welcome to Your Conversation Data Extractor</h2>
           <p>Extract valuable insights from your GoHighLevel conversations automatically.</p>
           
           <div className="stats-grid">
+            <div className="stat-card">
+              <h3>User ID</h3>
+              <p className="stat-value">{user.userId}</p>
+            </div>
+            
             <div className="stat-card">
               <h3>Location ID</h3>
               <p className="stat-value">{user.locationId}</p>
@@ -36,7 +62,17 @@ function DataExtractorApp({ user, authService }) {
             
             <div className="stat-card">
               <h3>Context Type</h3>
-              <p className="stat-value">{user.type}</p>
+              <p className="stat-value">{getContextTypeDisplay()}</p>
+            </div>
+
+            <div className="stat-card">
+              <h3>Email</h3>
+              <p className="stat-value">{user.email}</p>
+            </div>
+
+            <div className="stat-card">
+              <h3>Company ID</h3>
+              <p className="stat-value">{user.companyId}</p>
             </div>
           </div>
         </div>
