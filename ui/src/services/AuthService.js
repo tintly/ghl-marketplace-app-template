@@ -13,17 +13,11 @@ export class AuthService {
       const encryptedUserData = await this.getEncryptedUserData()
       console.log('Encrypted user data received')
 
-      // Send encrypted data to Supabase Edge Function
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-      if (!supabaseUrl) {
-        throw new Error('VITE_SUPABASE_URL environment variable is not set')
-      }
-
-      const response = await fetch(`${supabaseUrl}/functions/v1/auth-user-context`, {
+      // Use Netlify Functions instead of Supabase
+      const response = await fetch('/.netlify/functions/auth-user-context', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({ key: encryptedUserData })
       })
@@ -93,13 +87,11 @@ export class AuthService {
   async verifyLocationAccess(locationId) {
     try {
       const encryptedUserData = await this.getEncryptedUserData()
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 
-      const response = await fetch(`${supabaseUrl}/functions/v1/auth-verify-location/${locationId}`, {
+      const response = await fetch(`/.netlify/functions/auth-verify-location/${locationId}`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({ key: encryptedUserData })
       })
