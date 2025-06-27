@@ -7,8 +7,11 @@ export class AuthService {
   // Get user data using GHL SSO
   async getUserData() {
     try {
+      console.log('Starting authentication process...');
+      
       // Get encrypted data from parent window
       const encryptedUserData = await this.getEncryptedUserData()
+      console.log('Encrypted user data received');
 
       // Send encrypted data to Netlify Function
       const response = await fetch('/.netlify/functions/auth-user-context', {
@@ -19,11 +22,17 @@ export class AuthService {
         body: JSON.stringify({ key: encryptedUserData })
       })
 
+      console.log('Auth response status:', response.status);
+
       if (!response.ok) {
-        throw new Error('Failed to get user context')
+        const errorText = await response.text();
+        console.error('Auth response error:', errorText);
+        throw new Error(`Authentication failed: ${response.status} - ${errorText}`);
       }
 
       const result = await response.json()
+      console.log('Authentication successful:', result);
+      
       this.currentUser = result.user
       this.isAuthenticated = true
       
@@ -37,23 +46,40 @@ export class AuthService {
   // Extract the encrypted user data logic into separate method
   async getEncryptedUserData() {
     return new Promise((resolve, reject) => {
+      console.log('Requesting user data from parent window...');
+      
       const timeout = setTimeout(() => {
-        reject(new Error('Timeout waiting for user data'))
-      }, 10000)
+        console.error('Timeout waiting for user data from parent window');
+        reject(new Error('Timeout waiting for user data from parent window. Please ensure you are accessing this app from within GoHighLevel.'))
+      }, 15000) // Increased timeout to 15 seconds
 
       // Request user data from parent window
       window.parent.postMessage({ message: 'REQUEST_USER_DATA' }, '*')
 
       // Listen for the response
-      const messageHandler = ({ data }) => {
+      const messageHandler = ({ data, origin }) => {
+        console.log('Received message from parent:', { message: data.message, origin });
+        
         if (data.message === 'REQUEST_USER_DATA_RESPONSE') {
           clearTimeout(timeout)
           window.removeEventListener('message', messageHandler)
-          resolve(data.payload)
+          
+          if (data.payload) {
+            console.log('User data payload received');
+            resolve(data.payload)
+          } else {
+            console.error('No payload in user data response');
+            reject(new Error('No user data payload received'))
+          }
         }
       }
 
       window.addEventListener('message', messageHandler)
+      
+      // Also try to get data immediately in case it's already available
+      setTimeout(() => {
+        window.parent.postMessage({ message: 'REQUEST_USER_DATA' }, '*')
+      }, 1000)
     })
   }
 
