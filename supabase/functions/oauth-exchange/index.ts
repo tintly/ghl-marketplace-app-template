@@ -121,7 +121,10 @@ async function exchangeCodeForToken(code: string): Promise<TokenResponse> {
   }
 
   const tokenUrl = `${apiDomain}/oauth/token`
-  const redirectUri = `${Deno.env.get('SUPABASE_URL')?.replace('/functions/v1', '') || 'http://localhost:3000'}/callback/oauth`
+  
+  // Get the current request URL to build the redirect URI
+  const currentUrl = new URL(Deno.env.get('SUPABASE_URL') || 'http://localhost:3000')
+  const redirectUri = `${currentUrl.origin}/oauth/callback`
   
   // Prepare form data as URLSearchParams (application/x-www-form-urlencoded)
   const params = new URLSearchParams({
@@ -134,6 +137,7 @@ async function exchangeCodeForToken(code: string): Promise<TokenResponse> {
 
   console.log('Making token exchange request to:', tokenUrl)
   console.log('Using redirect_uri:', redirectUri)
+  console.log('Using client_id:', clientId)
 
   const response = await fetch(tokenUrl, {
     method: 'POST',
@@ -149,7 +153,8 @@ async function exchangeCodeForToken(code: string): Promise<TokenResponse> {
     console.error('Token exchange failed:', {
       status: response.status,
       statusText: response.statusText,
-      body: errorText
+      body: errorText,
+      redirectUri: redirectUri
     })
     throw new Error(`Token exchange failed: ${response.status} - ${errorText}`)
   }
@@ -199,7 +204,7 @@ async function saveGHLConfiguration(supabase: any, tokenData: TokenResponse, sta
 
   console.log('Saving configuration for resource:', resourceId)
 
-  // Insert or update configuration
+  // Insert or update configuration using the unique constraint
   const { data, error } = await supabase
     .from('ghl_configurations')
     .upsert(configData, {

@@ -3,7 +3,7 @@ import React, { useState } from 'react'
 function InstallationGuide({ user }) {
   const [copied, setCopied] = useState(false)
   
-  const redirectUri = `${window.location.origin}/callback/oauth`
+  const redirectUri = `${window.location.origin}/oauth/callback`
   
   // Note: The actual client ID should come from your GHL marketplace app settings
   // This is just a placeholder - you'll need to replace it with your real client ID
