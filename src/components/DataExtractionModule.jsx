@@ -44,60 +44,119 @@ function DataExtractionModule({ user, authService }) {
   }
 
   const getGHLConfiguration = async () => {
-    // First try to find by user_id
-    let { data, error } = await supabase
-      .from('ghl_configurations')
-      .select('*')
-      .eq('user_id', user.userId)
-      .eq('is_active', true)
-      .single()
+    console.log('Looking for GHL configuration...', {
+      userId: user.userId,
+      locationId: user.locationId,
+      devMode: user.devMode
+    })
 
-    // If not found by user_id, try to find by location_id (for dev mode or unlinked configs)
-    if (error && error.code === 'PGRST116' && user.locationId) {
-      console.log('No config found by user_id, trying by location_id...')
+    // Strategy 1: Try to find by ghl_account_id (location ID) first
+    if (user.locationId) {
+      console.log('Trying to find config by ghl_account_id:', user.locationId)
       
       const { data: locationData, error: locationError } = await supabase
         .from('ghl_configurations')
         .select('*')
         .eq('ghl_account_id', user.locationId)
         .eq('is_active', true)
-        .single()
+        .maybeSingle()
 
-      if (locationError && locationError.code !== 'PGRST116') {
-        throw new Error('Failed to load GHL configuration')
-      }
-
-      // If found by location but no user_id, link it to current user
-      if (locationData && !locationData.user_id) {
-        console.log('Found unlinked config, linking to current user...')
+      if (locationError) {
+        console.error('Error querying by ghl_account_id:', locationError)
+      } else if (locationData) {
+        console.log('Found config by ghl_account_id:', locationData.id)
         
-        const { data: updatedData, error: updateError } = await supabase
+        // If found but no user_id, link it to current user
+        if (!locationData.user_id) {
+          console.log('Config found but not linked to user, linking now...')
+          
+          const { data: updatedData, error: updateError } = await supabase
+            .from('ghl_configurations')
+            .update({ 
+              user_id: user.userId,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', locationData.id)
+            .select()
+            .single()
+
+          if (updateError) {
+            console.error('Failed to link configuration:', updateError)
+            return locationData // Return original data even if linking fails
+          }
+
+          console.log('Successfully linked config to user')
+          return updatedData
+        }
+
+        return locationData
+      }
+    }
+
+    // Strategy 2: Try to find by user_id
+    console.log('Trying to find config by user_id:', user.userId)
+    
+    const { data: userData, error: userError } = await supabase
+      .from('ghl_configurations')
+      .select('*')
+      .eq('user_id', user.userId)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    if (userError) {
+      console.error('Error querying by user_id:', userError)
+    } else if (userData) {
+      console.log('Found config by user_id:', userData.id)
+      return userData
+    }
+
+    // Strategy 3: In dev mode, create a configuration if none exists
+    if (user.devMode && user.locationId) {
+      console.log('Dev mode: No config found, creating one...')
+      
+      try {
+        const newConfig = {
+          user_id: user.userId,
+          ghl_account_id: user.locationId,
+          client_id: 'dev-client-id',
+          access_token: 'dev-access-token',
+          refresh_token: 'dev-refresh-token',
+          token_expires_at: new Date(Date.now() + (365 * 24 * 60 * 60 * 1000)).toISOString(),
+          business_name: 'Development Business',
+          business_address: '123 Dev Street',
+          business_phone: '+1-555-0123',
+          business_email: user.email,
+          business_website: 'https://dev.example.com',
+          business_description: 'Development environment business for testing',
+          target_audience: 'Developers and testers',
+          services_offered: 'Software development and testing services',
+          business_context: 'This is a development environment configuration for testing purposes',
+          is_active: true,
+          created_by: user.userId
+        }
+
+        const { data: createdData, error: createError } = await supabase
           .from('ghl_configurations')
-          .update({ 
-            user_id: user.userId,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', locationData.id)
+          .insert(newConfig)
           .select()
           .single()
 
-        if (updateError) {
-          console.error('Failed to link configuration:', updateError)
-          // Still return the original data even if linking fails
-          return locationData
+        if (createError) {
+          console.error('Failed to create dev configuration:', createError)
+          throw new Error('Failed to create development configuration')
         }
 
-        return updatedData
+        console.log('Created dev configuration:', createdData.id)
+        return createdData
+      } catch (createError) {
+        console.error('Error creating dev config:', createError)
+        throw new Error('Failed to create development configuration')
       }
-
-      return locationData
     }
 
-    if (error && error.code !== 'PGRST116') {
-      throw new Error('Failed to load GHL configuration')
-    }
-
-    return data
+    // No configuration found
+    console.log('No configuration found for user')
+    return null
   }
 
   const loadCustomFields = async (config) => {
@@ -291,10 +350,10 @@ function DataExtractionModule({ user, authService }) {
           No GoHighLevel configuration found for this location. 
           {user.devMode && ' In dev mode, a configuration should be automatically created.'}
         </p>
-        <div className="mt-3 text-xs text-yellow-700">
-          <p>User ID: {user.userId}</p>
-          <p>Location ID: {user.locationId}</p>
-          <p>Dev Mode: {user.devMode ? 'Yes' : 'No'}</p>
+        <div className="mt-3 text-xs text-yellow-700 space-y-1">
+          <p><strong>User ID:</strong> {user.userId}</p>
+          <p><strong>Location ID:</strong> {user.locationId}</p>
+          <p><strong>Dev Mode:</strong> {user.devMode ? 'Yes' : 'No'}</p>
         </div>
         <button
           onClick={loadData}
@@ -316,7 +375,7 @@ function DataExtractionModule({ user, authService }) {
           </p>
           {user.devMode && (
             <div className="mt-2 text-xs text-yellow-700 bg-yellow-50 px-2 py-1 rounded">
-              Dev Mode: Using configuration ID {ghlConfig.id}
+              Dev Mode: Using configuration ID {ghlConfig.id} for location {ghlConfig.ghl_account_id}
             </div>
           )}
         </div>
