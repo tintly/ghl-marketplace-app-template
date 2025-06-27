@@ -189,20 +189,21 @@ async function saveGHLConfiguration(supabase: any, tokenData: TokenResponse, sta
   // Calculate token expiration time
   const expiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString()
 
-  // Prepare configuration data
+  // Prepare configuration data - user_id can be null for OAuth installations
   const configData = {
-    user_id: userId, // This might be null if we don't have user context
+    user_id: userId, // This can be null for OAuth installations outside GHL
     ghl_account_id: resourceId,
     client_id: Deno.env.get('GHL_MARKETPLACE_CLIENT_ID'),
     access_token: tokenData.access_token,
     refresh_token: tokenData.refresh_token,
     token_expires_at: expiresAt,
     business_name: `GHL ${tokenData.userType} - ${resourceId}`, // Default name
+    business_description: 'OAuth installation - user context will be linked when accessed through GHL',
     is_active: true,
-    created_by: userId
+    created_by: userId // This can also be null
   }
 
-  console.log('Saving configuration for resource:', resourceId)
+  console.log('Saving configuration for resource:', resourceId, 'with user_id:', userId || 'null')
 
   // Insert or update configuration using the unique constraint
   const { data, error } = await supabase

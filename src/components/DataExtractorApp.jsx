@@ -1,4 +1,5 @@
 import React from 'react'
+import UserLinking from './UserLinking'
 
 function DataExtractorApp({ user, authService, isDevMode = false }) {
   const getLocationDisplay = () => {
@@ -6,6 +7,11 @@ function DataExtractorApp({ user, authService, isDevMode = false }) {
       return `Location: ${user.activeLocation}`
     }
     return `Company: ${user.companyId}`
+  }
+
+  const handleLinkingComplete = () => {
+    // Refresh the page or update state to reflect the linked configuration
+    window.location.reload()
   }
 
   return (
@@ -30,6 +36,9 @@ function DataExtractorApp({ user, authService, isDevMode = false }) {
       </header>
       
       <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        {/* User Linking Component - shows if there are unlinked configurations */}
+        <UserLinking user={user} onLinkingComplete={handleLinkingComplete} />
+        
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-gray-900 mb-2">
             Welcome to Your Conversation Data Extractor
