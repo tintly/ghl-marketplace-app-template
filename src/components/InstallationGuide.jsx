@@ -5,18 +5,30 @@ function InstallationGuide({ user, onInstallationComplete }) {
   
   const redirectUri = `${window.location.origin}/oauth/callback`
   
-  // Use environment variable for client ID or provide setup instructions
-  const clientId = import.meta.env.VITE_GHL_MARKETPLACE_CLIENT_ID || 'your-ghl-marketplace-client-id'
+  // Use the actual client ID from your marketplace app
+  const clientId = '685c90c16a67491ca1f5f7de-mcf0wxc1'
   
-  const authUrl = `https://marketplace.gohighlevel.com/oauth/chooselocation?response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&client_id=${clientId}&scope=conversations.readonly contacts.readonly locations.readonly&state=${encodeURIComponent(JSON.stringify({ userId: user?.userId }))}`
+  // Use the exact scopes from your installation link
+  const scopes = [
+    'conversations.readonly',
+    'conversations/message.readonly', 
+    'conversations/reports.readonly',
+    'contacts.readonly',
+    'contacts.write',
+    'locations.readonly',
+    'locations/customFields.readonly',
+    'locations/customFields.write',
+    'oauth.readonly',
+    'oauth.write'
+  ].join(' ')
+  
+  const authUrl = `https://marketplace.gohighlevel.com/oauth/chooselocation?response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&client_id=${clientId}&scope=${encodeURIComponent(scopes)}&state=${encodeURIComponent(JSON.stringify({ userId: user?.userId }))}`
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
-
-  const isClientIdConfigured = clientId !== 'your-ghl-marketplace-client-id'
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -26,21 +38,6 @@ function InstallationGuide({ user, onInstallationComplete }) {
         </h2>
         
         <div className="space-y-6">
-          {!isClientIdConfigured && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-red-900 mb-2">
-                Configuration Required
-              </h3>
-              <p className="text-red-800 mb-4">
-                Before you can install the app, you need to configure your GoHighLevel marketplace app credentials.
-              </p>
-              <div className="bg-white border rounded-md p-3 font-mono text-sm mb-4">
-                <p className="text-gray-800 mb-2">Add to your environment variables:</p>
-                <code className="block">VITE_GHL_MARKETPLACE_CLIENT_ID=your-actual-client-id</code>
-              </div>
-            </div>
-          )}
-
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <h3 className="text-lg font-semibold text-blue-900 mb-2">
               Step 1: Install the App via OAuth
@@ -48,24 +45,15 @@ function InstallationGuide({ user, onInstallationComplete }) {
             <p className="text-blue-800 mb-4">
               Click the button below to authorize this app to access your GoHighLevel data and get real access tokens.
             </p>
-            {isClientIdConfigured ? (
-              <a
-                href={authUrl}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-colors"
-              >
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                Install GoHighLevel Integration
-              </a>
-            ) : (
-              <button
-                disabled
-                className="inline-flex items-center px-4 py-2 bg-gray-400 text-white font-medium rounded-md cursor-not-allowed"
-              >
-                Configure Client ID First
-              </button>
-            )}
+            <a
+              href={authUrl}
+              className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-colors"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Install GoHighLevel Integration
+            </a>
           </div>
 
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
@@ -80,6 +68,31 @@ function InstallationGuide({ user, onInstallationComplete }) {
             </div>
           </div>
 
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-green-900 mb-2">
+              Required OAuth Scopes
+            </h3>
+            <p className="text-green-800 mb-2">
+              This app requires the following OAuth scopes for full functionality:
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-green-800">
+              <div className="space-y-1">
+                <p>• <code className="bg-green-100 px-1 rounded text-xs">conversations.readonly</code></p>
+                <p>• <code className="bg-green-100 px-1 rounded text-xs">conversations/message.readonly</code></p>
+                <p>• <code className="bg-green-100 px-1 rounded text-xs">conversations/reports.readonly</code></p>
+                <p>• <code className="bg-green-100 px-1 rounded text-xs">contacts.readonly</code></p>
+                <p>• <code className="bg-green-100 px-1 rounded text-xs">contacts.write</code></p>
+              </div>
+              <div className="space-y-1">
+                <p>• <code className="bg-green-100 px-1 rounded text-xs">locations.readonly</code></p>
+                <p>• <code className="bg-green-100 px-1 rounded text-xs">locations/customFields.readonly</code></p>
+                <p>• <code className="bg-green-100 px-1 rounded text-xs">locations/customFields.write</code></p>
+                <p>• <code className="bg-green-100 px-1 rounded text-xs">oauth.readonly</code></p>
+                <p>• <code className="bg-green-100 px-1 rounded text-xs">oauth.write</code></p>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
               Current Status
@@ -89,6 +102,7 @@ function InstallationGuide({ user, onInstallationComplete }) {
               <p><strong>Location ID:</strong> {user?.locationId}</p>
               <p><strong>Dev Mode:</strong> {user?.devMode ? 'Yes' : 'No'}</p>
               <p><strong>Token Status:</strong> {user?.tokenStatus || 'Unknown'}</p>
+              <p><strong>Client ID:</strong> {clientId}</p>
             </div>
           </div>
 
@@ -97,7 +111,7 @@ function InstallationGuide({ user, onInstallationComplete }) {
               Marketplace App Settings
             </h3>
             <p className="text-gray-700 mb-4">
-              In your GoHighLevel marketplace app settings, make sure to set the following redirect URI:
+              Your GoHighLevel marketplace app should have the following redirect URI configured:
             </p>
             <div className="bg-white border rounded-md p-3 font-mono text-sm">
               <div className="flex items-center justify-between">
