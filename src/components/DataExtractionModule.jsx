@@ -166,9 +166,11 @@ function DataExtractionModule({ user, authService }) {
             tokenExpiry: locationData.token_expires_at
           })
           
-          // If found but no user_id, link it to current user
-          if (!locationData.user_id) {
-            console.log('Config found but not linked to user, linking now...')
+          // If found but user_id doesn't match, update it to current user
+          if (!locationData.user_id || locationData.user_id !== user.userId) {
+            console.log('Config found but user_id mismatch, updating to current user...')
+            console.log('Current user_id in config:', locationData.user_id)
+            console.log('SSO user_id:', user.userId)
             
             const { data: updatedData, error: updateError } = await supabase
               .from('ghl_configurations')
@@ -181,12 +183,12 @@ function DataExtractionModule({ user, authService }) {
               .single()
 
             if (updateError) {
-              console.error('Failed to link configuration:', updateError)
+              console.error('Failed to update user_id in configuration:', updateError)
               setConfigError(`Failed to link configuration: ${updateError.message}`)
-              return locationData // Return original data even if linking fails
+              return locationData // Return original data even if update fails
             }
 
-            console.log('Successfully linked config to user')
+            console.log('Successfully updated config with current user_id')
             return updatedData
           }
 
@@ -215,8 +217,55 @@ function DataExtractionModule({ user, authService }) {
         return userData
       }
 
-      // No configuration found
-      console.log('No configuration found for user')
+      // Strategy 4: Look for ANY configuration for this location (regardless of user_id)
+      // This handles cases where the user_id from SSO doesn't match what's in the database
+      console.log('Strategy 4: Looking for ANY config for location:', user.locationId)
+      
+      const { data: anyLocationConfig, error: anyLocationError } = await supabase
+        .from('ghl_configurations')
+        .select('*')
+        .eq('ghl_account_id', user.locationId)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (anyLocationError) {
+        console.error('Error in fallback location query:', anyLocationError)
+      } else if (anyLocationConfig) {
+        console.log('Found config via fallback location search:', {
+          id: anyLocationConfig.id,
+          userId: anyLocationConfig.user_id,
+          businessName: anyLocationConfig.business_name,
+          hasAccessToken: !!anyLocationConfig.access_token,
+          hasRefreshToken: !!anyLocationConfig.refresh_token
+        })
+        
+        // Update this config to use the current user_id from SSO
+        console.log('Updating fallback config with current SSO user_id...')
+        
+        const { data: updatedFallbackData, error: updateFallbackError } = await supabase
+          .from('ghl_configurations')
+          .update({ 
+            user_id: user.userId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', anyLocationConfig.id)
+          .select()
+          .single()
+
+        if (updateFallbackError) {
+          console.error('Failed to update fallback config:', updateFallbackError)
+          // Still return the original config even if update fails
+          return anyLocationConfig
+        }
+
+        console.log('Successfully updated fallback config with SSO user_id')
+        return updatedFallbackData
+      }
+
+      // No configuration found at all
+      console.log('No configuration found for user or location')
       setConfigError(
         'No configuration found for this location. ' +
         'Please install the app via the GoHighLevel marketplace to get proper access tokens.'
