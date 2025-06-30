@@ -22,6 +22,9 @@ export class FieldRecreationService {
       const fieldData = this.prepareFieldDataForRecreation(originalData)
       console.log('Prepared field data:', fieldData)
 
+      // Validate field data before recreation
+      this.validateFieldData(fieldData)
+
       // Create the field in GoHighLevel
       const recreatedField = await this.ghlApiService.createCustomField(locationId, fieldData)
       console.log('Field recreated successfully:', recreatedField)
@@ -39,23 +42,31 @@ export class FieldRecreationService {
   prepareFieldDataForRecreation(originalData) {
     const fieldData = {
       name: originalData.name,
-      dataType: originalData.dataType,
-      fieldKey: originalData.fieldKey,
-      objectKey: this.extractObjectKey(originalData.fieldKey),
-      showInForms: true
+      dataType: originalData.dataType
     }
 
     // Add optional fields if they exist
-    if (originalData.description) {
-      fieldData.description = originalData.description
-    }
-
     if (originalData.placeholder) {
       fieldData.placeholder = originalData.placeholder
     }
 
-    if (originalData.parentId) {
-      fieldData.parentId = originalData.parentId
+    if (originalData.position !== undefined) {
+      fieldData.position = originalData.position
+    }
+
+    // For custom objects, add the required fields
+    if (originalData.fieldKey && originalData.fieldKey.startsWith('custom_object.')) {
+      fieldData.fieldKey = originalData.fieldKey
+      fieldData.objectKey = this.extractObjectKey(originalData.fieldKey)
+      fieldData.showInForms = true
+
+      if (originalData.description) {
+        fieldData.description = originalData.description
+      }
+
+      if (originalData.parentId) {
+        fieldData.parentId = originalData.parentId
+      }
     }
 
     // Handle picklist options for choice fields
@@ -133,16 +144,26 @@ export class FieldRecreationService {
    * Validate that field data is complete for recreation
    */
   validateFieldData(fieldData) {
-    const required = ['name', 'dataType', 'fieldKey', 'objectKey']
+    const required = ['name', 'dataType']
     const missing = required.filter(field => !fieldData[field])
     
     if (missing.length > 0) {
       throw new Error(`Missing required fields for recreation: ${missing.join(', ')}`)
     }
 
-    // Validate field key format
-    if (!this.isValidFieldKey(fieldData.fieldKey)) {
-      throw new Error(`Invalid field key format: ${fieldData.fieldKey}`)
+    // For custom objects, validate additional required fields
+    if (fieldData.fieldKey && fieldData.fieldKey.startsWith('custom_object.')) {
+      const customObjectRequired = ['fieldKey', 'objectKey']
+      const customObjectMissing = customObjectRequired.filter(field => !fieldData[field])
+      
+      if (customObjectMissing.length > 0) {
+        throw new Error(`Missing required custom object fields: ${customObjectMissing.join(', ')}`)
+      }
+
+      // Validate field key format
+      if (!this.isValidFieldKey(fieldData.fieldKey)) {
+        throw new Error(`Invalid field key format: ${fieldData.fieldKey}`)
+      }
     }
 
     return true
@@ -161,5 +182,35 @@ export class FieldRecreationService {
     if (fieldKey.startsWith('.') || fieldKey.endsWith('.')) return false
     
     return true
+  }
+
+  /**
+   * Determine if a field should be recreated as a custom object or contact field
+   */
+  isCustomObjectField(originalData) {
+    return originalData.fieldKey && originalData.fieldKey.startsWith('custom_object.')
+  }
+
+  /**
+   * Get field type compatibility info
+   */
+  getFieldTypeInfo(dataType) {
+    const contactFieldTypes = [
+      'TEXT', 'LARGE_TEXT', 'NUMERICAL', 'PHONE', 'MONETORY', 
+      'CHECKBOX', 'SINGLE_OPTIONS', 'MULTIPLE_OPTIONS', 'DATE', 
+      'TEXTBOX_LIST', 'FILE_UPLOAD', 'RADIO', 'EMAIL'
+    ]
+
+    const customObjectTypes = [
+      'TEXT', 'LARGE_TEXT', 'NUMERICAL', 'SINGLE_OPTIONS', 
+      'MULTIPLE_OPTIONS', 'CHECKBOX', 'RADIO', 'DATE', 
+      'TEXTBOX_LIST', 'FILE_UPLOAD'
+    ]
+
+    return {
+      supportsContact: contactFieldTypes.includes(dataType),
+      supportsCustomObject: customObjectTypes.includes(dataType),
+      dataType
+    }
   }
 }

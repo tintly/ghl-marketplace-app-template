@@ -53,62 +53,136 @@ export class GHLApiService {
     try {
       console.log('Creating custom field in GHL:', { locationId, fieldData })
       
-      const endpoint = `/custom-fields/`
+      // Determine which API endpoint to use based on the field type
+      const isCustomObject = fieldData.fieldKey && fieldData.fieldKey.startsWith('custom_object.')
       
-      // Prepare the payload according to GHL API specification
-      const payload = {
-        locationId: locationId,
-        name: fieldData.name,
-        dataType: fieldData.dataType,
-        showInForms: true, // Required field
-        fieldKey: fieldData.fieldKey,
-        objectKey: fieldData.objectKey || 'contact', // Default to contact
+      if (isCustomObject) {
+        return await this.createCustomObjectField(locationId, fieldData)
+      } else {
+        return await this.createContactField(locationId, fieldData)
       }
-
-      // Add optional fields if provided
-      if (fieldData.description) {
-        payload.description = fieldData.description
-      }
-
-      if (fieldData.placeholder) {
-        payload.placeholder = fieldData.placeholder
-      }
-
-      if (fieldData.parentId) {
-        payload.parentId = fieldData.parentId
-      }
-
-      // Add options for choice fields
-      if (fieldData.picklistOptions && fieldData.picklistOptions.length > 0) {
-        payload.options = fieldData.picklistOptions.map((option, index) => ({
-          key: typeof option === 'string' ? option.toLowerCase().replace(/\s+/g, '_') : option.key,
-          label: typeof option === 'string' ? option : option.label
-        }))
-      }
-
-      // Add specific fields for certain data types
-      if (fieldData.dataType === 'FILE_UPLOAD') {
-        payload.acceptedFormats = fieldData.acceptedFormats || '.pdf,.jpg,.png'
-        payload.maxFileLimit = fieldData.maxFileLimit || 1
-      }
-
-      if (fieldData.dataType === 'RADIO') {
-        payload.allowCustomOption = fieldData.allowCustomOption || false
-      }
-
-      console.log('GHL API payload:', payload)
-
-      const response = await this.makeRequest(endpoint, {
-        method: 'POST',
-        body: payload
-      })
-
-      console.log('Custom field created successfully:', response)
-      return response
     } catch (error) {
       console.error('Error creating custom field:', error)
       throw new Error(`Failed to create custom field in GoHighLevel: ${error.message}`)
     }
+  }
+
+  async createCustomObjectField(locationId, fieldData) {
+    console.log('Creating custom object field using /custom-fields/ endpoint')
+    
+    const endpoint = `/custom-fields/`
+    
+    // Prepare the payload according to the custom objects API specification
+    const payload = {
+      locationId: locationId,
+      name: fieldData.name,
+      dataType: fieldData.dataType,
+      showInForms: true, // Required field
+      fieldKey: fieldData.fieldKey,
+      objectKey: fieldData.objectKey || 'contact'
+    }
+
+    // Add optional fields if provided
+    if (fieldData.description) {
+      payload.description = fieldData.description
+    }
+
+    if (fieldData.placeholder) {
+      payload.placeholder = fieldData.placeholder
+    }
+
+    if (fieldData.parentId) {
+      payload.parentId = fieldData.parentId
+    }
+
+    // Add options for choice fields
+    if (fieldData.picklistOptions && fieldData.picklistOptions.length > 0) {
+      payload.options = fieldData.picklistOptions.map((option) => ({
+        key: typeof option === 'string' ? option.toLowerCase().replace(/\s+/g, '_') : option.key,
+        label: typeof option === 'string' ? option : option.label
+      }))
+    }
+
+    // Add specific fields for certain data types
+    if (fieldData.dataType === 'FILE_UPLOAD') {
+      payload.acceptedFormats = fieldData.acceptedFormats || '.pdf'
+      payload.maxFileLimit = fieldData.maxFileLimit || 1
+    }
+
+    if (fieldData.dataType === 'RADIO') {
+      payload.allowCustomOption = fieldData.allowCustomOption || false
+    }
+
+    console.log('Custom object field payload:', payload)
+
+    const response = await this.makeRequest(endpoint, {
+      method: 'POST',
+      body: payload
+    })
+
+    console.log('Custom object field created successfully:', response)
+    return response
+  }
+
+  async createContactField(locationId, fieldData) {
+    console.log('Creating contact field using /locations/{locationId}/customFields endpoint')
+    
+    const endpoint = `/locations/${locationId}/customFields`
+    
+    // Prepare the payload according to the contact fields API specification
+    const payload = {
+      name: fieldData.name,
+      dataType: fieldData.dataType,
+      model: 'contact' // Required for contact fields
+    }
+
+    // Add optional fields if provided
+    if (fieldData.placeholder) {
+      payload.placeholder = fieldData.placeholder
+    }
+
+    // Add position if specified
+    if (fieldData.position !== undefined) {
+      payload.position = fieldData.position
+    }
+
+    // Handle picklist options for choice fields
+    if (this.isChoiceField(fieldData.dataType) && fieldData.picklistOptions && fieldData.picklistOptions.length > 0) {
+      if (fieldData.dataType === 'TEXTBOX_LIST') {
+        // For TEXTBOX_LIST, use textBoxListOptions
+        payload.textBoxListOptions = fieldData.picklistOptions.map((option, index) => ({
+          label: typeof option === 'string' ? option : option.label,
+          prefillValue: '',
+          position: index
+        }))
+      } else {
+        // For other choice fields, this might not be supported in the contact fields API
+        console.warn('Picklist options may not be supported for contact fields of type:', fieldData.dataType)
+      }
+    }
+
+    // Handle file upload specific fields
+    if (fieldData.dataType === 'FILE_UPLOAD') {
+      payload.acceptedFormat = fieldData.acceptedFormats ? 
+        fieldData.acceptedFormats.split(',').map(f => f.trim()) : 
+        ['.pdf']
+      payload.isMultipleFile = fieldData.maxFileLimit > 1
+      payload.maxNumberOfFiles = fieldData.maxFileLimit || 1
+    }
+
+    console.log('Contact field payload:', payload)
+
+    const response = await this.makeRequest(endpoint, {
+      method: 'POST',
+      body: payload
+    })
+
+    console.log('Contact field created successfully:', response)
+    return response
+  }
+
+  isChoiceField(dataType) {
+    return ['SINGLE_OPTIONS', 'MULTIPLE_OPTIONS', 'CHECKBOX', 'RADIO', 'TEXTBOX_LIST'].includes(dataType)
   }
 
   async updateCustomField(locationId, fieldId, fieldData) {
