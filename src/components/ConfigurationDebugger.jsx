@@ -21,11 +21,13 @@ function ConfigurationDebugger({ user, onConfigurationFound }) {
       // Get all configurations for debugging
       const allConfigsResult = await DatabaseService.getAllConfigurations()
       if (allConfigsResult.error) {
-        throw new Error(`Failed to fetch configurations: ${allConfigsResult.error}`)
+        console.error('Failed to fetch configurations:', allConfigsResult.error)
+        // Don't throw here, continue with empty array
+        setAllConfigs([])
+      } else {
+        setAllConfigs(allConfigsResult.data)
+        console.log('Total configurations in database:', allConfigsResult.data.length)
       }
-      
-      setAllConfigs(allConfigsResult.data)
-      console.log('Total configurations in database:', allConfigsResult.data.length)
 
       // Try comprehensive lookup
       const lookupResult = await DatabaseService.findConfiguration(user.userId, user.locationId)
@@ -34,9 +36,10 @@ function ConfigurationDebugger({ user, onConfigurationFound }) {
         targetUserId: user.userId,
         targetLocationId: user.locationId,
         lookupResult,
-        totalConfigs: allConfigsResult.data.length,
-        matchingLocation: allConfigsResult.data.filter(c => c.ghl_account_id === user.locationId),
-        matchingUser: allConfigsResult.data.filter(c => c.user_id === user.userId)
+        totalConfigs: allConfigsResult.data?.length || 0,
+        matchingLocation: allConfigsResult.data?.filter(c => c.ghl_account_id === user.locationId) || [],
+        matchingUser: allConfigsResult.data?.filter(c => c.user_id === user.userId) || [],
+        databaseError: allConfigsResult.error
       })
 
       if (lookupResult.found && onConfigurationFound) {
@@ -164,6 +167,9 @@ function ConfigurationDebugger({ user, onConfigurationFound }) {
               <p><strong>Total Configurations:</strong> {debugData.totalConfigs}</p>
               <p><strong>Matching Location:</strong> {debugData.matchingLocation.length}</p>
               <p><strong>Matching User:</strong> {debugData.matchingUser.length}</p>
+              {debugData.databaseError && (
+                <p><strong>Database Error:</strong> <span className="text-red-600">{debugData.databaseError}</span></p>
+              )}
             </div>
           </div>
 
