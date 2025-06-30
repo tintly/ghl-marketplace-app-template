@@ -1,54 +1,76 @@
 import { supabase } from './supabase'
 
 export class ConfigurationService {
-  static async getGHLConfiguration(userId, locationId) {
-    console.log('=== CONFIGURATION SERVICE LOOKUP ===')
-    console.log('User ID:', userId)
-    console.log('Location ID:', locationId)
+  constructor() {
+    this.cache = new Map()
+    this.cacheTimeout = 5 * 60 * 1000 // 5 minutes
+  }
+
+  // Get configuration using the optimized database function
+  async getGHLConfiguration(userId, locationId) {
+    const cacheKey = `${userId}-${locationId}`
+    
+    // Check cache first
+    if (this.cache.has(cacheKey)) {
+      const cached = this.cache.get(cacheKey)
+      if (Date.now() - cached.timestamp < this.cacheTimeout) {
+        return cached.data
+      }
+      this.cache.delete(cacheKey)
+    }
 
     try {
+      console.log('=== CONFIGURATION LOOKUP START ===')
+      console.log('Parameters:', { userId, locationId })
+
       // Use the database function for optimized lookup
-      const { data: functionResult, error: functionError } = await supabase
+      const { data, error } = await supabase
         .rpc('get_user_ghl_configuration', {
           p_user_id: userId,
           p_location_id: locationId
         })
 
-      if (functionError) {
-        console.error('Function lookup error:', functionError)
+      if (error) {
+        console.error('Database function error:', error)
         // Fallback to manual queries if function fails
         return await this.fallbackConfigurationLookup(userId, locationId)
       }
 
-      if (functionResult && functionResult.length > 0) {
-        const config = functionResult[0]
-        console.log('✅ Found configuration via function:', {
+      if (data && data.length > 0) {
+        const config = data[0]
+        console.log('Configuration found via function:', {
           id: config.id,
-          user_id: config.user_id,
-          ghl_account_id: config.ghl_account_id,
-          hasAccessToken: !!config.access_token,
-          hasRefreshToken: !!config.refresh_token
+          userId: config.user_id,
+          locationId: config.ghl_account_id,
+          hasTokens: !!(config.access_token && config.refresh_token)
         })
+
+        // Cache the result
+        this.cache.set(cacheKey, {
+          data: config,
+          timestamp: Date.now()
+        })
+
         return config
       }
 
-      console.log('❌ No configuration found via function')
-      return null
+      console.log('No configuration found via function, trying fallback...')
+      return await this.fallbackConfigurationLookup(userId, locationId)
 
     } catch (error) {
-      console.error('Configuration service error:', error)
-      // Fallback to manual queries
+      console.error('Configuration lookup error:', error)
       return await this.fallbackConfigurationLookup(userId, locationId)
     }
   }
 
-  static async fallbackConfigurationLookup(userId, locationId) {
+  // Fallback lookup method using direct queries
+  async fallbackConfigurationLookup(userId, locationId) {
     console.log('=== FALLBACK CONFIGURATION LOOKUP ===')
-
+    
     try {
-      // Strategy 1: Exact match
-      console.log('Fallback Strategy 1: Exact match')
-      const { data: exactMatch, error: exactError } = await supabase
+      // Strategy 1: Try exact match
+      console.log('Strategy 1: Exact match lookup')
+      let { data, error } = await supabase
         .from('ghl_configurations')
         .select('*')
         .eq('user_id', userId)
@@ -56,102 +78,104 @@ export class ConfigurationService {
         .eq('is_active', true)
         .maybeSingle()
 
-      if (exactError) {
-        console.error('Exact match error:', exactError)
-      } else if (exactMatch) {
-        console.log('✅ Found exact match:', exactMatch.id)
-        return exactMatch
+      if (error) {
+        console.error('Exact match query error:', error)
+      } else if (data) {
+        console.log('Found exact match:', data.id)
+        return data
       }
 
-      // Strategy 2: By location (most common for OAuth installs)
-      console.log('Fallback Strategy 2: By location')
-      const { data: locationConfigs, error: locationError } = await supabase
+      // Strategy 2: Try by location only
+      console.log('Strategy 2: Location-only lookup')
+      const { data: locationData, error: locationError } = await supabase
         .from('ghl_configurations')
         .select('*')
         .eq('ghl_account_id', locationId)
         .eq('is_active', true)
         .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
 
       if (locationError) {
         console.error('Location lookup error:', locationError)
-      } else if (locationConfigs && locationConfigs.length > 0) {
-        console.log(`Found ${locationConfigs.length} config(s) for location`)
+      } else if (locationData) {
+        console.log('Found by location:', locationData.id)
         
-        // Prefer config with matching user_id, otherwise take most recent
-        const bestConfig = locationConfigs.find(c => c.user_id === userId) || locationConfigs[0]
-        
-        console.log('Selected config:', {
-          id: bestConfig.id,
-          user_id: bestConfig.user_id,
-          matches_user: bestConfig.user_id === userId
-        })
-
-        // If user_id doesn't match, update it
-        if (bestConfig.user_id !== userId) {
-          console.log('Updating config to link with current user...')
-          
-          const { data: updatedConfig, error: updateError } = await supabase
-            .from('ghl_configurations')
-            .update({ 
-              user_id: userId,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', bestConfig.id)
-            .select()
-            .single()
-
-          if (updateError) {
-            console.error('Failed to update user_id:', updateError)
-            return bestConfig // Return original even if update fails
+        // If found but no user_id, try to link it
+        if (!locationData.user_id) {
+          console.log('Attempting to link configuration to user...')
+          const linkedConfig = await this.linkConfigurationToUser(locationData.id, userId)
+          if (linkedConfig) {
+            return linkedConfig
           }
-
-          console.log('✅ Successfully linked config to user')
-          return updatedConfig
         }
-
-        return bestConfig
+        
+        return locationData
       }
 
-      // Strategy 3: By user_id only
-      console.log('Fallback Strategy 3: By user_id')
-      const { data: userConfigs, error: userError } = await supabase
+      // Strategy 3: Try by user only
+      console.log('Strategy 3: User-only lookup')
+      const { data: userData, error: userError } = await supabase
         .from('ghl_configurations')
         .select('*')
         .eq('user_id', userId)
         .eq('is_active', true)
         .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
 
       if (userError) {
         console.error('User lookup error:', userError)
-      } else if (userConfigs && userConfigs.length > 0) {
-        console.log('✅ Found config by user_id:', userConfigs[0].id)
-        return userConfigs[0]
+      } else if (userData) {
+        console.log('Found by user:', userData.id)
+        return userData
       }
 
-      console.log('❌ No configuration found in fallback lookup')
+      console.log('No configuration found in any strategy')
       return null
 
     } catch (error) {
       console.error('Fallback lookup error:', error)
-      throw error
+      return null
     }
   }
 
-  static async validateTokenStatus(config) {
-    if (!config) {
-      return {
-        isValid: false,
-        status: 'missing_config',
-        message: 'No configuration found',
-        severity: 'error'
-      }
-    }
+  // Link an existing configuration to a user
+  async linkConfigurationToUser(configId, userId) {
+    try {
+      console.log('Linking configuration to user:', { configId, userId })
+      
+      const { data, error } = await supabase
+        .from('ghl_configurations')
+        .update({
+          user_id: userId,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', configId)
+        .select()
+        .single()
 
+      if (error) {
+        console.error('Failed to link configuration:', error)
+        return null
+      }
+
+      console.log('Successfully linked configuration')
+      return data
+
+    } catch (error) {
+      console.error('Link configuration error:', error)
+      return null
+    }
+  }
+
+  // Validate token status
+  validateTokenStatus(config) {
     if (!config.access_token) {
       return {
         isValid: false,
         status: 'missing_access_token',
-        message: 'Access token is missing. Please reinstall the app.',
+        message: 'Access token is missing',
         severity: 'error'
       }
     }
@@ -159,18 +183,8 @@ export class ConfigurationService {
     if (!config.refresh_token) {
       return {
         isValid: false,
-        status: 'missing_refresh_token',
-        message: 'Refresh token is missing. Please reinstall the app.',
-        severity: 'error'
-      }
-    }
-    
-    // Check if tokens are dev tokens
-    if (config.access_token.startsWith('dev-') || config.refresh_token.startsWith('dev-')) {
-      return {
-        isValid: false,
-        status: 'dev_tokens',
-        message: 'Development tokens detected. Please reinstall the app to get real GHL tokens.',
+        status: 'missing_refresh_token', 
+        message: 'Refresh token is missing',
         severity: 'error'
       }
     }
@@ -184,14 +198,14 @@ export class ConfigurationService {
         return {
           isValid: false,
           status: 'expired',
-          message: 'Access token has expired. The system will attempt to refresh it automatically.',
+          message: 'Access token has expired',
           severity: 'warning'
         }
       } else if (hoursUntilExpiry < 24) {
         return {
           isValid: true,
           status: 'expiring_soon',
-          message: `Access token expires in ${Math.round(hoursUntilExpiry)} hours.`,
+          message: `Token expires in ${Math.round(hoursUntilExpiry)} hours`,
           severity: 'info'
         }
       }
@@ -200,8 +214,13 @@ export class ConfigurationService {
     return {
       isValid: true,
       status: 'valid',
-      message: 'Real GHL access tokens are valid and ready for use.',
+      message: 'Access token is valid',
       severity: 'success'
     }
+  }
+
+  // Clear cache
+  clearCache() {
+    this.cache.clear()
   }
 }

@@ -16,7 +16,8 @@ function DataExtractionModule({ user, authService }) {
   const [editingField, setEditingField] = useState(null)
   const [ghlConfig, setGhlConfig] = useState(null)
   const [configError, setConfigError] = useState(null)
-  const [tokenValidation, setTokenValidation] = useState(null)
+  const [tokenStatus, setTokenStatus] = useState(null)
+  const [configService] = useState(new ConfigurationService())
 
   useEffect(() => {
     loadData()
@@ -28,48 +29,42 @@ function DataExtractionModule({ user, authService }) {
       setError(null)
       setConfigError(null)
 
-      console.log('=== LOAD DATA START ===')
-      console.log('User data received:', {
+      console.log('=== DATA EXTRACTION MODULE LOAD START ===')
+      console.log('User context:', {
         userId: user.userId,
         locationId: user.locationId,
-        configId: user.configId,
-        configValidated: user.configValidated,
-        tokenStatus: user.tokenStatus
+        devMode: user.devMode
       })
 
-      // Use the new ConfigurationService
-      const config = await ConfigurationService.getGHLConfiguration(user.userId, user.locationId)
+      // Get GHL configuration using the new service
+      const config = await configService.getGHLConfiguration(user.userId, user.locationId)
+      
+      if (!config) {
+        setConfigError('No configuration found for this location')
+        return
+      }
+
+      console.log('Configuration loaded:', {
+        id: config.id,
+        hasTokens: !!(config.access_token && config.refresh_token)
+      })
+
       setGhlConfig(config)
 
-      if (config) {
-        console.log('✅ Configuration loaded successfully:', {
-          id: config.id,
-          ghl_account_id: config.ghl_account_id,
-          user_id: config.user_id,
-          hasAccessToken: !!config.access_token,
-          hasRefreshToken: !!config.refresh_token
-        })
-
-        // Validate token status using the service
-        const validation = await ConfigurationService.validateTokenStatus(config)
-        setTokenValidation(validation)
-        
-        if (validation.isValid) {
-          // Load custom fields and extraction fields in parallel
-          await Promise.all([
-            loadCustomFields(config),
-            loadExtractionFields(config.id)
-          ])
-        } else {
-          setConfigError(`Token issue: ${validation.message}`)
-        }
+      // Validate token status
+      const status = configService.validateTokenStatus(config)
+      setTokenStatus(status)
+      
+      if (status.isValid) {
+        // Load custom fields and extraction fields in parallel
+        await Promise.all([
+          loadCustomFields(config),
+          loadExtractionFields(config.id)
+        ])
       } else {
-        console.log('❌ No configuration found')
-        setConfigError(
-          'No configuration found for this location. ' +
-          'Please install the app via the GoHighLevel marketplace to get proper access tokens.'
-        )
+        setConfigError(`Token issue: ${status.message}`)
       }
+
     } catch (error) {
       console.error('Error loading data:', error)
       setError(error.message)
@@ -80,15 +75,76 @@ function DataExtractionModule({ user, authService }) {
 
   const loadCustomFields = async (config) => {
     try {
-      console.log('Loading custom fields with token:', config.access_token.substring(0, 20) + '...')
-      const ghlService = new GHLApiService(config.access_token)
-      const fields = await ghlService.getCustomFields(config.ghl_account_id)
-      console.log(`✅ Loaded ${fields.length} custom fields`)
-      setCustomFields(fields)
+      // In dev mode, use mock data if API call fails
+      if (user.devMode) {
+        try {
+          const ghlService = new GHLApiService(config.access_token)
+          const fields = await ghlService.getCustomFields(config.ghl_account_id)
+          setCustomFields(fields)
+        } catch (error) {
+          console.log('API call failed in dev mode, using mock data:', error.message)
+          setCustomFields(getMockCustomFields())
+        }
+      } else {
+        const ghlService = new GHLApiService(config.access_token)
+        const fields = await ghlService.getCustomFields(config.ghl_account_id)
+        setCustomFields(fields)
+      }
     } catch (error) {
       console.error('Error loading custom fields:', error)
-      throw new Error(`Failed to load custom fields: ${error.message}`)
+      if (user.devMode) {
+        console.log('Using mock data due to error in dev mode')
+        setCustomFields(getMockCustomFields())
+      } else {
+        throw new Error('Failed to load custom fields from GoHighLevel')
+      }
     }
+  }
+
+  const getMockCustomFields = () => {
+    return [
+      {
+        id: "mock-text-field",
+        name: "Customer Name",
+        model: "contact",
+        fieldKey: "contact.customer_name",
+        placeholder: "Enter customer name",
+        dataType: "TEXT",
+        position: 50,
+        standard: false
+      },
+      {
+        id: "mock-phone-field",
+        name: "Phone Number",
+        model: "contact",
+        fieldKey: "contact.phone_number",
+        placeholder: "",
+        dataType: "PHONE",
+        position: 100,
+        standard: false
+      },
+      {
+        id: "mock-service-field",
+        name: "Service Type",
+        model: "contact",
+        fieldKey: "contact.service_type",
+        placeholder: "",
+        dataType: "SINGLE_OPTIONS",
+        position: 150,
+        standard: false,
+        picklistOptions: ["Consultation", "Installation", "Maintenance", "Repair"]
+      },
+      {
+        id: "mock-date-field",
+        name: "Appointment Date",
+        model: "contact",
+        fieldKey: "contact.appointment_date",
+        placeholder: "",
+        dataType: "DATE",
+        position: 200,
+        standard: false
+      }
+    ]
   }
 
   const loadExtractionFields = async (configId) => {
@@ -102,7 +158,6 @@ function DataExtractionModule({ user, authService }) {
       throw new Error('Failed to load extraction fields')
     }
 
-    console.log(`✅ Loaded ${data?.length || 0} extraction fields`)
     setExtractionFields(data || [])
   }
 
@@ -177,9 +232,9 @@ function DataExtractionModule({ user, authService }) {
     }
   }
 
-  const handleReinstallApp = () => {
-    const EXACT_INSTALL_URL = 'https://marketplace.leadconnectorhq.com/oauth/chooselocation?response_type=code&redirect_uri=https%3A%2F%2Feloquent-moonbeam-8a5386.netlify.app%2Foauth%2Fcallback&client_id=685c90c16a67491ca1f5f7de-mcf0wxc1&scope=conversations.readonly+conversations%2Fmessage.readonly+conversations%2Freports.readonly+contacts.readonly+contacts.write+locations.readonly+locations%2FcustomFields.readonly+locations%2FcustomFields.write+oauth.readonly+oauth.write'
-    window.open(EXACT_INSTALL_URL, '_blank')
+  const handleRetryConfiguration = () => {
+    configService.clearCache()
+    loadData()
   }
 
   if (loading) {
@@ -196,11 +251,6 @@ function DataExtractionModule({ user, authService }) {
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
         <h3 className="text-red-800 font-medium">Error Loading Data</h3>
         <p className="text-red-600 text-sm mt-1">{error}</p>
-        <div className="mt-3 text-xs text-red-700 space-y-1">
-          <p><strong>User ID:</strong> {user.userId}</p>
-          <p><strong>Location ID:</strong> {user.locationId}</p>
-          <p><strong>Expected Config ID:</strong> 5cad15db-9da3-4d45-b09e-6196bcd1ef96</p>
-        </div>
         <button
           onClick={loadData}
           className="mt-3 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
@@ -214,33 +264,21 @@ function DataExtractionModule({ user, authService }) {
   if (!ghlConfig) {
     return (
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <h3 className="text-yellow-800 font-medium">Configuration Issue</h3>
+        <h3 className="text-yellow-800 font-medium">No Configuration Found</h3>
         <p className="text-yellow-600 text-sm mt-1">
-          {configError || 'Unable to load GoHighLevel configuration.'}
+          {configError || 'No GoHighLevel configuration found for this location.'}
         </p>
         <div className="mt-3 text-xs text-yellow-700 space-y-1">
           <p><strong>User ID:</strong> {user.userId}</p>
           <p><strong>Location ID:</strong> {user.locationId}</p>
-          <p><strong>Expected Config:</strong> 5cad15db-9da3-4d45-b09e-6196bcd1ef96</p>
-          <p><strong>Config Validated:</strong> {user.configValidated ? 'Yes' : 'No'}</p>
-          <p><strong>Config ID from Auth:</strong> {user.configId || 'None'}</p>
-          <p><strong>Token Status:</strong> {user.tokenStatus || 'Unknown'}</p>
-          {configError && (
-            <p><strong>Error:</strong> {configError}</p>
-          )}
+          <p><strong>Dev Mode:</strong> {user.devMode ? 'Yes' : 'No'}</p>
         </div>
-        <div className="mt-3 space-x-2">
+        <div className="mt-3">
           <button
-            onClick={loadData}
+            onClick={handleRetryConfiguration}
             className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
           >
             Retry Loading
-          </button>
-          <button
-            onClick={handleReinstallApp}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
-          >
-            Reinstall App
           </button>
         </div>
       </div>
@@ -250,32 +288,22 @@ function DataExtractionModule({ user, authService }) {
   return (
     <div className="space-y-6">
       {/* Token Status Alert */}
-      {tokenValidation && !tokenValidation.isValid && (
+      {tokenStatus && !tokenStatus.isValid && (
         <div className={`border rounded-lg p-4 ${
-          tokenValidation.severity === 'error' 
+          tokenStatus.severity === 'error' 
             ? 'bg-red-50 border-red-200' 
             : 'bg-yellow-50 border-yellow-200'
         }`}>
           <h3 className={`font-medium ${
-            tokenValidation.severity === 'error' ? 'text-red-800' : 'text-yellow-800'
+            tokenStatus.severity === 'error' ? 'text-red-800' : 'text-yellow-800'
           }`}>
             Token Issue Detected
           </h3>
           <p className={`text-sm mt-1 ${
-            tokenValidation.severity === 'error' ? 'text-red-600' : 'text-yellow-600'
+            tokenStatus.severity === 'error' ? 'text-red-600' : 'text-yellow-600'
           }`}>
-            {tokenValidation.message}
+            {tokenStatus.message}
           </p>
-          {tokenValidation.severity === 'error' && (
-            <div className="mt-3">
-              <button
-                onClick={handleReinstallApp}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
-              >
-                Reinstall App
-              </button>
-            </div>
-          )}
         </div>
       )}
 
@@ -285,12 +313,12 @@ function DataExtractionModule({ user, authService }) {
           <p className="text-sm text-gray-600 mt-1">
             Configure which custom fields should be automatically populated by AI during conversations.
           </p>
-          <div className="mt-2 text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded">
-            Config ID: {ghlConfig.id} | Location: {ghlConfig.ghl_account_id} | User: {ghlConfig.user_id}
+          <div className="mt-2 text-xs text-green-700 bg-green-50 px-2 py-1 rounded">
+            Using configuration ID: {ghlConfig.id} for location {ghlConfig.ghl_account_id}
           </div>
-          {tokenValidation && tokenValidation.isValid && (
+          {tokenStatus && tokenStatus.isValid && (
             <div className="mt-2 text-xs text-green-700 bg-green-50 px-2 py-1 rounded">
-              ✅ {tokenValidation.message}
+              Token Status: {tokenStatus.message}
             </div>
           )}
         </div>
