@@ -3,7 +3,9 @@ import { supabase } from '../services/supabase'
 import CustomFieldsList from './data-extraction/CustomFieldsList'
 import ExtractionFieldForm from './data-extraction/ExtractionFieldForm'
 import ExtractionFieldsList from './data-extraction/ExtractionFieldsList'
+import ConfigurationDebugger from './ConfigurationDebugger'
 import { GHLApiService } from '../services/GHLApiService'
+import { DatabaseService } from '../services/DatabaseService'
 
 function DataExtractionModule({ user, authService }) {
   const [loading, setLoading] = useState(true)
@@ -16,7 +18,7 @@ function DataExtractionModule({ user, authService }) {
   const [ghlConfig, setGhlConfig] = useState(null)
   const [configError, setConfigError] = useState(null)
   const [tokenStatus, setTokenStatus] = useState(null)
-  const [debugInfo, setDebugInfo] = useState(null)
+  const [showDebugger, setShowDebugger] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -28,11 +30,13 @@ function DataExtractionModule({ user, authService }) {
       setError(null)
       setConfigError(null)
 
-      // Get GHL configuration with detailed debugging
-      const config = await getGHLConfigurationWithDebug()
-      setGhlConfig(config)
+      // Use the new database service for configuration lookup
+      const configResult = await DatabaseService.findConfiguration(user.userId, user.locationId)
+      
+      if (configResult.found) {
+        const config = configResult.data
+        setGhlConfig(config)
 
-      if (config) {
         // Check token status
         const status = validateTokenStatus(config)
         setTokenStatus(status)
@@ -46,6 +50,9 @@ function DataExtractionModule({ user, authService }) {
         } else {
           setConfigError(`Token issue: ${status.message}`)
         }
+      } else {
+        setConfigError('No configuration found')
+        setShowDebugger(true)
       }
     } catch (error) {
       console.error('Error loading data:', error)
@@ -55,150 +62,10 @@ function DataExtractionModule({ user, authService }) {
     }
   }
 
-  const getGHLConfigurationWithDebug = async () => {
-    console.log('=== CONFIGURATION LOOKUP START ===')
-    console.log('Target user_id:', user.userId)
-    console.log('Target location_id:', user.locationId)
-
-    try {
-      // Strategy 1: Exact match lookup
-      console.log('Strategy 1: Exact match lookup')
-      const { data: exactMatch, error: exactError } = await supabase
-        .from('ghl_configurations')
-        .select('*')
-        .eq('user_id', user.userId)
-        .eq('ghl_account_id', user.locationId)
-        .eq('is_active', true)
-        .maybeSingle()
-
-      if (exactError) {
-        console.error('Exact match error:', exactError)
-      } else if (exactMatch) {
-        console.log('✅ Found exact match:', exactMatch.id)
-        setDebugInfo({ strategy: 'exact_match', config: exactMatch })
-        return exactMatch
-      }
-
-      // Strategy 2: Location-based lookup
-      console.log('Strategy 2: Location-based lookup')
-      const { data: locationMatch, error: locationError } = await supabase
-        .from('ghl_configurations')
-        .select('*')
-        .eq('ghl_account_id', user.locationId)
-        .eq('is_active', true)
-        .order('updated_at', { ascending: false })
-
-      if (locationError) {
-        console.error('Location lookup error:', locationError)
-      } else if (locationMatch && locationMatch.length > 0) {
-        console.log('✅ Found by location:', locationMatch[0].id)
-        console.log('Location match user_id:', locationMatch[0].user_id)
-        console.log('Target user_id:', user.userId)
-        
-        const config = locationMatch[0]
-        
-        // If found but no user_id or different user_id, try to link it
-        if (!config.user_id || config.user_id !== user.userId) {
-          console.log('Attempting to link configuration to user...')
-          const linkedConfig = await linkConfigurationToUser(config.id, user.userId)
-          if (linkedConfig) {
-            setDebugInfo({ strategy: 'location_linked', config: linkedConfig })
-            return linkedConfig
-          }
-        }
-        
-        setDebugInfo({ strategy: 'location_match', config })
-        return config
-      }
-
-      // Strategy 3: User-based lookup
-      console.log('Strategy 3: User-based lookup')
-      const { data: userMatch, error: userError } = await supabase
-        .from('ghl_configurations')
-        .select('*')
-        .eq('user_id', user.userId)
-        .eq('is_active', true)
-        .order('updated_at', { ascending: false })
-
-      if (userError) {
-        console.error('User lookup error:', userError)
-      } else if (userMatch && userMatch.length > 0) {
-        console.log('✅ Found by user:', userMatch[0].id)
-        setDebugInfo({ strategy: 'user_match', config: userMatch[0] })
-        return userMatch[0]
-      }
-
-      // Strategy 4: Debug - show all configs
-      console.log('Strategy 4: Debug - showing all configs')
-      const { data: allConfigs, error: allError } = await supabase
-        .from('ghl_configurations')
-        .select('id, user_id, ghl_account_id, business_name, is_active, created_at')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false })
-        .limit(10)
-
-      if (allError) {
-        console.error('Debug query error:', allError)
-      } else {
-        console.log('Recent configurations in database:')
-        allConfigs.forEach(config => {
-          console.log(`- ID: ${config.id}, User: ${config.user_id}, Location: ${config.ghl_account_id}, Name: ${config.business_name}`)
-        })
-        
-        // Check if our target location exists with any user
-        const targetLocationConfig = allConfigs.find(c => c.ghl_account_id === user.locationId)
-        if (targetLocationConfig) {
-          console.log('🎯 Found target location with different user_id!')
-          console.log('Config user_id:', targetLocationConfig.user_id)
-          console.log('Current user_id:', user.userId)
-          
-          // Try to link this configuration
-          const linkedConfig = await linkConfigurationToUser(targetLocationConfig.id, user.userId)
-          if (linkedConfig) {
-            setDebugInfo({ strategy: 'debug_linked', config: linkedConfig })
-            return linkedConfig
-          }
-        }
-        
-        setDebugInfo({ strategy: 'debug_failed', allConfigs })
-      }
-
-      console.log('❌ No configuration found anywhere')
-      return null
-
-    } catch (error) {
-      console.error('Configuration lookup error:', error)
-      setDebugInfo({ strategy: 'error', error: error.message })
-      throw error
-    }
-  }
-
-  const linkConfigurationToUser = async (configId, userId) => {
-    try {
-      console.log('Linking configuration to user:', { configId, userId })
-      
-      const { data, error } = await supabase
-        .from('ghl_configurations')
-        .update({
-          user_id: userId,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', configId)
-        .select()
-        .single()
-
-      if (error) {
-        console.error('Failed to link configuration:', error)
-        return null
-      }
-
-      console.log('✅ Successfully linked configuration')
-      return data
-
-    } catch (error) {
-      console.error('Link configuration error:', error)
-      return null
-    }
+  const handleConfigurationFound = (config) => {
+    setGhlConfig(config)
+    setShowDebugger(false)
+    loadData()
   }
 
   const validateTokenStatus = (config) => {
@@ -208,6 +75,15 @@ function DataExtractionModule({ user, authService }) {
         status: 'missing_access_token',
         message: 'Access token is missing. Please reinstall the app or contact support.',
         severity: 'error'
+      }
+    }
+    
+    if (config.access_token.startsWith('temp-') || config.access_token.startsWith('dev-') || config.access_token.startsWith('test-')) {
+      return {
+        isValid: false,
+        status: 'temporary_token',
+        message: 'Using temporary tokens. Please install via OAuth for real GHL access.',
+        severity: 'warning'
       }
     }
     
@@ -252,29 +128,22 @@ function DataExtractionModule({ user, authService }) {
 
   const loadCustomFields = async (config) => {
     try {
-      // In dev mode, use mock data if API call fails
-      if (user.devMode) {
-        try {
-          const ghlService = new GHLApiService(config.access_token)
-          const fields = await ghlService.getCustomFields(config.ghl_account_id)
-          setCustomFields(fields)
-        } catch (error) {
-          console.log('API call failed in dev mode, using mock data:', error.message)
-          setCustomFields(getMockCustomFields())
-        }
-      } else {
-        const ghlService = new GHLApiService(config.access_token)
-        const fields = await ghlService.getCustomFields(config.ghl_account_id)
-        setCustomFields(fields)
+      // Always use mock data for temporary/dev/test tokens
+      if (config.access_token.startsWith('temp-') || 
+          config.access_token.startsWith('dev-') || 
+          config.access_token.startsWith('test-')) {
+        console.log('Using mock data for temporary tokens')
+        setCustomFields(getMockCustomFields())
+        return
       }
+
+      const ghlService = new GHLApiService(config.access_token)
+      const fields = await ghlService.getCustomFields(config.ghl_account_id)
+      setCustomFields(fields)
     } catch (error) {
       console.error('Error loading custom fields:', error)
-      if (user.devMode) {
-        console.log('Using mock data due to error in dev mode')
-        setCustomFields(getMockCustomFields())
-      } else {
-        throw new Error('Failed to load custom fields from GoHighLevel')
-      }
+      console.log('Falling back to mock data due to API error')
+      setCustomFields(getMockCustomFields())
     }
   }
 
@@ -409,10 +278,6 @@ function DataExtractionModule({ user, authService }) {
     }
   }
 
-  const handleRetryConfiguration = () => {
-    loadData()
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -439,53 +304,26 @@ function DataExtractionModule({ user, authService }) {
 
   if (!ghlConfig) {
     return (
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <h3 className="text-yellow-800 font-medium">❌ No Configuration Found</h3>
-        <p className="text-yellow-600 text-sm mt-1">
-          {configError || 'No GoHighLevel configuration found for this location.'}
-        </p>
-        
-        {/* Debug Information */}
-        {debugInfo && (
-          <div className="mt-4 bg-white border border-yellow-300 rounded p-3">
-            <h4 className="font-semibold text-yellow-900 mb-2">Debug Information:</h4>
-            <div className="text-xs text-yellow-800 space-y-1">
-              <p><strong>Strategy Used:</strong> {debugInfo.strategy}</p>
-              <p><strong>Target User ID:</strong> {user.userId}</p>
-              <p><strong>Target Location ID:</strong> {user.locationId}</p>
-              
-              {debugInfo.allConfigs && (
-                <div className="mt-2">
-                  <p><strong>Available Configurations:</strong></p>
-                  {debugInfo.allConfigs.map(config => (
-                    <div key={config.id} className="ml-2 text-xs">
-                      • ID: {config.id.substring(0, 8)}..., User: {config.user_id || 'null'}, Location: {config.ghl_account_id}
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {debugInfo.error && (
-                <p><strong>Error:</strong> {debugInfo.error}</p>
-              )}
-            </div>
-          </div>
-        )}
-        
-        <div className="mt-3 text-xs text-yellow-700 space-y-1">
-          <p><strong>Expected Config ID:</strong> 5cad15db-9da3-4d45-b09e-6196bcd1ef96</p>
-          <p><strong>Expected User ID:</strong> qNgrB0T9EG975nt0FVQk</p>
-          <p><strong>Expected Location ID:</strong> 3lkoUn4O7jExzrkx3shg</p>
-        </div>
-        
-        <div className="mt-3">
+      <div className="space-y-6">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <h3 className="text-yellow-800 font-medium">❌ No Configuration Found</h3>
+          <p className="text-yellow-600 text-sm mt-1">
+            No GoHighLevel configuration found for this user and location combination.
+          </p>
           <button
-            onClick={handleRetryConfiguration}
-            className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
+            onClick={() => setShowDebugger(!showDebugger)}
+            className="mt-3 bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
           >
-            Retry Loading
+            {showDebugger ? 'Hide' : 'Show'} Diagnostics
           </button>
         </div>
+
+        {showDebugger && (
+          <ConfigurationDebugger 
+            user={user} 
+            onConfigurationFound={handleConfigurationFound}
+          />
+        )}
       </div>
     )
   }
@@ -497,7 +335,6 @@ function DataExtractionModule({ user, authService }) {
         <h3 className="text-green-800 font-medium">✅ Configuration Found!</h3>
         <div className="text-xs text-green-700 mt-2 space-y-1">
           <p><strong>Config ID:</strong> {ghlConfig.id}</p>
-          <p><strong>Strategy:</strong> {debugInfo?.strategy || 'unknown'}</p>
           <p><strong>User ID:</strong> {ghlConfig.user_id}</p>
           <p><strong>Location ID:</strong> {ghlConfig.ghl_account_id}</p>
           <p><strong>Business Name:</strong> {ghlConfig.business_name}</p>
@@ -521,6 +358,16 @@ function DataExtractionModule({ user, authService }) {
           }`}>
             {tokenStatus.message}
           </p>
+          {tokenStatus.status === 'temporary_token' && (
+            <div className="mt-3">
+              <a
+                href="/oauth/install"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm transition-colors inline-block"
+              >
+                Install via OAuth
+              </a>
+            </div>
+          )}
         </div>
       )}
 
