@@ -31,7 +31,6 @@ Deno.serve(async (req: Request) => {
   try {
     console.log('=== AUTH REQUEST START ===')
     
-    // Production mode - handle SSO decryption
     const { key } = await req.json()
     
     if (!key) {
@@ -73,8 +72,13 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     
-    // Validate production configuration
+    // Validate configuration
     const configResult = await validateConfiguration(supabase, userContext)
+
+    // Generate Supabase JWT for the user
+    console.log('Generating Supabase JWT...')
+    const jwtToken = await generateSupabaseJWT(userContext)
+    console.log('JWT generated successfully')
 
     return new Response(
       JSON.stringify({
@@ -85,7 +89,8 @@ Deno.serve(async (req: Request) => {
           configId: configResult?.id || null,
           tokenStatus: configResult?.tokenStatus || 'unknown',
           tokenValidation: configResult?.tokenValidation || null
-        }
+        },
+        supabaseJWT: jwtToken
       }),
       {
         status: 200,
@@ -114,6 +119,66 @@ Deno.serve(async (req: Request) => {
     )
   }
 })
+
+async function generateSupabaseJWT(userContext: any): Promise<string> {
+  try {
+    const jwtSecret = Deno.env.get('SUPABASE_JWT_SECRET')
+    if (!jwtSecret) {
+      throw new Error('SUPABASE_JWT_SECRET environment variable is not set')
+    }
+
+    // JWT Header
+    const header = {
+      alg: 'HS256',
+      typ: 'JWT'
+    }
+
+    // JWT Payload with GHL user data
+    const now = Math.floor(Date.now() / 1000)
+    const payload = {
+      aud: 'authenticated',
+      exp: now + (24 * 60 * 60), // 24 hours
+      iat: now,
+      iss: 'supabase',
+      sub: userContext.userId, // Use GHL userId as the subject
+      email: userContext.email,
+      role: 'authenticated',
+      // Custom claims for GHL data
+      ghl_user_id: userContext.userId,
+      ghl_location_id: userContext.locationId,
+      ghl_company_id: userContext.companyId,
+      ghl_user_name: userContext.userName,
+      ghl_user_role: userContext.role,
+      ghl_user_type: userContext.type
+    }
+
+    // Encode header and payload
+    const encodedHeader = btoa(JSON.stringify(header)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+    const encodedPayload = btoa(JSON.stringify(payload)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+
+    // Create signature
+    const message = `${encodedHeader}.${encodedPayload}`
+    const key = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(jwtSecret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    )
+    
+    const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message))
+    const encodedSignature = btoa(String.fromCharCode(...new Uint8Array(signature)))
+      .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+
+    const jwt = `${message}.${encodedSignature}`
+    console.log('JWT generated with claims:', { sub: payload.sub, ghl_user_id: payload.ghl_user_id })
+    
+    return jwt
+  } catch (error) {
+    console.error('JWT generation error:', error)
+    throw new Error(`Failed to generate JWT: ${error.message}`)
+  }
+}
 
 async function validateConfiguration(supabase: any, userContext: any) {
   try {

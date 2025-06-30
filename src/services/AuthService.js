@@ -59,12 +59,42 @@ export class AuthService {
       const result = await response.json()
       console.log('Authentication successful:', result)
       
+      // Set up Supabase session with the JWT
+      if (result.supabaseJWT) {
+        console.log('Setting up Supabase session with JWT...')
+        await this.setupSupabaseSession(result.supabaseJWT)
+      }
+      
       this.currentUser = result.user
       this.isAuthenticated = true
       
       return result.user
     } catch (error) {
       console.error('Failed to fetch user data:', error)
+      throw error
+    }
+  }
+
+  // Set up Supabase session with JWT
+  async setupSupabaseSession(jwtToken) {
+    try {
+      const { supabase } = await import('./supabase')
+      
+      // Set the session with the JWT
+      const { data, error } = await supabase.auth.setSession({
+        access_token: jwtToken,
+        refresh_token: 'dummy-refresh-token' // Required but not used for custom JWTs
+      })
+
+      if (error) {
+        console.error('Failed to set Supabase session:', error)
+        throw error
+      }
+
+      console.log('Supabase session established successfully')
+      return data
+    } catch (error) {
+      console.error('Error setting up Supabase session:', error)
       throw error
     }
   }
