@@ -91,9 +91,10 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
   const needsPicklistOptions = ['SINGLE_OPTIONS', 'MULTIPLE_OPTIONS'].includes(formData.field_type)
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-      <div className="relative top-4 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white my-8">
-        <div className="mb-4">
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-200 flex-shrink-0">
           <h3 className="text-lg font-medium text-gray-900">
             {editingField ? 'Edit Extraction Field' : 'Configure Data Extraction'}
           </h3>
@@ -104,13 +105,15 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
           )}
         </div>
 
+        {/* Error Alert */}
         {error && (
-          <div className="mb-4 bg-red-50 border border-red-200 rounded-md p-3">
+          <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-md p-3 flex-shrink-0">
             <p className="text-sm text-red-600">{error}</p>
           </div>
         )}
 
-        <div className="max-h-[70vh] overflow-y-auto">
+        {/* Scrollable Form Content */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -164,7 +167,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Options
                 </label>
-                <div className="space-y-2 max-h-32 overflow-y-auto">
+                <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md p-3">
                   {formData.picklist_options.map((option, index) => (
                     <div key={index} className="flex items-center space-x-2">
                       <input
@@ -232,7 +235,8 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
           </form>
         </div>
 
-        <div className="flex justify-end space-x-3 pt-4 border-t mt-4">
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3 flex-shrink-0">
           <button
             type="button"
             onClick={onCancel}

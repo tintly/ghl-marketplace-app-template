@@ -73,7 +73,7 @@ function DataExtractorApp({ user, authService }) {
         
         {/* User Linking Component - shows if there are unlinked configurations */}
         {!user.standaloneMode && !needsOAuthInstallation() && (
-          <UserLinking user={user} onLinkingComplete={handleLinkingComplete} />
+          <UserLinking user={user} authService={authService} onLinkingComplete={handleLinkingComplete} />
         )}
         
         {!needsOAuthInstallation() && <Navigation />}
