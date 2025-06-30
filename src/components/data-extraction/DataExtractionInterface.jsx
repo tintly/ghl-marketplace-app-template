@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react'
-import { supabase } from '../../services/supabase'
 import CustomFieldsList from './CustomFieldsList'
 import ExtractionFieldForm from './ExtractionFieldForm'
 import ExtractionFieldsList from './ExtractionFieldsList'
@@ -43,6 +42,9 @@ function DataExtractionInterface({ config, user, authService }) {
   }
 
   const loadExtractionFields = async () => {
+    // Use the authenticated Supabase client
+    const supabase = authService?.getSupabaseClient() || (await import('../../services/supabase')).supabase
+
     const { data, error } = await supabase
       .from('data_extraction_fields')
       .select('*')
@@ -50,6 +52,7 @@ function DataExtractionInterface({ config, user, authService }) {
       .order('sort_order', { ascending: true })
 
     if (error) {
+      console.error('Error loading extraction fields:', error)
       throw new Error('Failed to load extraction fields')
     }
 
@@ -70,6 +73,8 @@ function DataExtractionInterface({ config, user, authService }) {
 
   const handleFormSubmit = async (formData) => {
     try {
+      const supabase = authService?.getSupabaseClient() || (await import('../../services/supabase')).supabase
+
       if (editingField) {
         // Update existing field
         const { error } = await supabase
@@ -106,6 +111,8 @@ function DataExtractionInterface({ config, user, authService }) {
 
   const handleDeleteExtraction = async (fieldId) => {
     try {
+      const supabase = authService?.getSupabaseClient() || (await import('../../services/supabase')).supabase
+
       const { error } = await supabase
         .from('data_extraction_fields')
         .delete()
@@ -158,6 +165,9 @@ function DataExtractionInterface({ config, user, authService }) {
         </p>
         <div className="mt-2 text-xs text-green-700 bg-green-50 px-2 py-1 rounded">
           Using configuration: {config.business_name} ({config.id.substring(0, 8)}...)
+        </div>
+        <div className="mt-1 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded">
+          Authenticated as: {user.userName} ({user.userId})
         </div>
       </div>
 

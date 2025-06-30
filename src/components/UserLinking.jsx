@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { supabase } from '../services/supabase'
 
-function UserLinking({ user, onLinkingComplete }) {
+function UserLinking({ user, authService, onLinkingComplete }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [unlinkedConfigs, setUnlinkedConfigs] = useState([])
@@ -12,6 +11,8 @@ function UserLinking({ user, onLinkingComplete }) {
 
   const checkForUnlinkedConfigurations = async () => {
     try {
+      const supabase = authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
+
       // Look for configurations that match this user's location but have no user_id
       const { data, error } = await supabase
         .from('ghl_configurations')
@@ -37,6 +38,8 @@ function UserLinking({ user, onLinkingComplete }) {
     setError(null)
 
     try {
+      const supabase = authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
+
       const { error } = await supabase
         .from('ghl_configurations')
         .update({ 
