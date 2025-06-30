@@ -10,7 +10,8 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
     picklist_options: [],
     placeholder: '',
     is_required: false,
-    sort_order: 0
+    sort_order: 0,
+    original_ghl_field_data: {}
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -26,7 +27,8 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
         picklist_options: editingField.picklist_options || [],
         placeholder: editingField.placeholder || '',
         is_required: editingField.is_required,
-        sort_order: editingField.sort_order
+        sort_order: editingField.sort_order,
+        original_ghl_field_data: editingField.original_ghl_field_data || {}
       })
     } else if (customField) {
       // Creating new field from custom field
@@ -43,7 +45,8 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
         ).filter(Boolean) : [],
         placeholder: customField.placeholder || '',
         is_required: false,
-        sort_order: 0
+        sort_order: 0,
+        original_ghl_field_data: customField // Store the entire GHL field object
       })
     }
   }, [customField, editingField])

@@ -1,14 +1,57 @@
 import React from 'react'
 import { getFieldTypeIcon, getFieldTypeLabel } from '../../utils/customFieldUtils'
 
-function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete }) {
+function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete, onRecreate }) {
   const getCustomFieldInfo = (targetKey) => {
     return customFields.find(cf => cf.id === targetKey)
+  }
+
+  const isFieldActive = (targetKey) => {
+    return !!getCustomFieldInfo(targetKey)
+  }
+
+  const getFieldDisplayData = (field) => {
+    const customField = getCustomFieldInfo(field.target_ghl_key)
+    
+    if (customField) {
+      // Field is active in GHL
+      return {
+        isActive: true,
+        name: customField.name,
+        dataType: customField.dataType,
+        picklistOptions: customField.picklistOptions || [],
+        source: 'ghl'
+      }
+    } else if (field.original_ghl_field_data && Object.keys(field.original_ghl_field_data).length > 0) {
+      // Field is inactive, use stored data
+      return {
+        isActive: false,
+        name: field.original_ghl_field_data.name || field.field_name,
+        dataType: field.original_ghl_field_data.dataType || 'TEXT',
+        picklistOptions: field.original_ghl_field_data.picklistOptions || [],
+        source: 'stored'
+      }
+    } else {
+      // Fallback to extraction field data
+      return {
+        isActive: false,
+        name: field.field_name,
+        dataType: 'TEXT',
+        picklistOptions: field.picklist_options || [],
+        source: 'fallback'
+      }
+    }
   }
 
   const handleDelete = (field) => {
     if (window.confirm(`Are you sure you want to delete the extraction configuration for "${field.field_name}"?`)) {
       onDelete(field.id)
+    }
+  }
+
+  const handleRecreate = (field) => {
+    if (window.confirm(`Are you sure you want to recreate the "${field.field_name}" field in GoHighLevel?`)) {
+      onRecreate(field)
     }
   }
 
@@ -32,22 +75,36 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
       ) : (
         <div className="space-y-3 max-h-96 overflow-y-auto">
           {extractionFields.map((field) => {
-            const customField = getCustomFieldInfo(field.target_ghl_key)
+            const displayData = getFieldDisplayData(field)
             
             return (
               <div
                 key={field.id}
-                className="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow"
+                className={`border rounded-lg p-4 hover:shadow-sm transition-shadow ${
+                  displayData.isActive ? 'border-gray-200' : 'border-red-200 bg-red-50'
+                }`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center space-x-2 mb-2">
                       <span className="text-lg">
-                        {customField ? getFieldTypeIcon(customField.dataType) : '📝'}
+                        {getFieldTypeIcon(displayData.dataType)}
                       </span>
                       <h4 className="font-medium text-gray-900">{field.field_name}</h4>
-                      {field.is_required && (
+                      
+                      {/* Status badges */}
+                      {displayData.isActive ? (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Active
+                        </span>
+                      ) : (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          No longer active
+                        </span>
+                      )}
+                      
+                      {field.is_required && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
                           Required
                         </span>
                       )}
@@ -55,37 +112,52 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
                     
                     <div className="text-sm text-gray-600 space-y-1">
                       <p><span className="font-medium">Description:</span> {field.description}</p>
-                      <p><span className="font-medium">Type:</span> {getFieldTypeLabel(field.field_type)}</p>
-                      {customField && (
-                        <p><span className="font-medium">GHL Field:</span> {customField.name}</p>
+                      <p><span className="font-medium">Type:</span> {getFieldTypeLabel(displayData.dataType)}</p>
+                      
+                      {displayData.isActive ? (
+                        <p><span className="font-medium">GHL Field:</span> {displayData.name}</p>
+                      ) : (
+                        <p><span className="font-medium">Original Field:</span> {displayData.name} <span className="text-red-600">(deleted from GHL)</span></p>
                       )}
+                      
                       {field.placeholder && (
                         <p><span className="font-medium">Placeholder:</span> {field.placeholder}</p>
                       )}
-                      {field.picklist_options && field.picklist_options.length > 0 && (
+                      
+                      {displayData.picklistOptions && displayData.picklistOptions.length > 0 && (
                         <div>
                           <span className="font-medium">Options:</span>
                           <div className="flex flex-wrap gap-1 mt-1">
-                            {field.picklist_options.slice(0, 3).map((option, index) => (
+                            {displayData.picklistOptions.slice(0, 3).map((option, index) => (
                               <span
                                 key={index}
                                 className="inline-flex items-center px-2 py-1 rounded-md text-xs bg-blue-100 text-blue-800"
                               >
-                                {option}
+                                {typeof option === 'string' ? option : option.label || option.value || option}
                               </span>
                             ))}
-                            {field.picklist_options.length > 3 && (
+                            {displayData.picklistOptions.length > 3 && (
                               <span className="text-xs text-gray-500">
-                                +{field.picklist_options.length - 3} more
+                                +{displayData.picklistOptions.length - 3} more
                               </span>
                             )}
                           </div>
+                        </div>
+                      )}
+                      
+                      {!displayData.isActive && (
+                        <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                          <p className="text-yellow-800">
+                            <strong>Note:</strong> This field was deleted from GoHighLevel. 
+                            You can recreate it or remove this configuration.
+                          </p>
                         </div>
                       )}
                     </div>
                   </div>
                   
                   <div className="ml-4 flex space-x-2">
+                    {/* Edit button */}
                     <button
                       onClick={() => onEdit(field)}
                       className="text-blue-600 hover:text-blue-700 p-1"
@@ -95,6 +167,21 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
+                    
+                    {/* Recreate button (only for inactive fields) */}
+                    {!displayData.isActive && onRecreate && (
+                      <button
+                        onClick={() => handleRecreate(field)}
+                        className="text-green-600 hover:text-green-700 p-1"
+                        title="Recreate Field in GHL"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      </button>
+                    )}
+                    
+                    {/* Delete button */}
                     <button
                       onClick={() => handleDelete(field)}
                       className="text-red-600 hover:text-red-700 p-1"

@@ -3,6 +3,7 @@ import CustomFieldsList from './CustomFieldsList'
 import ExtractionFieldForm from './ExtractionFieldForm'
 import ExtractionFieldsList from './ExtractionFieldsList'
 import CustomFieldsLoader from './CustomFieldsLoader'
+import { GHLApiService } from '../../services/GHLApiService'
 
 function DataExtractionInterface({ config, user, authService }) {
   const [customFields, setCustomFields] = useState([])
@@ -12,6 +13,7 @@ function DataExtractionInterface({ config, user, authService }) {
   const [editingField, setEditingField] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [recreating, setRecreating] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -69,6 +71,72 @@ function DataExtractionInterface({ config, user, authService }) {
     setEditingField(extractionField)
     setSelectedCustomField(null)
     setShowForm(true)
+  }
+
+  const handleRecreateExtraction = async (extractionField) => {
+    try {
+      setRecreating(true)
+      setError(null)
+
+      console.log('Recreating field from stored data:', extractionField)
+
+      // Extract original field data
+      const originalData = extractionField.original_ghl_field_data
+      if (!originalData || Object.keys(originalData).length === 0) {
+        throw new Error('No original field data available for recreation')
+      }
+
+      // Prepare field data for recreation
+      const fieldData = {
+        name: originalData.name,
+        dataType: originalData.dataType,
+        model: originalData.model || 'contact',
+        fieldKey: originalData.fieldKey,
+        placeholder: originalData.placeholder || '',
+        position: originalData.position || 100,
+        parentId: originalData.parentId, // Include parentId for folder organization
+        picklistOptions: originalData.picklistOptions || []
+      }
+
+      console.log('Recreating field with data:', fieldData)
+
+      // Create the field in GoHighLevel
+      const ghlService = new GHLApiService(config.access_token)
+      const recreatedField = await ghlService.createCustomField(config.ghl_account_id, fieldData)
+
+      console.log('Field recreated successfully:', recreatedField)
+
+      // Update the extraction field with the new GHL field ID
+      const supabase = authService?.getSupabaseClient() || (await import('../../services/supabase')).supabase
+
+      const { error: updateError } = await supabase
+        .from('data_extraction_fields')
+        .update({
+          target_ghl_key: recreatedField.customField?.id || recreatedField.id,
+          original_ghl_field_data: recreatedField.customField || recreatedField,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', extractionField.id)
+
+      if (updateError) {
+        console.error('Error updating extraction field:', updateError)
+        throw new Error('Failed to update extraction field with new GHL field ID')
+      }
+
+      // Reload both custom fields and extraction fields to reflect changes
+      await Promise.all([
+        loadCustomFields(),
+        loadExtractionFields()
+      ])
+
+      console.log('Field recreation completed successfully')
+
+    } catch (error) {
+      console.error('Error recreating field:', error)
+      setError(`Failed to recreate field: ${error.message}`)
+    } finally {
+      setRecreating(false)
+    }
   }
 
   const handleFormSubmit = async (formData) => {
@@ -164,6 +232,16 @@ function DataExtractionInterface({ config, user, authService }) {
         </p>
       </div>
 
+      {/* Recreation Loading Indicator */}
+      {recreating && (
+        <div className="mx-6 mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+            <span className="text-blue-800">Recreating field in GoHighLevel...</span>
+          </div>
+        </div>
+      )}
+
       <div className="p-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Available Custom Fields */}
@@ -183,6 +261,7 @@ function DataExtractionInterface({ config, user, authService }) {
               customFields={customFields}
               onEdit={handleEditExtraction}
               onDelete={handleDeleteExtraction}
+              onRecreate={handleRecreateExtraction}
             />
           </div>
         </div>
