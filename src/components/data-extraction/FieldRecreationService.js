@@ -69,9 +69,18 @@ export class FieldRecreationService {
       }
     }
 
-    // Handle picklist options for choice fields
-    if (this.isChoiceField(originalData.dataType) && originalData.picklistOptions) {
-      fieldData.picklistOptions = this.normalizePicklistOptions(originalData.picklistOptions)
+    // Handle picklist options for choice fields - CRITICAL FIX
+    if (this.isChoiceField(originalData.dataType)) {
+      const options = this.getFieldOptions(originalData)
+      
+      if (options.length === 0) {
+        // If no options are available, create default options
+        fieldData.picklistOptions = this.createDefaultOptions(originalData.dataType)
+        console.log('Created default options for field:', fieldData.picklistOptions)
+      } else {
+        fieldData.picklistOptions = this.normalizePicklistOptions(options)
+        console.log('Using existing options for field:', fieldData.picklistOptions)
+      }
     }
 
     // Handle file upload specific fields
@@ -86,6 +95,42 @@ export class FieldRecreationService {
     }
 
     return fieldData
+  }
+
+  /**
+   * Get field options from various possible sources in the original data
+   */
+  getFieldOptions(originalData) {
+    // Try multiple possible option sources
+    const possibleSources = [
+      originalData.picklistOptions,
+      originalData.options,
+      originalData.choices,
+      originalData.values
+    ]
+
+    for (const source of possibleSources) {
+      if (Array.isArray(source) && source.length > 0) {
+        return source
+      }
+    }
+
+    return []
+  }
+
+  /**
+   * Create default options for choice fields when none are available
+   */
+  createDefaultOptions(dataType) {
+    const defaultOptions = {
+      'SINGLE_OPTIONS': ['Option 1', 'Option 2', 'Option 3'],
+      'MULTIPLE_OPTIONS': ['Choice A', 'Choice B', 'Choice C'],
+      'CHECKBOX': ['Yes', 'No'],
+      'RADIO': ['Option 1', 'Option 2'],
+      'TEXTBOX_LIST': ['Item 1', 'Item 2']
+    }
+
+    return defaultOptions[dataType] || ['Option 1', 'Option 2']
   }
 
   /**
@@ -149,6 +194,13 @@ export class FieldRecreationService {
     
     if (missing.length > 0) {
       throw new Error(`Missing required fields for recreation: ${missing.join(', ')}`)
+    }
+
+    // Validate that choice fields have options
+    if (this.isChoiceField(fieldData.dataType)) {
+      if (!fieldData.picklistOptions || !Array.isArray(fieldData.picklistOptions) || fieldData.picklistOptions.length === 0) {
+        throw new Error(`Choice field type ${fieldData.dataType} requires at least one option`)
+      }
     }
 
     // For custom objects, validate additional required fields

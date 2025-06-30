@@ -95,12 +95,32 @@ export class GHLApiService {
       payload.parentId = fieldData.parentId
     }
 
-    // Add options for choice fields
-    if (fieldData.picklistOptions && fieldData.picklistOptions.length > 0) {
-      payload.options = fieldData.picklistOptions.map((option) => ({
-        key: typeof option === 'string' ? option.toLowerCase().replace(/\s+/g, '_') : option.key,
-        label: typeof option === 'string' ? option : option.label
-      }))
+    // Add options for choice fields - CRITICAL: Ensure options are always provided for choice fields
+    if (this.isChoiceField(fieldData.dataType)) {
+      if (!fieldData.picklistOptions || !Array.isArray(fieldData.picklistOptions) || fieldData.picklistOptions.length === 0) {
+        throw new Error(`Field type ${fieldData.dataType} requires at least one option`)
+      }
+
+      payload.options = fieldData.picklistOptions.map((option) => {
+        if (typeof option === 'string') {
+          return {
+            key: option.toLowerCase().replace(/\s+/g, '_'),
+            label: option
+          }
+        } else if (option && typeof option === 'object') {
+          return {
+            key: option.key || option.label?.toLowerCase().replace(/\s+/g, '_') || 'option',
+            label: option.label || option.key || 'Option'
+          }
+        } else {
+          return {
+            key: 'option',
+            label: 'Option'
+          }
+        }
+      })
+
+      console.log('Options for custom object field:', payload.options)
     }
 
     // Add specific fields for certain data types
@@ -147,17 +167,27 @@ export class GHLApiService {
     }
 
     // Handle picklist options for choice fields
-    if (this.isChoiceField(fieldData.dataType) && fieldData.picklistOptions && fieldData.picklistOptions.length > 0) {
+    if (this.isChoiceField(fieldData.dataType)) {
+      if (!fieldData.picklistOptions || !Array.isArray(fieldData.picklistOptions) || fieldData.picklistOptions.length === 0) {
+        throw new Error(`Field type ${fieldData.dataType} requires at least one option`)
+      }
+
       if (fieldData.dataType === 'TEXTBOX_LIST') {
         // For TEXTBOX_LIST, use textBoxListOptions
         payload.textBoxListOptions = fieldData.picklistOptions.map((option, index) => ({
-          label: typeof option === 'string' ? option : option.label,
+          label: typeof option === 'string' ? option : option.label || `Option ${index + 1}`,
           prefillValue: '',
           position: index
         }))
       } else {
         // For other choice fields, this might not be supported in the contact fields API
+        // But we'll try to include them anyway
         console.warn('Picklist options may not be supported for contact fields of type:', fieldData.dataType)
+        
+        // Some contact field types might support picklistOptions
+        payload.picklistOptions = fieldData.picklistOptions.map(option => 
+          typeof option === 'string' ? option : option.label || option.key || 'Option'
+        )
       }
     }
 
