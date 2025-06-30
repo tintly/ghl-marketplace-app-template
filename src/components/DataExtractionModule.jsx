@@ -27,11 +27,28 @@ function DataExtractionModule({ user, authService }) {
       setError(null)
       setConfigError(null)
 
+      console.log('=== LOAD DATA START ===')
+      console.log('User data received:', {
+        userId: user.userId,
+        locationId: user.locationId,
+        configId: user.configId,
+        configValidated: user.configValidated,
+        tokenStatus: user.tokenStatus
+      })
+
       // Get GHL configuration
       const config = await getGHLConfiguration()
       setGhlConfig(config)
 
       if (config) {
+        console.log('✅ Configuration loaded successfully:', {
+          id: config.id,
+          ghl_account_id: config.ghl_account_id,
+          user_id: config.user_id,
+          hasAccessToken: !!config.access_token,
+          hasRefreshToken: !!config.refresh_token
+        })
+
         // Validate token status
         const validation = validateTokenStatus(config)
         setTokenValidation(validation)
@@ -45,6 +62,8 @@ function DataExtractionModule({ user, authService }) {
         } else {
           setConfigError(`Token issue: ${validation.message}`)
         }
+      } else {
+        console.log('❌ No configuration found')
       }
     } catch (error) {
       console.error('Error loading data:', error)
@@ -69,6 +88,16 @@ function DataExtractionModule({ user, authService }) {
         isValid: false,
         status: 'missing_refresh_token',
         message: 'Refresh token is missing. Please reinstall the app.',
+        severity: 'error'
+      }
+    }
+    
+    // Check if tokens are dev tokens (should not be in production)
+    if (config.access_token.startsWith('dev-') || config.refresh_token.startsWith('dev-')) {
+      return {
+        isValid: false,
+        status: 'dev_tokens',
+        message: 'Development tokens detected. Please reinstall the app to get real GHL tokens.',
         severity: 'error'
       }
     }
@@ -98,145 +127,76 @@ function DataExtractionModule({ user, authService }) {
     return {
       isValid: true,
       status: 'valid',
-      message: 'Access token is valid and ready for use.',
+      message: 'Real GHL access tokens are valid and ready for use.',
       severity: 'success'
     }
   }
 
   const getGHLConfiguration = async () => {
     console.log('=== CONFIGURATION LOOKUP START ===')
-    console.log('User context:', {
-      userId: user.userId,
-      locationId: user.locationId,
-      configValidated: user.configValidated,
-      configId: user.configId,
-      tokenStatus: user.tokenStatus
-    })
+    console.log('Target user_id:', user.userId)
+    console.log('Target location_id:', user.locationId)
 
     try {
-      // Strategy 1: If we have a configId from auth, try to fetch it directly
-      if (user.configId) {
-        console.log('Strategy 1: Direct config fetch by ID:', user.configId)
-        
-        const { data: directConfig, error: directError } = await supabase
-          .from('ghl_configurations')
-          .select('*')
-          .eq('id', user.configId)
-          .eq('is_active', true)
-          .maybeSingle()
-
-        if (directError) {
-          console.error('Error fetching config by ID:', directError)
-        } else if (directConfig) {
-          console.log('✅ Found config by direct ID lookup')
-          return directConfig
-        } else {
-          console.log('❌ Config ID provided but not found in database')
-        }
-      }
-
-      // Strategy 2: Try to find by ghl_account_id (location ID) - most reliable
-      if (user.locationId) {
-        console.log('Strategy 2: Finding config by ghl_account_id:', user.locationId)
-        
-        const { data: locationConfigs, error: locationError } = await supabase
-          .from('ghl_configurations')
-          .select('*')
-          .eq('ghl_account_id', user.locationId)
-          .eq('is_active', true)
-          .order('updated_at', { ascending: false })
-
-        if (locationError) {
-          console.error('Error querying by ghl_account_id:', locationError)
-          setConfigError(`Database query failed: ${locationError.message}`)
-        } else if (locationConfigs && locationConfigs.length > 0) {
-          const locationData = locationConfigs[0] // Get the most recently updated one
-          
-          console.log('✅ Found config(s) by ghl_account_id:', {
-            count: locationConfigs.length,
-            selectedId: locationData.id,
-            userId: locationData.user_id,
-            businessName: locationData.business_name,
-            hasAccessToken: !!locationData.access_token,
-            hasRefreshToken: !!locationData.refresh_token
-          })
-          
-          // If user_id doesn't match current user, update it
-          if (!locationData.user_id || locationData.user_id !== user.userId) {
-            console.log('Updating config user_id to match current SSO user...')
-            
-            const { data: updatedData, error: updateError } = await supabase
-              .from('ghl_configurations')
-              .update({ 
-                user_id: user.userId,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', locationData.id)
-              .select()
-              .single()
-
-            if (updateError) {
-              console.error('Failed to update user_id:', updateError)
-              // Still return original data
-              return locationData
-            }
-
-            console.log('✅ Successfully updated config with current user_id')
-            return updatedData
-          }
-
-          return locationData
-        } else {
-          console.log('❌ No configs found for location:', user.locationId)
-        }
-      }
-
-      // Strategy 3: Try to find by user_id as fallback
-      console.log('Strategy 3: Finding config by user_id:', user.userId)
+      // Strategy 1: Direct lookup by exact user_id and location_id match
+      console.log('Strategy 1: Exact match lookup')
       
-      const { data: userConfigs, error: userError } = await supabase
+      const { data: exactMatch, error: exactError } = await supabase
         .from('ghl_configurations')
         .select('*')
         .eq('user_id', user.userId)
+        .eq('ghl_account_id', user.locationId)
         .eq('is_active', true)
-        .order('updated_at', { ascending: false })
+        .maybeSingle()
 
-      if (userError) {
-        console.error('Error querying by user_id:', userError)
-      } else if (userConfigs && userConfigs.length > 0) {
-        const userData = userConfigs[0]
-        console.log('✅ Found config by user_id:', userData.id)
-        return userData
+      if (exactError) {
+        console.error('Exact match query error:', exactError)
+      } else if (exactMatch) {
+        console.log('✅ Found exact match configuration:', exactMatch.id)
+        return exactMatch
       }
 
-      // Strategy 4: Debug - show all configs for this location (ignore user_id)
-      console.log('Strategy 4: Debug - checking ALL configs for location')
+      // Strategy 2: Find by location_id only (most reliable for OAuth installs)
+      console.log('Strategy 2: Location-based lookup')
       
-      const { data: allLocationConfigs, error: allError } = await supabase
+      const { data: locationConfigs, error: locationError } = await supabase
         .from('ghl_configurations')
         .select('*')
         .eq('ghl_account_id', user.locationId)
-        .order('created_at', { ascending: false })
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false })
 
-      if (allError) {
-        console.error('Error in debug query:', allError)
-      } else {
-        console.log('All configs for location:', allLocationConfigs?.map(c => ({
-          id: c.id,
-          user_id: c.user_id,
-          is_active: c.is_active,
-          business_name: c.business_name,
-          created_at: c.created_at,
-          hasTokens: !!(c.access_token && c.refresh_token)
-        })))
+      if (locationError) {
+        console.error('Location query error:', locationError)
+        setConfigError(`Database query failed: ${locationError.message}`)
+      } else if (locationConfigs && locationConfigs.length > 0) {
+        console.log(`Found ${locationConfigs.length} config(s) for location`)
         
-        // If we found any config for this location, use the most recent active one
-        const activeConfigs = allLocationConfigs?.filter(c => c.is_active) || []
-        if (activeConfigs.length > 0) {
-          const bestConfig = activeConfigs[0]
-          console.log('Using most recent active config:', bestConfig.id)
+        // Log all configs for debugging
+        locationConfigs.forEach((config, index) => {
+          console.log(`Config ${index + 1}:`, {
+            id: config.id,
+            user_id: config.user_id,
+            business_name: config.business_name,
+            hasRealTokens: !!(config.access_token && !config.access_token.startsWith('dev-')),
+            created_at: config.created_at,
+            updated_at: config.updated_at
+          })
+        })
+
+        // Find the best config (prefer one with matching user_id, then most recent)
+        let bestConfig = locationConfigs.find(c => c.user_id === user.userId) || locationConfigs[0]
+        
+        console.log('Selected config:', {
+          id: bestConfig.id,
+          user_id: bestConfig.user_id,
+          matches_user: bestConfig.user_id === user.userId
+        })
+
+        // If user_id doesn't match, update it
+        if (bestConfig.user_id !== user.userId) {
+          console.log('Updating config user_id to match SSO user...')
           
-          // Update it with current user_id
           const { data: updatedConfig, error: updateError } = await supabase
             .from('ghl_configurations')
             .update({ 
@@ -248,16 +208,60 @@ function DataExtractionModule({ user, authService }) {
             .single()
 
           if (updateError) {
-            console.error('Failed to update best config:', updateError)
+            console.error('Failed to update user_id:', updateError)
+            // Still return the original config
             return bestConfig
           }
 
-          console.log('✅ Updated and using best available config')
+          console.log('✅ Successfully updated config with current user_id')
           return updatedConfig
         }
+
+        return bestConfig
       }
 
-      // No configuration found at all
+      // Strategy 3: Find by user_id only (fallback)
+      console.log('Strategy 3: User-based lookup')
+      
+      const { data: userConfigs, error: userError } = await supabase
+        .from('ghl_configurations')
+        .select('*')
+        .eq('user_id', user.userId)
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+
+      if (userError) {
+        console.error('User query error:', userError)
+      } else if (userConfigs && userConfigs.length > 0) {
+        console.log('✅ Found config by user_id:', userConfigs[0].id)
+        return userConfigs[0]
+      }
+
+      // Strategy 4: Debug - show ALL configs to understand what's in the database
+      console.log('Strategy 4: Debug - showing all configs')
+      
+      const { data: allConfigs, error: allError } = await supabase
+        .from('ghl_configurations')
+        .select('id, user_id, ghl_account_id, business_name, is_active, created_at')
+        .order('created_at', { ascending: false })
+        .limit(10)
+
+      if (allError) {
+        console.error('Debug query error:', allError)
+      } else {
+        console.log('Recent configurations in database:')
+        allConfigs?.forEach((config, index) => {
+          console.log(`${index + 1}. ID: ${config.id}`)
+          console.log(`   User: ${config.user_id}`)
+          console.log(`   Location: ${config.ghl_account_id}`)
+          console.log(`   Active: ${config.is_active}`)
+          console.log(`   Business: ${config.business_name}`)
+          console.log(`   Created: ${config.created_at}`)
+          console.log('---')
+        })
+      }
+
+      // No configuration found
       console.log('❌ No configuration found anywhere')
       setConfigError(
         'No configuration found for this location. ' +
@@ -274,12 +278,14 @@ function DataExtractionModule({ user, authService }) {
 
   const loadCustomFields = async (config) => {
     try {
+      console.log('Loading custom fields with token:', config.access_token.substring(0, 20) + '...')
       const ghlService = new GHLApiService(config.access_token)
       const fields = await ghlService.getCustomFields(config.ghl_account_id)
+      console.log(`✅ Loaded ${fields.length} custom fields`)
       setCustomFields(fields)
     } catch (error) {
       console.error('Error loading custom fields:', error)
-      throw new Error('Failed to load custom fields from GoHighLevel')
+      throw new Error(`Failed to load custom fields: ${error.message}`)
     }
   }
 
@@ -294,6 +300,7 @@ function DataExtractionModule({ user, authService }) {
       throw new Error('Failed to load extraction fields')
     }
 
+    console.log(`✅ Loaded ${data?.length || 0} extraction fields`)
     setExtractionFields(data || [])
   }
 
@@ -387,6 +394,11 @@ function DataExtractionModule({ user, authService }) {
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
         <h3 className="text-red-800 font-medium">Error Loading Data</h3>
         <p className="text-red-600 text-sm mt-1">{error}</p>
+        <div className="mt-3 text-xs text-red-700 space-y-1">
+          <p><strong>User ID:</strong> {user.userId}</p>
+          <p><strong>Location ID:</strong> {user.locationId}</p>
+          <p><strong>Expected Config ID:</strong> 5cad15db-9da3-4d45-b09e-6196bcd1ef96</p>
+        </div>
         <button
           onClick={loadData}
           className="mt-3 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
@@ -407,8 +419,9 @@ function DataExtractionModule({ user, authService }) {
         <div className="mt-3 text-xs text-yellow-700 space-y-1">
           <p><strong>User ID:</strong> {user.userId}</p>
           <p><strong>Location ID:</strong> {user.locationId}</p>
+          <p><strong>Expected Config:</strong> 5cad15db-9da3-4d45-b09e-6196bcd1ef96</p>
           <p><strong>Config Validated:</strong> {user.configValidated ? 'Yes' : 'No'}</p>
-          <p><strong>Config ID:</strong> {user.configId || 'None'}</p>
+          <p><strong>Config ID from Auth:</strong> {user.configId || 'None'}</p>
           <p><strong>Token Status:</strong> {user.tokenStatus || 'Unknown'}</p>
           {configError && (
             <p><strong>Error:</strong> {configError}</p>
@@ -471,11 +484,11 @@ function DataExtractionModule({ user, authService }) {
             Configure which custom fields should be automatically populated by AI during conversations.
           </p>
           <div className="mt-2 text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded">
-            Config ID: {ghlConfig.id} | Location: {ghlConfig.ghl_account_id}
+            Config ID: {ghlConfig.id} | Location: {ghlConfig.ghl_account_id} | User: {ghlConfig.user_id}
           </div>
           {tokenValidation && tokenValidation.isValid && (
             <div className="mt-2 text-xs text-green-700 bg-green-50 px-2 py-1 rounded">
-              Token Status: {tokenValidation.message}
+              ✅ {tokenValidation.message}
             </div>
           )}
         </div>
