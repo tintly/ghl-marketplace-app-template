@@ -1,61 +1,34 @@
 import React, { useState, useEffect } from 'react'
-import { supabase } from '../services/supabase'
-import CustomFieldsList from './data-extraction/CustomFieldsList'
-import ExtractionFieldForm from './data-extraction/ExtractionFieldForm'
-import ExtractionFieldsList from './data-extraction/ExtractionFieldsList'
+import ConfigurationManager from './data-extraction/ConfigurationManager'
+import DataExtractionInterface from './data-extraction/DataExtractionInterface'
+import TokenStatusAlert from './data-extraction/TokenStatusAlert'
 import ConfigurationDebugger from './ConfigurationDebugger'
-import { GHLApiService } from '../services/GHLApiService'
-import { DatabaseService } from '../services/DatabaseService'
 
 function DataExtractionModule({ user, authService }) {
+  const [ghlConfig, setGhlConfig] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [customFields, setCustomFields] = useState([])
-  const [extractionFields, setExtractionFields] = useState([])
-  const [selectedCustomField, setSelectedCustomField] = useState(null)
-  const [showForm, setShowForm] = useState(false)
-  const [editingField, setEditingField] = useState(null)
-  const [ghlConfig, setGhlConfig] = useState(null)
-  const [configError, setConfigError] = useState(null)
-  const [tokenStatus, setTokenStatus] = useState(null)
   const [showDebugger, setShowDebugger] = useState(false)
 
   useEffect(() => {
-    loadData()
+    loadConfiguration()
   }, [user])
 
-  const loadData = async () => {
+  const loadConfiguration = async () => {
     try {
       setLoading(true)
       setError(null)
-      setConfigError(null)
 
-      // Use the new database service for configuration lookup
-      const configResult = await DatabaseService.findConfiguration(user.userId, user.locationId)
+      const configManager = new ConfigurationManager()
+      const result = await configManager.findConfiguration(user.userId, user.locationId)
       
-      if (configResult.found) {
-        const config = configResult.data
-        setGhlConfig(config)
-
-        // Check token status
-        const status = validateTokenStatus(config)
-        setTokenStatus(status)
-        
-        if (status.isValid) {
-          // Load custom fields and extraction fields in parallel
-          await Promise.all([
-            loadCustomFields(config),
-            loadExtractionFields(config.id)
-          ])
-        } else {
-          setConfigError(`Token issue: ${status.message}`)
-        }
+      if (result.found) {
+        setGhlConfig(result.data)
       } else {
-        setConfigError('No configuration found')
         setShowDebugger(true)
       }
     } catch (error) {
-      console.error('Error loading data:', error)
+      console.error('Error loading configuration:', error)
       setError(error.message)
     } finally {
       setLoading(false)
@@ -65,217 +38,10 @@ function DataExtractionModule({ user, authService }) {
   const handleConfigurationFound = (config) => {
     setGhlConfig(config)
     setShowDebugger(false)
-    loadData()
   }
 
-  const validateTokenStatus = (config) => {
-    if (!config.access_token) {
-      return {
-        isValid: false,
-        status: 'missing_access_token',
-        message: 'Access token is missing. Please reinstall the app or contact support.',
-        severity: 'error'
-      }
-    }
-    
-    if (config.access_token.startsWith('temp-') || config.access_token.startsWith('dev-') || config.access_token.startsWith('test-')) {
-      return {
-        isValid: false,
-        status: 'temporary_token',
-        message: 'Using temporary tokens. Please install via OAuth for real GHL access.',
-        severity: 'warning'
-      }
-    }
-    
-    if (!config.refresh_token) {
-      return {
-        isValid: false,
-        status: 'missing_refresh_token',
-        message: 'Refresh token is missing. Please reinstall the app.',
-        severity: 'error'
-      }
-    }
-    
-    if (config.token_expires_at) {
-      const expiryDate = new Date(config.token_expires_at)
-      const now = new Date()
-      const hoursUntilExpiry = (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60)
-      
-      if (hoursUntilExpiry < 0) {
-        return {
-          isValid: false,
-          status: 'expired',
-          message: 'Access token has expired. The system will attempt to refresh it automatically.',
-          severity: 'warning'
-        }
-      } else if (hoursUntilExpiry < 24) {
-        return {
-          isValid: true,
-          status: 'expiring_soon',
-          message: `Access token expires in ${Math.round(hoursUntilExpiry)} hours.`,
-          severity: 'info'
-        }
-      }
-    }
-    
-    return {
-      isValid: true,
-      status: 'valid',
-      message: 'Access token is valid.',
-      severity: 'success'
-    }
-  }
-
-  const loadCustomFields = async (config) => {
-    try {
-      // Always use mock data for temporary/dev/test tokens
-      if (config.access_token.startsWith('temp-') || 
-          config.access_token.startsWith('dev-') || 
-          config.access_token.startsWith('test-')) {
-        console.log('Using mock data for temporary tokens')
-        setCustomFields(getMockCustomFields())
-        return
-      }
-
-      const ghlService = new GHLApiService(config.access_token)
-      const fields = await ghlService.getCustomFields(config.ghl_account_id)
-      setCustomFields(fields)
-    } catch (error) {
-      console.error('Error loading custom fields:', error)
-      console.log('Falling back to mock data due to API error')
-      setCustomFields(getMockCustomFields())
-    }
-  }
-
-  const getMockCustomFields = () => {
-    return [
-      {
-        id: "mock-text-field",
-        name: "Customer Name",
-        model: "contact",
-        fieldKey: "contact.customer_name",
-        placeholder: "Enter customer name",
-        dataType: "TEXT",
-        position: 50,
-        standard: false
-      },
-      {
-        id: "mock-phone-field",
-        name: "Phone Number",
-        model: "contact",
-        fieldKey: "contact.phone_number",
-        placeholder: "",
-        dataType: "PHONE",
-        position: 100,
-        standard: false
-      },
-      {
-        id: "mock-service-field",
-        name: "Service Type",
-        model: "contact",
-        fieldKey: "contact.service_type",
-        placeholder: "",
-        dataType: "SINGLE_OPTIONS",
-        position: 150,
-        standard: false,
-        picklistOptions: ["Consultation", "Installation", "Maintenance", "Repair"]
-      },
-      {
-        id: "mock-date-field",
-        name: "Appointment Date",
-        model: "contact",
-        fieldKey: "contact.appointment_date",
-        placeholder: "",
-        dataType: "DATE",
-        position: 200,
-        standard: false
-      }
-    ]
-  }
-
-  const loadExtractionFields = async (configId) => {
-    const { data, error } = await supabase
-      .from('data_extraction_fields')
-      .select('*')
-      .eq('config_id', configId)
-      .order('sort_order', { ascending: true })
-
-    if (error) {
-      throw new Error('Failed to load extraction fields')
-    }
-
-    setExtractionFields(data || [])
-  }
-
-  const handleCreateExtraction = (customField) => {
-    setSelectedCustomField(customField)
-    setEditingField(null)
-    setShowForm(true)
-  }
-
-  const handleEditExtraction = (extractionField) => {
-    setEditingField(extractionField)
-    setSelectedCustomField(null)
-    setShowForm(true)
-  }
-
-  const handleFormSubmit = async (formData) => {
-    try {
-      if (editingField) {
-        // Update existing field
-        const { error } = await supabase
-          .from('data_extraction_fields')
-          .update({
-            ...formData,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingField.id)
-
-        if (error) throw error
-      } else {
-        // Create new field
-        const { error } = await supabase
-          .from('data_extraction_fields')
-          .insert({
-            config_id: ghlConfig.id,
-            ...formData
-          })
-
-        if (error) throw error
-      }
-
-      // Reload extraction fields
-      await loadExtractionFields(ghlConfig.id)
-      setShowForm(false)
-      setSelectedCustomField(null)
-      setEditingField(null)
-    } catch (error) {
-      console.error('Error saving extraction field:', error)
-      throw error
-    }
-  }
-
-  const handleDeleteExtraction = async (fieldId) => {
-    try {
-      const { error } = await supabase
-        .from('data_extraction_fields')
-        .delete()
-        .eq('id', fieldId)
-
-      if (error) throw error
-
-      // Reload extraction fields
-      await loadExtractionFields(ghlConfig.id)
-    } catch (error) {
-      console.error('Error deleting extraction field:', error)
-      throw error
-    }
-  }
-
-  const handleRefreshFields = () => {
-    if (ghlConfig) {
-      loadCustomFields(ghlConfig)
-    }
+  const handleRetry = () => {
+    loadConfiguration()
   }
 
   if (loading) {
@@ -293,7 +59,7 @@ function DataExtractionModule({ user, authService }) {
         <h3 className="text-red-800 font-medium">Error Loading Data</h3>
         <p className="text-red-600 text-sm mt-1">{error}</p>
         <button
-          onClick={loadData}
+          onClick={handleRetry}
           className="mt-3 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
         >
           Retry
@@ -342,89 +108,14 @@ function DataExtractionModule({ user, authService }) {
       </div>
 
       {/* Token Status Alert */}
-      {tokenStatus && !tokenStatus.isValid && (
-        <div className={`border rounded-lg p-4 ${
-          tokenStatus.severity === 'error' 
-            ? 'bg-red-50 border-red-200' 
-            : 'bg-yellow-50 border-yellow-200'
-        }`}>
-          <h3 className={`font-medium ${
-            tokenStatus.severity === 'error' ? 'text-red-800' : 'text-yellow-800'
-          }`}>
-            Token Issue Detected
-          </h3>
-          <p className={`text-sm mt-1 ${
-            tokenStatus.severity === 'error' ? 'text-red-600' : 'text-yellow-600'
-          }`}>
-            {tokenStatus.message}
-          </p>
-          {tokenStatus.status === 'temporary_token' && (
-            <div className="mt-3">
-              <a
-                href="/oauth/install"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm transition-colors inline-block"
-              >
-                Install via OAuth
-              </a>
-            </div>
-          )}
-        </div>
-      )}
+      <TokenStatusAlert config={ghlConfig} />
 
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Data Extraction Configuration</h2>
-          <p className="text-sm text-gray-600 mt-1">
-            Configure which custom fields should be automatically populated by AI during conversations.
-          </p>
-          <div className="mt-2 text-xs text-green-700 bg-green-50 px-2 py-1 rounded">
-            Using configuration ID: {ghlConfig.id} for location {ghlConfig.ghl_account_id}
-          </div>
-          {tokenStatus && tokenStatus.isValid && (
-            <div className="mt-2 text-xs text-green-700 bg-green-50 px-2 py-1 rounded">
-              Token Status: {tokenStatus.message}
-            </div>
-          )}
-        </div>
-
-        <div className="p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Available Custom Fields */}
-            <div>
-              <CustomFieldsList
-                customFields={customFields}
-                extractionFields={extractionFields}
-                onCreateExtraction={handleCreateExtraction}
-                onRefresh={handleRefreshFields}
-              />
-            </div>
-
-            {/* Configured Extraction Fields */}
-            <div>
-              <ExtractionFieldsList
-                extractionFields={extractionFields}
-                customFields={customFields}
-                onEdit={handleEditExtraction}
-                onDelete={handleDeleteExtraction}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Form Modal */}
-      {showForm && (
-        <ExtractionFieldForm
-          customField={selectedCustomField}
-          editingField={editingField}
-          onSubmit={handleFormSubmit}
-          onCancel={() => {
-            setShowForm(false)
-            setSelectedCustomField(null)
-            setEditingField(null)
-          }}
-        />
-      )}
+      {/* Main Data Extraction Interface */}
+      <DataExtractionInterface 
+        config={ghlConfig} 
+        user={user}
+        authService={authService}
+      />
     </div>
   )
 }
