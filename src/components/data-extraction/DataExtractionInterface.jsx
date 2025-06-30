@@ -72,41 +72,40 @@ function DataExtractionInterface({ config, user, authService }) {
   }
 
   const handleFormSubmit = async (formData) => {
-    try {
-      const supabase = authService?.getSupabaseClient() || (await import('../../services/supabase')).supabase
+    const supabase = authService?.getSupabaseClient() || (await import('../../services/supabase')).supabase
 
-      if (editingField) {
-        // Update existing field
-        const { error } = await supabase
-          .from('data_extraction_fields')
-          .update({
-            ...formData,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingField.id)
+    if (editingField) {
+      // Update existing field
+      const { error } = await supabase
+        .from('data_extraction_fields')
+        .update({
+          ...formData,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', editingField.id)
 
-        if (error) throw error
-      } else {
-        // Create new field
-        const { error } = await supabase
-          .from('data_extraction_fields')
-          .insert({
-            config_id: config.id,
-            ...formData
-          })
+      if (error) throw error
+    } else {
+      // Create new field
+      const { error } = await supabase
+        .from('data_extraction_fields')
+        .insert({
+          config_id: config.id,
+          ...formData
+        })
 
-        if (error) throw error
-      }
-
-      // Reload extraction fields
-      await loadExtractionFields()
-      setShowForm(false)
-      setSelectedCustomField(null)
-      setEditingField(null)
-    } catch (error) {
-      console.error('Error saving extraction field:', error)
-      throw error
+      if (error) throw error
     }
+
+    // Reload extraction fields and close form
+    await loadExtractionFields()
+    handleFormClose()
+  }
+
+  const handleFormClose = () => {
+    setShowForm(false)
+    setSelectedCustomField(null)
+    setEditingField(null)
   }
 
   const handleDeleteExtraction = async (fieldId) => {
@@ -195,11 +194,7 @@ function DataExtractionInterface({ config, user, authService }) {
           customField={selectedCustomField}
           editingField={editingField}
           onSubmit={handleFormSubmit}
-          onCancel={() => {
-            setShowForm(false)
-            setSelectedCustomField(null)
-            setEditingField(null)
-          }}
+          onCancel={handleFormClose}
         />
       )}
     </div>
