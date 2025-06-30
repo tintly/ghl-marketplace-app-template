@@ -53,26 +53,47 @@ export class GHLApiService {
     try {
       console.log('Creating custom field in GHL:', { locationId, fieldData })
       
-      const endpoint = `/locations/${locationId}/customFields`
+      const endpoint = `/custom-fields/`
       
-      // Prepare the payload for GHL API
+      // Prepare the payload according to GHL API specification
       const payload = {
+        locationId: locationId,
         name: fieldData.name,
         dataType: fieldData.dataType,
-        model: fieldData.model || 'contact',
+        showInForms: true, // Required field
         fieldKey: fieldData.fieldKey,
-        placeholder: fieldData.placeholder || '',
-        position: fieldData.position || 100
+        objectKey: fieldData.objectKey || 'contact', // Default to contact
       }
 
-      // Add parentId if provided (for folder organization)
+      // Add optional fields if provided
+      if (fieldData.description) {
+        payload.description = fieldData.description
+      }
+
+      if (fieldData.placeholder) {
+        payload.placeholder = fieldData.placeholder
+      }
+
       if (fieldData.parentId) {
         payload.parentId = fieldData.parentId
       }
 
-      // Add picklist options for choice fields
+      // Add options for choice fields
       if (fieldData.picklistOptions && fieldData.picklistOptions.length > 0) {
-        payload.picklistOptions = fieldData.picklistOptions
+        payload.options = fieldData.picklistOptions.map((option, index) => ({
+          key: typeof option === 'string' ? option.toLowerCase().replace(/\s+/g, '_') : option.key,
+          label: typeof option === 'string' ? option : option.label
+        }))
+      }
+
+      // Add specific fields for certain data types
+      if (fieldData.dataType === 'FILE_UPLOAD') {
+        payload.acceptedFormats = fieldData.acceptedFormats || '.pdf,.jpg,.png'
+        payload.maxFileLimit = fieldData.maxFileLimit || 1
+      }
+
+      if (fieldData.dataType === 'RADIO') {
+        payload.allowCustomOption = fieldData.allowCustomOption || false
       }
 
       console.log('GHL API payload:', payload)

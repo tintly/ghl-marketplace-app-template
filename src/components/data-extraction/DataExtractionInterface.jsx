@@ -4,6 +4,7 @@ import ExtractionFieldForm from './ExtractionFieldForm'
 import ExtractionFieldsList from './ExtractionFieldsList'
 import CustomFieldsLoader from './CustomFieldsLoader'
 import { GHLApiService } from '../../services/GHLApiService'
+import { FieldRecreationService } from './FieldRecreationService'
 
 function DataExtractionInterface({ config, user, authService }) {
   const [customFields, setCustomFields] = useState([])
@@ -78,33 +79,28 @@ function DataExtractionInterface({ config, user, authService }) {
       setRecreating(true)
       setError(null)
 
-      console.log('Recreating field from stored data:', extractionField)
+      console.log('=== STARTING FIELD RECREATION ===')
+      console.log('Extraction field:', extractionField)
 
-      // Extract original field data
-      const originalData = extractionField.original_ghl_field_data
-      if (!originalData || Object.keys(originalData).length === 0) {
-        throw new Error('No original field data available for recreation')
+      // Validate that we have the necessary data
+      if (!extractionField.original_ghl_field_data || Object.keys(extractionField.original_ghl_field_data).length === 0) {
+        throw new Error('No original field data available for recreation. This field cannot be recreated.')
       }
 
-      // Prepare field data for recreation
-      const fieldData = {
-        name: originalData.name,
-        dataType: originalData.dataType,
-        model: originalData.model || 'contact',
-        fieldKey: originalData.fieldKey,
-        placeholder: originalData.placeholder || '',
-        position: originalData.position || 100,
-        parentId: originalData.parentId, // Include parentId for folder organization
-        picklistOptions: originalData.picklistOptions || []
-      }
-
-      console.log('Recreating field with data:', fieldData)
-
-      // Create the field in GoHighLevel
+      // Initialize GHL API service and recreation service
       const ghlService = new GHLApiService(config.access_token)
-      const recreatedField = await ghlService.createCustomField(config.ghl_account_id, fieldData)
+      const recreationService = new FieldRecreationService(ghlService)
 
-      console.log('Field recreated successfully:', recreatedField)
+      // Recreate the field
+      const recreatedField = await recreationService.recreateField(config.ghl_account_id, extractionField)
+      
+      console.log('Field recreation completed:', recreatedField)
+
+      // Extract the new field ID from the response
+      const newFieldId = recreatedField.customField?.id || recreatedField.id
+      if (!newFieldId) {
+        throw new Error('Failed to get new field ID from recreation response')
+      }
 
       // Update the extraction field with the new GHL field ID
       const supabase = authService?.getSupabaseClient() || (await import('../../services/supabase')).supabase
@@ -112,7 +108,7 @@ function DataExtractionInterface({ config, user, authService }) {
       const { error: updateError } = await supabase
         .from('data_extraction_fields')
         .update({
-          target_ghl_key: recreatedField.customField?.id || recreatedField.id,
+          target_ghl_key: newFieldId,
           original_ghl_field_data: recreatedField.customField || recreatedField,
           updated_at: new Date().toISOString()
         })
@@ -120,7 +116,7 @@ function DataExtractionInterface({ config, user, authService }) {
 
       if (updateError) {
         console.error('Error updating extraction field:', updateError)
-        throw new Error('Failed to update extraction field with new GHL field ID')
+        throw new Error('Field was recreated but failed to update the configuration. Please refresh the page.')
       }
 
       // Reload both custom fields and extraction fields to reflect changes
@@ -129,10 +125,10 @@ function DataExtractionInterface({ config, user, authService }) {
         loadExtractionFields()
       ])
 
-      console.log('Field recreation completed successfully')
+      console.log('✅ Field recreation completed successfully')
 
     } catch (error) {
-      console.error('Error recreating field:', error)
+      console.error('❌ Field recreation failed:', error)
       setError(`Failed to recreate field: ${error.message}`)
     } finally {
       setRecreating(false)
@@ -239,6 +235,9 @@ function DataExtractionInterface({ config, user, authService }) {
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
             <span className="text-blue-800">Recreating field in GoHighLevel...</span>
           </div>
+          <p className="text-blue-700 text-xs mt-1">
+            This may take a few moments. Please do not refresh the page.
+          </p>
         </div>
       )}
 
