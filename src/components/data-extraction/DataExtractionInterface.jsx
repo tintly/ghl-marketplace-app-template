@@ -163,12 +163,6 @@ function DataExtractionInterface({ config, user, authService }) {
         <p className="text-sm text-gray-600 mt-1">
           Configure which custom fields should be automatically populated by AI during conversations.
         </p>
-        <div className="mt-2 text-xs text-green-700 bg-green-50 px-2 py-1 rounded">
-          Using configuration: {config.business_name} ({config.id.substring(0, 8)}...)
-        </div>
-        <div className="mt-1 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded">
-          Authenticated as: {user.userName} ({user.userId})
-        </div>
       </div>
 
       <div className="p-6">
