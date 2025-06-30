@@ -92,10 +92,11 @@ function DataExtractionInterface({ config, user, authService }) {
       const ghlService = new GHLApiService(config.access_token)
       const recreationService = new FieldRecreationService(ghlService)
 
-      // Recreate the field
+      // Recreate the field in GoHighLevel
+      console.log('🔄 Recreating field in GoHighLevel...')
       const recreatedField = await recreationService.recreateField(config.ghl_account_id, extractionField)
       
-      console.log('Field recreation completed:', recreatedField)
+      console.log('✅ Field recreation completed:', recreatedField)
 
       // Extract the new field ID from the response
       const newFieldId = recreatedField.customField?.id || recreatedField.id
@@ -103,14 +104,17 @@ function DataExtractionInterface({ config, user, authService }) {
         throw new Error('Failed to get new field ID from recreation response')
       }
 
-      // Update the extraction field with the new GHL field ID
+      console.log('🔄 Updating extraction field with new ID:', newFieldId)
+
+      // Update the extraction field with the new GHL field ID and updated field data
       const supabase = authService?.getSupabaseClient() || (await import('../../services/supabase')).supabase
 
+      const updatedFieldData = recreatedField.customField || recreatedField
       const { error: updateError } = await supabase
         .from('data_extraction_fields')
         .update({
-          target_ghl_key: newFieldId,
-          original_ghl_field_data: recreatedField.customField || recreatedField,
+          target_ghl_key: newFieldId, // This is the key fix - update to new field ID
+          original_ghl_field_data: updatedFieldData, // Store the new field data
           updated_at: new Date().toISOString()
         })
         .eq('id', extractionField.id)
@@ -120,10 +124,13 @@ function DataExtractionInterface({ config, user, authService }) {
         throw new Error('Field was recreated but failed to update the configuration. Please refresh the page.')
       }
 
-      console.log('✅ Field recreation completed successfully')
+      console.log('✅ Extraction field updated with new ID successfully')
 
       // Force refresh the interface to show updated state
+      console.log('🔄 Refreshing interface to show updated state...')
       await refreshInterface()
+
+      console.log('🎉 Field recreation process completed successfully!')
 
     } catch (error) {
       console.error('❌ Field recreation failed:', error)
@@ -273,7 +280,7 @@ function DataExtractionInterface({ config, user, authService }) {
             <span className="text-blue-800">Recreating field in GoHighLevel...</span>
           </div>
           <p className="text-blue-700 text-xs mt-1">
-            This may take a few moments. Please do not refresh the page.
+            This may take a few moments. The field will get a new ID and the configuration will be updated automatically.
           </p>
         </div>
       )}

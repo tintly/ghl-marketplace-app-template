@@ -20,18 +20,20 @@ export class FieldRecreationService {
 
       // Prepare field data for recreation
       const fieldData = this.prepareFieldDataForRecreation(originalData)
-      console.log('Prepared field data:', fieldData)
+      console.log('Prepared field data for GHL API:', fieldData)
 
       // Validate field data before recreation
       this.validateFieldData(fieldData)
 
       // Create the field in GoHighLevel
+      console.log('🔄 Creating field in GoHighLevel...')
       const recreatedField = await this.ghlApiService.createCustomField(locationId, fieldData)
-      console.log('Field recreated successfully:', recreatedField)
+      console.log('✅ Field recreated successfully in GHL:', recreatedField)
 
+      // Return the complete response with the new field ID
       return recreatedField
     } catch (error) {
-      console.error('Field recreation error:', error)
+      console.error('❌ Field recreation error:', error)
       throw new Error(`Failed to recreate field: ${error.message}`)
     }
   }
@@ -61,11 +63,11 @@ export class FieldRecreationService {
       if (options.length === 0) {
         // If no options are available, create default options
         fieldData.picklistOptions = this.createDefaultOptions(originalData.dataType)
-        console.log('Created default options for field:', fieldData.picklistOptions)
+        console.log('⚠️ Created default options for field (no original options found):', fieldData.picklistOptions)
       } else {
         // Normalize options to simple string array for GHL API
         fieldData.picklistOptions = this.normalizeOptionsToStrings(options)
-        console.log('Using existing options for field:', fieldData.picklistOptions)
+        console.log('✅ Using existing options for field:', fieldData.picklistOptions)
       }
     }
 
@@ -87,15 +89,18 @@ export class FieldRecreationService {
       originalData.picklistOptions,
       originalData.options,
       originalData.choices,
-      originalData.values
+      originalData.values,
+      originalData.textBoxListOptions // For TEXTBOX_LIST fields
     ]
 
     for (const source of possibleSources) {
       if (Array.isArray(source) && source.length > 0) {
+        console.log('Found options in source:', source)
         return source
       }
     }
 
+    console.log('⚠️ No options found in any source for choice field')
     return []
   }
 
@@ -104,14 +109,14 @@ export class FieldRecreationService {
    */
   createDefaultOptions(dataType) {
     const defaultOptions = {
-      'SINGLE_OPTIONS': ['Option 1', 'Option 2', 'Option 3'],
-      'MULTIPLE_OPTIONS': ['Choice A', 'Choice B', 'Choice C'],
+      'SINGLE_OPTIONS': ['Yes', 'No', 'Maybe'],
+      'MULTIPLE_OPTIONS': ['Option A', 'Option B', 'Option C'],
       'CHECKBOX': ['Yes', 'No'],
-      'RADIO': ['Option 1', 'Option 2'],
-      'TEXTBOX_LIST': ['Item 1', 'Item 2']
+      'RADIO': ['Option 1', 'Option 2', 'Option 3'],
+      'TEXTBOX_LIST': ['Item 1', 'Item 2', 'Item 3']
     }
 
-    return defaultOptions[dataType] || ['Option 1', 'Option 2']
+    return defaultOptions[dataType] || ['Option 1', 'Option 2', 'Option 3']
   }
 
   /**
@@ -129,9 +134,11 @@ export class FieldRecreationService {
 
     return options.map((option, index) => {
       if (typeof option === 'string') {
-        return option
+        return option.trim()
       } else if (option && typeof option === 'object') {
-        return option.label || option.value || option.key || `Option ${index + 1}`
+        // Handle different object structures
+        const value = option.label || option.value || option.key || option.name || option.text
+        return value ? String(value).trim() : `Option ${index + 1}`
       } else {
         return `Option ${index + 1}`
       }
@@ -149,6 +156,11 @@ export class FieldRecreationService {
       throw new Error(`Missing required fields for recreation: ${missing.join(', ')}`)
     }
 
+    // Validate field name
+    if (!fieldData.name || fieldData.name.trim().length === 0) {
+      throw new Error('Field name cannot be empty')
+    }
+
     // Validate that choice fields have options
     if (this.isChoiceField(fieldData.dataType)) {
       if (!fieldData.picklistOptions || !Array.isArray(fieldData.picklistOptions) || fieldData.picklistOptions.length === 0) {
@@ -158,10 +170,18 @@ export class FieldRecreationService {
       // Ensure all options are valid strings
       const invalidOptions = fieldData.picklistOptions.filter(opt => !opt || typeof opt !== 'string' || opt.trim() === '')
       if (invalidOptions.length > 0) {
-        throw new Error(`All options must be non-empty strings. Found invalid options: ${invalidOptions.length}`)
+        throw new Error(`All options must be non-empty strings. Found ${invalidOptions.length} invalid options`)
+      }
+
+      // Check for duplicate options
+      const uniqueOptions = [...new Set(fieldData.picklistOptions)]
+      if (uniqueOptions.length !== fieldData.picklistOptions.length) {
+        console.log('⚠️ Removing duplicate options from field')
+        fieldData.picklistOptions = uniqueOptions
       }
     }
 
+    console.log('✅ Field data validation passed')
     return true
   }
 
@@ -180,5 +200,26 @@ export class FieldRecreationService {
       dataType,
       requiresOptions: this.isChoiceField(dataType)
     }
+  }
+
+  /**
+   * Extract the new field ID from the GHL API response
+   */
+  extractNewFieldId(response) {
+    // Handle different response structures from GHL API
+    if (response.customField && response.customField.id) {
+      return response.customField.id
+    }
+    
+    if (response.id) {
+      return response.id
+    }
+    
+    if (response.data && response.data.id) {
+      return response.data.id
+    }
+    
+    console.error('Could not extract field ID from response:', response)
+    throw new Error('Unable to extract new field ID from GoHighLevel response')
   }
 }
