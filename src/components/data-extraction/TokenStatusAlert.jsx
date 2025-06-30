@@ -5,51 +5,18 @@ function TokenStatusAlert({ config }) {
   const configManager = new ConfigurationManager()
   const tokenStatus = configManager.validateTokenStatus(config)
 
-  // Only show alert if there are issues (not for valid tokens)
-  if (tokenStatus.isValid && tokenStatus.status === 'valid') {
+  // Only show alert for critical errors that require user action
+  if (tokenStatus.isValid) {
     return null
   }
 
-  // Show warning for expiring soon
-  if (tokenStatus.isValid && tokenStatus.status === 'expiring_soon') {
+  // Only show errors for invalid tokens that need user intervention
+  if (['missing_access_token', 'missing_refresh_token'].includes(tokenStatus.status)) {
     return (
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <h3 className="text-yellow-800 font-medium">⚠️ Token Expiring Soon</h3>
-        <p className="text-yellow-600 text-sm mt-1">{tokenStatus.message}</p>
-      </div>
-    )
-  }
-
-  // Show errors for invalid tokens
-  return (
-    <div className={`border rounded-lg p-4 ${
-      tokenStatus.severity === 'error' 
-        ? 'bg-red-50 border-red-200' 
-        : 'bg-yellow-50 border-yellow-200'
-    }`}>
-      <h3 className={`font-medium ${
-        tokenStatus.severity === 'error' ? 'text-red-800' : 'text-yellow-800'
-      }`}>
-        ⚠️ Token Issue Detected
-      </h3>
-      <p className={`text-sm mt-1 ${
-        tokenStatus.severity === 'error' ? 'text-red-600' : 'text-yellow-600'
-      }`}>
-        {tokenStatus.message}
-      </p>
-      
-      {tokenStatus.status === 'temporary_token' && (
-        <div className="mt-3">
-          <a
-            href="/"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm transition-colors inline-block"
-          >
-            Install via OAuth
-          </a>
-        </div>
-      )}
-      
-      {['missing_access_token', 'missing_refresh_token'].includes(tokenStatus.status) && (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <h3 className="text-red-800 font-medium">⚠️ Authentication Required</h3>
+        <p className="text-red-600 text-sm mt-1">{tokenStatus.message}</p>
+        
         <div className="mt-3">
           <button
             onClick={() => window.open('https://marketplace.gohighlevel.com', '_blank')}
@@ -58,9 +25,31 @@ function TokenStatusAlert({ config }) {
             Reinstall App
           </button>
         </div>
-      )}
-    </div>
-  )
+      </div>
+    )
+  }
+
+  // For temporary tokens, show OAuth installation option
+  if (tokenStatus.status === 'temporary_token') {
+    return (
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <h3 className="text-yellow-800 font-medium">⚠️ Development Mode</h3>
+        <p className="text-yellow-600 text-sm mt-1">{tokenStatus.message}</p>
+        
+        <div className="mt-3">
+          <a
+            href="/"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm transition-colors inline-block"
+          >
+            Install via OAuth
+          </a>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't show anything for expired tokens - let the automatic refresh handle it
+  return null
 }
 
 export default TokenStatusAlert
