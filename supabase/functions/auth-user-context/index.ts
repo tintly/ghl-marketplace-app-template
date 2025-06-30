@@ -120,6 +120,22 @@ Deno.serve(async (req: Request) => {
   }
 })
 
+// Helper function to convert string to UUID format
+function stringToUUID(str: string): string {
+  // Create a hash of the string and format it as UUID
+  const hash = md5(new TextEncoder().encode(str))
+  const hex = Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('')
+  
+  // Format as UUID: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+  return [
+    hex.substring(0, 8),
+    hex.substring(8, 12),
+    '4' + hex.substring(13, 16), // Version 4 UUID
+    ((parseInt(hex.substring(16, 17), 16) & 0x3) | 0x8).toString(16) + hex.substring(17, 20), // Variant bits
+    hex.substring(20, 32)
+  ].join('-')
+}
+
 async function generateSupabaseJWT(userContext: any): Promise<string> {
   try {
     // Try to get JWT secret from environment
@@ -149,6 +165,10 @@ async function generateSupabaseJWT(userContext: any): Promise<string> {
       throw new Error('JWT_SECRET environment variable is not set and could not derive fallback')
     }
 
+    // Convert GHL user ID to UUID format for Supabase compatibility
+    const userUUID = stringToUUID(userContext.userId)
+    console.log('Converted GHL user ID to UUID:', { original: userContext.userId, uuid: userUUID })
+
     // JWT Header
     const header = {
       alg: 'HS256',
@@ -162,11 +182,11 @@ async function generateSupabaseJWT(userContext: any): Promise<string> {
       exp: now + (24 * 60 * 60), // 24 hours
       iat: now,
       iss: 'supabase',
-      sub: userContext.userId, // Use GHL userId as the subject
+      sub: userUUID, // Use UUID format for Supabase compatibility
       email: userContext.email,
       role: 'authenticated',
       // Custom claims for GHL data
-      ghl_user_id: userContext.userId,
+      ghl_user_id: userContext.userId, // Keep original GHL user ID
       ghl_location_id: userContext.locationId,
       ghl_company_id: userContext.companyId,
       ghl_user_name: userContext.userName,
@@ -193,7 +213,11 @@ async function generateSupabaseJWT(userContext: any): Promise<string> {
       .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
 
     const jwt = `${message}.${encodedSignature}`
-    console.log('JWT generated with claims:', { sub: payload.sub, ghl_user_id: payload.ghl_user_id })
+    console.log('JWT generated with claims:', { 
+      sub: payload.sub, 
+      ghl_user_id: payload.ghl_user_id,
+      email: payload.email 
+    })
     
     return jwt
   } catch (error) {
