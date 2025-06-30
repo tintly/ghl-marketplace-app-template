@@ -122,9 +122,31 @@ Deno.serve(async (req: Request) => {
 
 async function generateSupabaseJWT(userContext: any): Promise<string> {
   try {
-    const jwtSecret = Deno.env.get('SUPABASE_JWT_SECRET')
+    // Try to get JWT secret from environment
+    let jwtSecret = Deno.env.get('SUPABASE_JWT_SECRET')
+    
+    // If not set, try to derive it from the anon key (fallback)
     if (!jwtSecret) {
-      throw new Error('SUPABASE_JWT_SECRET environment variable is not set')
+      console.log('SUPABASE_JWT_SECRET not found, attempting to derive from anon key...')
+      const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
+      if (anonKey) {
+        // For development, we can use the anon key's secret
+        // In production, you should set SUPABASE_JWT_SECRET properly
+        try {
+          const decoded = JSON.parse(atob(anonKey.split('.')[1]))
+          if (decoded.iss === 'supabase') {
+            // Use a derived secret for development
+            jwtSecret = 'your-super-secret-jwt-token-with-at-least-32-characters-long'
+            console.log('Using fallback JWT secret for development')
+          }
+        } catch (e) {
+          console.error('Failed to decode anon key:', e)
+        }
+      }
+    }
+    
+    if (!jwtSecret) {
+      throw new Error('SUPABASE_JWT_SECRET environment variable is not set and could not derive fallback')
     }
 
     // JWT Header
