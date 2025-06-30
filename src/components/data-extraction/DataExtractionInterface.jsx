@@ -15,6 +15,7 @@ function DataExtractionInterface({ config, user, authService }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [recreating, setRecreating] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -119,19 +120,39 @@ function DataExtractionInterface({ config, user, authService }) {
         throw new Error('Field was recreated but failed to update the configuration. Please refresh the page.')
       }
 
-      // Reload both custom fields and extraction fields to reflect changes
-      await Promise.all([
-        loadCustomFields(),
-        loadExtractionFields()
-      ])
-
       console.log('✅ Field recreation completed successfully')
+
+      // Force refresh the interface to show updated state
+      await refreshInterface()
 
     } catch (error) {
       console.error('❌ Field recreation failed:', error)
       setError(`Failed to recreate field: ${error.message}`)
     } finally {
       setRecreating(false)
+    }
+  }
+
+  const refreshInterface = async () => {
+    try {
+      setRefreshing(true)
+      console.log('🔄 Refreshing interface after field recreation...')
+      
+      // Wait a moment for GHL to process the new field
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      // Reload both custom fields and extraction fields
+      await Promise.all([
+        loadCustomFields(),
+        loadExtractionFields()
+      ])
+      
+      console.log('✅ Interface refresh completed')
+    } catch (error) {
+      console.error('Error refreshing interface:', error)
+      setError('Failed to refresh interface. Please reload the page.')
+    } finally {
+      setRefreshing(false)
     }
   }
 
@@ -191,8 +212,16 @@ function DataExtractionInterface({ config, user, authService }) {
     }
   }
 
-  const handleRefreshFields = () => {
-    loadCustomFields()
+  const handleRefreshFields = async () => {
+    try {
+      setRefreshing(true)
+      await loadCustomFields()
+    } catch (error) {
+      console.error('Error refreshing fields:', error)
+      setError('Failed to refresh custom fields')
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   if (loading) {
@@ -209,12 +238,20 @@ function DataExtractionInterface({ config, user, authService }) {
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
         <h3 className="text-red-800 font-medium">Interface Error</h3>
         <p className="text-red-600 text-sm mt-1">{error}</p>
-        <button
-          onClick={loadData}
-          className="mt-3 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
-        >
-          Retry
-        </button>
+        <div className="mt-3 space-x-2">
+          <button
+            onClick={loadData}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
+          >
+            Retry
+          </button>
+          <button
+            onClick={() => setError(null)}
+            className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm transition-colors"
+          >
+            Dismiss
+          </button>
+        </div>
       </div>
     )
   }
@@ -241,6 +278,19 @@ function DataExtractionInterface({ config, user, authService }) {
         </div>
       )}
 
+      {/* Refresh Loading Indicator */}
+      {refreshing && (
+        <div className="mx-6 mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600 mr-2"></div>
+            <span className="text-green-800">Refreshing interface...</span>
+          </div>
+          <p className="text-green-700 text-xs mt-1">
+            Updating field status and configurations.
+          </p>
+        </div>
+      )}
+
       <div className="p-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Available Custom Fields */}
@@ -250,6 +300,7 @@ function DataExtractionInterface({ config, user, authService }) {
               extractionFields={extractionFields}
               onCreateExtraction={handleCreateExtraction}
               onRefresh={handleRefreshFields}
+              refreshing={refreshing}
             />
           </div>
 
@@ -261,6 +312,7 @@ function DataExtractionInterface({ config, user, authService }) {
               onEdit={handleEditExtraction}
               onDelete={handleDeleteExtraction}
               onRecreate={handleRecreateExtraction}
+              recreating={recreating}
             />
           </div>
         </div>
