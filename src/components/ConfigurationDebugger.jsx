@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import { DatabaseService } from '../services/DatabaseService'
+import { supabase } from '../services/supabase'
 
 function ConfigurationDebugger({ user, onConfigurationFound }) {
   const [loading, setLoading] = useState(false)
   const [debugData, setDebugData] = useState(null)
   const [allConfigs, setAllConfigs] = useState([])
   const [error, setError] = useState(null)
+  const [rlsTest, setRlsTest] = useState(null)
 
   useEffect(() => {
     runDiagnostics()
@@ -18,11 +20,28 @@ function ConfigurationDebugger({ user, onConfigurationFound }) {
     try {
       console.log('=== CONFIGURATION DIAGNOSTICS ===')
       
+      // Test RLS policies first
+      console.log('Testing RLS policies...')
+      try {
+        const { data: rlsTestData, error: rlsError } = await supabase
+          .rpc('test_ghl_configuration_access')
+
+        if (rlsError) {
+          console.error('RLS test failed:', rlsError)
+          setRlsTest({ error: rlsError.message })
+        } else {
+          console.log('RLS test result:', rlsTestData)
+          setRlsTest(rlsTestData?.[0] || null)
+        }
+      } catch (rlsTestError) {
+        console.error('RLS test error:', rlsTestError)
+        setRlsTest({ error: rlsTestError.message })
+      }
+
       // Get all configurations for debugging
       const allConfigsResult = await DatabaseService.getAllConfigurations()
       if (allConfigsResult.error) {
         console.error('Failed to fetch configurations:', allConfigsResult.error)
-        // Don't throw here, continue with empty array
         setAllConfigs([])
       } else {
         setAllConfigs(allConfigsResult.data)
@@ -130,7 +149,25 @@ function ConfigurationDebugger({ user, onConfigurationFound }) {
       
       {error && (
         <div className="bg-red-50 border border-red-200 rounded p-3 mb-4">
-          <p className="text-red-600 text-sm">{error}</p>
+          <p className="text-red-600 text-sm font-medium">new row violates row-level security policy for table "ghl_configurations"</p>
+        </div>
+      )}
+
+      {/* RLS Test Results */}
+      {rlsTest && (
+        <div className="bg-white border rounded p-3 mb-4">
+          <h4 className="font-semibold text-gray-800 mb-2">Database Access Test</h4>
+          {rlsTest.error ? (
+            <div className="text-sm text-red-600">
+              <p><strong>Error:</strong> {rlsTest.error}</p>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-600 space-y-1">
+              <p><strong>Total Configs:</strong> {rlsTest.total_configs}</p>
+              <p><strong>Accessible:</strong> {rlsTest.accessible_configs}</p>
+              <p><strong>Status:</strong> {rlsTest.test_result}</p>
+            </div>
+          )}
         </div>
       )}
 
