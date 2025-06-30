@@ -116,7 +116,7 @@ function DataExtractionModule({ user, authService }) {
     try {
       // Strategy 1: If we have a configId from auth, try to fetch it directly
       if (user.configId) {
-        console.log('Attempting direct config fetch by ID:', user.configId)
+        console.log('Strategy 1: Direct config fetch by ID:', user.configId)
         
         const { data: directConfig, error: directError } = await supabase
           .from('ghl_configurations')
@@ -128,49 +128,42 @@ function DataExtractionModule({ user, authService }) {
         if (directError) {
           console.error('Error fetching config by ID:', directError)
         } else if (directConfig) {
-          console.log('Found config by direct ID lookup:', {
-            id: directConfig.id,
-            userId: directConfig.user_id,
-            businessName: directConfig.business_name,
-            hasAccessToken: !!directConfig.access_token,
-            hasRefreshToken: !!directConfig.refresh_token
-          })
+          console.log('✅ Found config by direct ID lookup')
           return directConfig
+        } else {
+          console.log('❌ Config ID provided but not found in database')
         }
       }
 
-      // Strategy 2: Try to find by ghl_account_id (location ID)
+      // Strategy 2: Try to find by ghl_account_id (location ID) - most reliable
       if (user.locationId) {
-        console.log('Finding config by ghl_account_id:', user.locationId)
+        console.log('Strategy 2: Finding config by ghl_account_id:', user.locationId)
         
-        const { data: locationData, error: locationError } = await supabase
+        const { data: locationConfigs, error: locationError } = await supabase
           .from('ghl_configurations')
           .select('*')
           .eq('ghl_account_id', user.locationId)
           .eq('is_active', true)
-          .maybeSingle()
+          .order('updated_at', { ascending: false })
 
         if (locationError) {
           console.error('Error querying by ghl_account_id:', locationError)
           setConfigError(`Database query failed: ${locationError.message}`)
-          return null
-        } 
-        
-        if (locationData) {
-          console.log('Found config by ghl_account_id:', {
-            id: locationData.id,
+        } else if (locationConfigs && locationConfigs.length > 0) {
+          const locationData = locationConfigs[0] // Get the most recently updated one
+          
+          console.log('✅ Found config(s) by ghl_account_id:', {
+            count: locationConfigs.length,
+            selectedId: locationData.id,
             userId: locationData.user_id,
             businessName: locationData.business_name,
             hasAccessToken: !!locationData.access_token,
-            hasRefreshToken: !!locationData.refresh_token,
-            tokenExpiry: locationData.token_expires_at
+            hasRefreshToken: !!locationData.refresh_token
           })
           
-          // If found but user_id doesn't match, update it to current user
+          // If user_id doesn't match current user, update it
           if (!locationData.user_id || locationData.user_id !== user.userId) {
-            console.log('Config found but user_id mismatch, updating to current user...')
-            console.log('Current user_id in config:', locationData.user_id)
-            console.log('SSO user_id:', user.userId)
+            console.log('Updating config user_id to match current SSO user...')
             
             const { data: updatedData, error: updateError } = await supabase
               .from('ghl_configurations')
@@ -183,89 +176,89 @@ function DataExtractionModule({ user, authService }) {
               .single()
 
             if (updateError) {
-              console.error('Failed to update user_id in configuration:', updateError)
-              setConfigError(`Failed to link configuration: ${updateError.message}`)
-              return locationData // Return original data even if update fails
+              console.error('Failed to update user_id:', updateError)
+              // Still return original data
+              return locationData
             }
 
-            console.log('Successfully updated config with current user_id')
+            console.log('✅ Successfully updated config with current user_id')
             return updatedData
           }
 
           return locationData
+        } else {
+          console.log('❌ No configs found for location:', user.locationId)
         }
       }
 
       // Strategy 3: Try to find by user_id as fallback
-      console.log('Finding config by user_id:', user.userId)
+      console.log('Strategy 3: Finding config by user_id:', user.userId)
       
-      const { data: userData, error: userError } = await supabase
+      const { data: userConfigs, error: userError } = await supabase
         .from('ghl_configurations')
         .select('*')
         .eq('user_id', user.userId)
         .eq('is_active', true)
-        .maybeSingle()
+        .order('updated_at', { ascending: false })
 
       if (userError) {
         console.error('Error querying by user_id:', userError)
-        setConfigError(`Database query failed: ${userError.message}`)
-        return null
-      } 
-      
-      if (userData) {
-        console.log('Found config by user_id:', userData.id)
+      } else if (userConfigs && userConfigs.length > 0) {
+        const userData = userConfigs[0]
+        console.log('✅ Found config by user_id:', userData.id)
         return userData
       }
 
-      // Strategy 4: Look for ANY configuration for this location (regardless of user_id)
-      // This handles cases where the user_id from SSO doesn't match what's in the database
-      console.log('Strategy 4: Looking for ANY config for location:', user.locationId)
+      // Strategy 4: Debug - show all configs for this location (ignore user_id)
+      console.log('Strategy 4: Debug - checking ALL configs for location')
       
-      const { data: anyLocationConfig, error: anyLocationError } = await supabase
+      const { data: allLocationConfigs, error: allError } = await supabase
         .from('ghl_configurations')
         .select('*')
         .eq('ghl_account_id', user.locationId)
-        .eq('is_active', true)
         .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
 
-      if (anyLocationError) {
-        console.error('Error in fallback location query:', anyLocationError)
-      } else if (anyLocationConfig) {
-        console.log('Found config via fallback location search:', {
-          id: anyLocationConfig.id,
-          userId: anyLocationConfig.user_id,
-          businessName: anyLocationConfig.business_name,
-          hasAccessToken: !!anyLocationConfig.access_token,
-          hasRefreshToken: !!anyLocationConfig.refresh_token
-        })
+      if (allError) {
+        console.error('Error in debug query:', allError)
+      } else {
+        console.log('All configs for location:', allLocationConfigs?.map(c => ({
+          id: c.id,
+          user_id: c.user_id,
+          is_active: c.is_active,
+          business_name: c.business_name,
+          created_at: c.created_at,
+          hasTokens: !!(c.access_token && c.refresh_token)
+        })))
         
-        // Update this config to use the current user_id from SSO
-        console.log('Updating fallback config with current SSO user_id...')
-        
-        const { data: updatedFallbackData, error: updateFallbackError } = await supabase
-          .from('ghl_configurations')
-          .update({ 
-            user_id: user.userId,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', anyLocationConfig.id)
-          .select()
-          .single()
+        // If we found any config for this location, use the most recent active one
+        const activeConfigs = allLocationConfigs?.filter(c => c.is_active) || []
+        if (activeConfigs.length > 0) {
+          const bestConfig = activeConfigs[0]
+          console.log('Using most recent active config:', bestConfig.id)
+          
+          // Update it with current user_id
+          const { data: updatedConfig, error: updateError } = await supabase
+            .from('ghl_configurations')
+            .update({ 
+              user_id: user.userId,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', bestConfig.id)
+            .select()
+            .single()
 
-        if (updateFallbackError) {
-          console.error('Failed to update fallback config:', updateFallbackError)
-          // Still return the original config even if update fails
-          return anyLocationConfig
+          if (updateError) {
+            console.error('Failed to update best config:', updateError)
+            return bestConfig
+          }
+
+          console.log('✅ Updated and using best available config')
+          return updatedConfig
         }
-
-        console.log('Successfully updated fallback config with SSO user_id')
-        return updatedFallbackData
       }
 
       // No configuration found at all
-      console.log('No configuration found for user or location')
+      console.log('❌ No configuration found anywhere')
       setConfigError(
         'No configuration found for this location. ' +
         'Please install the app via the GoHighLevel marketplace to get proper access tokens.'
