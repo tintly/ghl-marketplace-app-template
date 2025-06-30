@@ -53,95 +53,13 @@ export class GHLApiService {
     try {
       console.log('Creating custom field in GHL:', { locationId, fieldData })
       
-      // Determine which API endpoint to use based on the field type
-      const isCustomObject = fieldData.fieldKey && fieldData.fieldKey.startsWith('custom_object.')
-      
-      if (isCustomObject) {
-        return await this.createCustomObjectField(locationId, fieldData)
-      } else {
-        return await this.createContactField(locationId, fieldData)
-      }
+      // Always use the contact fields endpoint for now
+      // The custom objects endpoint has different requirements
+      return await this.createContactField(locationId, fieldData)
     } catch (error) {
       console.error('Error creating custom field:', error)
       throw new Error(`Failed to create custom field in GoHighLevel: ${error.message}`)
     }
-  }
-
-  async createCustomObjectField(locationId, fieldData) {
-    console.log('Creating custom object field using /custom-fields/ endpoint')
-    
-    const endpoint = `/custom-fields/`
-    
-    // Prepare the payload according to the custom objects API specification
-    const payload = {
-      locationId: locationId,
-      name: fieldData.name,
-      dataType: fieldData.dataType,
-      showInForms: true, // Required field
-      fieldKey: fieldData.fieldKey,
-      objectKey: fieldData.objectKey || 'contact'
-    }
-
-    // Add optional fields if provided
-    if (fieldData.description) {
-      payload.description = fieldData.description
-    }
-
-    if (fieldData.placeholder) {
-      payload.placeholder = fieldData.placeholder
-    }
-
-    if (fieldData.parentId) {
-      payload.parentId = fieldData.parentId
-    }
-
-    // Add options for choice fields - CRITICAL: Ensure options are always provided for choice fields
-    if (this.isChoiceField(fieldData.dataType)) {
-      if (!fieldData.picklistOptions || !Array.isArray(fieldData.picklistOptions) || fieldData.picklistOptions.length === 0) {
-        throw new Error(`Field type ${fieldData.dataType} requires at least one option`)
-      }
-
-      payload.options = fieldData.picklistOptions.map((option) => {
-        if (typeof option === 'string') {
-          return {
-            key: option.toLowerCase().replace(/\s+/g, '_'),
-            label: option
-          }
-        } else if (option && typeof option === 'object') {
-          return {
-            key: option.key || option.label?.toLowerCase().replace(/\s+/g, '_') || 'option',
-            label: option.label || option.key || 'Option'
-          }
-        } else {
-          return {
-            key: 'option',
-            label: 'Option'
-          }
-        }
-      })
-
-      console.log('Options for custom object field:', payload.options)
-    }
-
-    // Add specific fields for certain data types
-    if (fieldData.dataType === 'FILE_UPLOAD') {
-      payload.acceptedFormats = fieldData.acceptedFormats || '.pdf'
-      payload.maxFileLimit = fieldData.maxFileLimit || 1
-    }
-
-    if (fieldData.dataType === 'RADIO') {
-      payload.allowCustomOption = fieldData.allowCustomOption || false
-    }
-
-    console.log('Custom object field payload:', payload)
-
-    const response = await this.makeRequest(endpoint, {
-      method: 'POST',
-      body: payload
-    })
-
-    console.log('Custom object field created successfully:', response)
-    return response
   }
 
   async createContactField(locationId, fieldData) {
@@ -166,28 +84,51 @@ export class GHLApiService {
       payload.position = fieldData.position
     }
 
-    // Handle picklist options for choice fields
+    // Handle different field types with their specific requirements
     if (this.isChoiceField(fieldData.dataType)) {
       if (!fieldData.picklistOptions || !Array.isArray(fieldData.picklistOptions) || fieldData.picklistOptions.length === 0) {
         throw new Error(`Field type ${fieldData.dataType} requires at least one option`)
       }
 
-      if (fieldData.dataType === 'TEXTBOX_LIST') {
-        // For TEXTBOX_LIST, use textBoxListOptions
-        payload.textBoxListOptions = fieldData.picklistOptions.map((option, index) => ({
-          label: typeof option === 'string' ? option : option.label || `Option ${index + 1}`,
-          prefillValue: '',
-          position: index
-        }))
-      } else {
-        // For other choice fields, this might not be supported in the contact fields API
-        // But we'll try to include them anyway
-        console.warn('Picklist options may not be supported for contact fields of type:', fieldData.dataType)
-        
-        // Some contact field types might support picklistOptions
-        payload.picklistOptions = fieldData.picklistOptions.map(option => 
-          typeof option === 'string' ? option : option.label || option.key || 'Option'
-        )
+      // Handle different choice field types
+      switch (fieldData.dataType) {
+        case 'TEXTBOX_LIST':
+          // For TEXTBOX_LIST, use textBoxListOptions
+          payload.textBoxListOptions = fieldData.picklistOptions.map((option, index) => ({
+            label: typeof option === 'string' ? option : (option.label || `Option ${index + 1}`),
+            prefillValue: '',
+            position: index
+          }))
+          break
+
+        case 'SINGLE_OPTIONS':
+        case 'MULTIPLE_OPTIONS':
+          // For choice fields, use options array (not picklistOptions)
+          payload.options = fieldData.picklistOptions.map(option => 
+            typeof option === 'string' ? option : (option.label || option.key || 'Option')
+          )
+          break
+
+        case 'CHECKBOX':
+          // For checkbox, we might need to handle differently
+          // Let's try with options first
+          payload.options = fieldData.picklistOptions.map(option => 
+            typeof option === 'string' ? option : (option.label || option.key || 'Option')
+          )
+          break
+
+        case 'RADIO':
+          // For radio buttons, use options
+          payload.options = fieldData.picklistOptions.map(option => 
+            typeof option === 'string' ? option : (option.label || option.key || 'Option')
+          )
+          break
+
+        default:
+          console.warn('Unknown choice field type:', fieldData.dataType)
+          payload.options = fieldData.picklistOptions.map(option => 
+            typeof option === 'string' ? option : (option.label || option.key || 'Option')
+          )
       }
     }
 
@@ -200,7 +141,11 @@ export class GHLApiService {
       payload.maxNumberOfFiles = fieldData.maxFileLimit || 1
     }
 
-    console.log('Contact field payload:', payload)
+    // Remove any properties that shouldn't be there
+    // The API specifically complained about picklistOptions
+    delete payload.picklistOptions
+
+    console.log('Contact field payload:', JSON.stringify(payload, null, 2))
 
     const response = await this.makeRequest(endpoint, {
       method: 'POST',
@@ -227,9 +172,11 @@ export class GHLApiService {
         position: fieldData.position
       }
 
-      // Add picklist options for choice fields
-      if (fieldData.picklistOptions && fieldData.picklistOptions.length > 0) {
-        payload.picklistOptions = fieldData.picklistOptions
+      // For choice fields, use options instead of picklistOptions
+      if (this.isChoiceField(fieldData.dataType) && fieldData.picklistOptions && fieldData.picklistOptions.length > 0) {
+        payload.options = fieldData.picklistOptions.map(option => 
+          typeof option === 'string' ? option : (option.label || option.key || 'Option')
+        )
       }
 
       const response = await this.makeRequest(endpoint, {

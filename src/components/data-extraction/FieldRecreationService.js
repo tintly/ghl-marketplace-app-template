@@ -54,21 +54,6 @@ export class FieldRecreationService {
       fieldData.position = originalData.position
     }
 
-    // For custom objects, add the required fields
-    if (originalData.fieldKey && originalData.fieldKey.startsWith('custom_object.')) {
-      fieldData.fieldKey = originalData.fieldKey
-      fieldData.objectKey = this.extractObjectKey(originalData.fieldKey)
-      fieldData.showInForms = true
-
-      if (originalData.description) {
-        fieldData.description = originalData.description
-      }
-
-      if (originalData.parentId) {
-        fieldData.parentId = originalData.parentId
-      }
-    }
-
     // Handle picklist options for choice fields - CRITICAL FIX
     if (this.isChoiceField(originalData.dataType)) {
       const options = this.getFieldOptions(originalData)
@@ -78,7 +63,8 @@ export class FieldRecreationService {
         fieldData.picklistOptions = this.createDefaultOptions(originalData.dataType)
         console.log('Created default options for field:', fieldData.picklistOptions)
       } else {
-        fieldData.picklistOptions = this.normalizePicklistOptions(options)
+        // Normalize options to simple string array for GHL API
+        fieldData.picklistOptions = this.normalizeOptionsToStrings(options)
         console.log('Using existing options for field:', fieldData.picklistOptions)
       }
     }
@@ -87,11 +73,6 @@ export class FieldRecreationService {
     if (originalData.dataType === 'FILE_UPLOAD') {
       fieldData.acceptedFormats = originalData.acceptedFormats || '.pdf,.jpg,.png'
       fieldData.maxFileLimit = originalData.maxFileLimit || 1
-    }
-
-    // Handle radio button specific fields
-    if (originalData.dataType === 'RADIO') {
-      fieldData.allowCustomOption = originalData.allowCustomOption || false
     }
 
     return fieldData
@@ -134,25 +115,6 @@ export class FieldRecreationService {
   }
 
   /**
-   * Extract object key from field key
-   */
-  extractObjectKey(fieldKey) {
-    if (!fieldKey) return 'contact'
-    
-    // For custom objects: "custom_object.pet.name" -> "custom_object.pet"
-    if (fieldKey.startsWith('custom_object.')) {
-      const parts = fieldKey.split('.')
-      if (parts.length >= 3) {
-        return `${parts[0]}.${parts[1]}`
-      }
-    }
-    
-    // For standard objects: "contact.field_name" -> "contact"
-    const parts = fieldKey.split('.')
-    return parts[0] || 'contact'
-  }
-
-  /**
    * Check if field type requires choice options
    */
   isChoiceField(dataType) {
@@ -160,29 +122,20 @@ export class FieldRecreationService {
   }
 
   /**
-   * Normalize picklist options to the format expected by GHL API
+   * Normalize picklist options to simple string array for GHL API
    */
-  normalizePicklistOptions(options) {
+  normalizeOptionsToStrings(options) {
     if (!Array.isArray(options)) return []
 
     return options.map((option, index) => {
       if (typeof option === 'string') {
-        return {
-          key: option.toLowerCase().replace(/\s+/g, '_'),
-          label: option
-        }
+        return option
       } else if (option && typeof option === 'object') {
-        return {
-          key: option.key || option.value || `option_${index}`,
-          label: option.label || option.value || option.key || `Option ${index + 1}`
-        }
+        return option.label || option.value || option.key || `Option ${index + 1}`
       } else {
-        return {
-          key: `option_${index}`,
-          label: `Option ${index + 1}`
-        }
+        return `Option ${index + 1}`
       }
-    })
+    }).filter(Boolean) // Remove any empty values
   }
 
   /**
@@ -201,68 +154,31 @@ export class FieldRecreationService {
       if (!fieldData.picklistOptions || !Array.isArray(fieldData.picklistOptions) || fieldData.picklistOptions.length === 0) {
         throw new Error(`Choice field type ${fieldData.dataType} requires at least one option`)
       }
-    }
 
-    // For custom objects, validate additional required fields
-    if (fieldData.fieldKey && fieldData.fieldKey.startsWith('custom_object.')) {
-      const customObjectRequired = ['fieldKey', 'objectKey']
-      const customObjectMissing = customObjectRequired.filter(field => !fieldData[field])
-      
-      if (customObjectMissing.length > 0) {
-        throw new Error(`Missing required custom object fields: ${customObjectMissing.join(', ')}`)
-      }
-
-      // Validate field key format
-      if (!this.isValidFieldKey(fieldData.fieldKey)) {
-        throw new Error(`Invalid field key format: ${fieldData.fieldKey}`)
+      // Ensure all options are valid strings
+      const invalidOptions = fieldData.picklistOptions.filter(opt => !opt || typeof opt !== 'string' || opt.trim() === '')
+      if (invalidOptions.length > 0) {
+        throw new Error(`All options must be non-empty strings. Found invalid options: ${invalidOptions.length}`)
       }
     }
 
     return true
-  }
-
-  /**
-   * Validate field key format
-   */
-  isValidFieldKey(fieldKey) {
-    if (!fieldKey || typeof fieldKey !== 'string') return false
-    
-    // Should contain at least one dot
-    if (!fieldKey.includes('.')) return false
-    
-    // Should not start or end with dot
-    if (fieldKey.startsWith('.') || fieldKey.endsWith('.')) return false
-    
-    return true
-  }
-
-  /**
-   * Determine if a field should be recreated as a custom object or contact field
-   */
-  isCustomObjectField(originalData) {
-    return originalData.fieldKey && originalData.fieldKey.startsWith('custom_object.')
   }
 
   /**
    * Get field type compatibility info
    */
   getFieldTypeInfo(dataType) {
-    const contactFieldTypes = [
+    const supportedTypes = [
       'TEXT', 'LARGE_TEXT', 'NUMERICAL', 'PHONE', 'MONETORY', 
       'CHECKBOX', 'SINGLE_OPTIONS', 'MULTIPLE_OPTIONS', 'DATE', 
       'TEXTBOX_LIST', 'FILE_UPLOAD', 'RADIO', 'EMAIL'
     ]
 
-    const customObjectTypes = [
-      'TEXT', 'LARGE_TEXT', 'NUMERICAL', 'SINGLE_OPTIONS', 
-      'MULTIPLE_OPTIONS', 'CHECKBOX', 'RADIO', 'DATE', 
-      'TEXTBOX_LIST', 'FILE_UPLOAD'
-    ]
-
     return {
-      supportsContact: contactFieldTypes.includes(dataType),
-      supportsCustomObject: customObjectTypes.includes(dataType),
-      dataType
+      isSupported: supportedTypes.includes(dataType),
+      dataType,
+      requiresOptions: this.isChoiceField(dataType)
     }
   }
 }
