@@ -1,11 +1,12 @@
-import { supabase } from './supabase'
-
 export class DatabaseService {
   // Check if a configuration exists for the given user and location
-  static async checkConfigurationExists(userId, locationId) {
+  static async checkConfigurationExists(userId, locationId, authService = null) {
     try {
       console.log('=== DATABASE SERVICE: CHECK EXISTS ===')
       console.log('Parameters:', { userId, locationId })
+
+      // Get the appropriate Supabase client
+      const supabase = authService?.getSupabaseClient() || (await import('./supabase')).supabase
 
       const { data, error } = await supabase
         .from('ghl_configurations')
@@ -33,9 +34,11 @@ export class DatabaseService {
   }
 
   // Get all configurations for debugging (with limited fields for security)
-  static async getAllConfigurations() {
+  static async getAllConfigurations(authService = null) {
     try {
       console.log('=== DATABASE SERVICE: GET ALL CONFIGS ===')
+
+      const supabase = authService?.getSupabaseClient() || (await import('./supabase')).supabase
 
       const { data, error } = await supabase
         .from('ghl_configurations')
@@ -58,7 +61,7 @@ export class DatabaseService {
   }
 
   // Create a new configuration
-  static async createConfiguration(configData) {
+  static async createConfiguration(configData, authService = null) {
     try {
       console.log('=== DATABASE SERVICE: CREATE CONFIG ===')
       console.log('Config data:', {
@@ -66,6 +69,8 @@ export class DatabaseService {
         ghl_account_id: configData.ghl_account_id,
         business_name: configData.business_name
       })
+
+      const supabase = authService?.getSupabaseClient() || (await import('./supabase')).supabase
 
       const { data, error } = await supabase
         .from('ghl_configurations')
@@ -87,11 +92,13 @@ export class DatabaseService {
   }
 
   // Update an existing configuration
-  static async updateConfiguration(configId, updates) {
+  static async updateConfiguration(configId, updates, authService = null) {
     try {
       console.log('=== DATABASE SERVICE: UPDATE CONFIG ===')
       console.log('Config ID:', configId)
       console.log('Updates:', updates)
+
+      const supabase = authService?.getSupabaseClient() || (await import('./supabase')).supabase
 
       const { data, error } = await supabase
         .from('ghl_configurations')
@@ -117,17 +124,19 @@ export class DatabaseService {
   }
 
   // Link a configuration to a user
-  static async linkConfigurationToUser(configId, userId) {
+  static async linkConfigurationToUser(configId, userId, authService = null) {
     console.log('=== DATABASE SERVICE: LINK CONFIG TO USER ===')
     console.log('Linking config', configId, 'to user', userId)
-    return this.updateConfiguration(configId, { user_id: userId })
+    return this.updateConfiguration(configId, { user_id: userId }, authService)
   }
 
   // Find configuration by location ID
-  static async findConfigurationByLocation(locationId) {
+  static async findConfigurationByLocation(locationId, authService = null) {
     try {
       console.log('=== DATABASE SERVICE: FIND BY LOCATION ===')
       console.log('Location ID:', locationId)
+
+      const supabase = authService?.getSupabaseClient() || (await import('./supabase')).supabase
 
       const { data, error } = await supabase
         .from('ghl_configurations')
@@ -152,10 +161,12 @@ export class DatabaseService {
   }
 
   // Find configuration by user ID
-  static async findConfigurationByUser(userId) {
+  static async findConfigurationByUser(userId, authService = null) {
     try {
       console.log('=== DATABASE SERVICE: FIND BY USER ===')
       console.log('User ID:', userId)
+
+      const supabase = authService?.getSupabaseClient() || (await import('./supabase')).supabase
 
       const { data, error } = await supabase
         .from('ghl_configurations')
@@ -180,11 +191,13 @@ export class DatabaseService {
   }
 
   // Comprehensive configuration lookup with better error handling
-  static async findConfiguration(userId, locationId) {
+  static async findConfiguration(userId, locationId, authService = null) {
     console.log('=== DATABASE SERVICE: COMPREHENSIVE LOOKUP ===')
     console.log('Parameters:', { userId, locationId })
 
     try {
+      const supabase = authService?.getSupabaseClient() || (await import('./supabase')).supabase
+
       // Strategy 1: Use the database function first
       console.log('Strategy 1: Using database function')
       const { data: functionData, error: functionError } = await supabase
@@ -207,21 +220,21 @@ export class DatabaseService {
       console.log('Strategy 2: Direct query fallback')
 
       // Try exact match
-      const exactMatch = await this.checkConfigurationExists(userId, locationId)
+      const exactMatch = await this.checkConfigurationExists(userId, locationId, authService)
       if (exactMatch.exists) {
         console.log('Found exact match via direct query')
         return { found: true, strategy: 'exact_match', data: exactMatch.config, error: null }
       }
 
       // Try by location
-      const locationMatch = await this.findConfigurationByLocation(locationId)
+      const locationMatch = await this.findConfigurationByLocation(locationId, authService)
       if (locationMatch.found) {
         console.log('Found by location via direct query')
         return { found: true, strategy: 'location_match', data: locationMatch.data, error: null }
       }
 
       // Try by user
-      const userMatch = await this.findConfigurationByUser(userId)
+      const userMatch = await this.findConfigurationByUser(userId, authService)
       if (userMatch.found) {
         console.log('Found by user via direct query')
         return { found: true, strategy: 'user_match', data: userMatch.data, error: null }

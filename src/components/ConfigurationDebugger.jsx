@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { DatabaseService } from '../services/DatabaseService'
-import { supabase } from '../services/supabase'
 
-function ConfigurationDebugger({ user, onConfigurationFound }) {
+function ConfigurationDebugger({ user, authService, onConfigurationFound }) {
   const [loading, setLoading] = useState(false)
   const [debugData, setDebugData] = useState(null)
   const [allConfigs, setAllConfigs] = useState([])
@@ -23,6 +22,7 @@ function ConfigurationDebugger({ user, onConfigurationFound }) {
       // Test RLS policies first
       console.log('Testing RLS policies...')
       try {
+        const supabase = authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
         const { data: rlsTestData, error: rlsError } = await supabase
           .rpc('test_ghl_configuration_access')
 
@@ -39,7 +39,7 @@ function ConfigurationDebugger({ user, onConfigurationFound }) {
       }
 
       // Get all configurations for debugging
-      const allConfigsResult = await DatabaseService.getAllConfigurations()
+      const allConfigsResult = await DatabaseService.getAllConfigurations(authService)
       if (allConfigsResult.error) {
         console.error('Failed to fetch configurations:', allConfigsResult.error)
         setAllConfigs([])
@@ -49,7 +49,7 @@ function ConfigurationDebugger({ user, onConfigurationFound }) {
       }
 
       // Try comprehensive lookup
-      const lookupResult = await DatabaseService.findConfiguration(user.userId, user.locationId)
+      const lookupResult = await DatabaseService.findConfiguration(user.userId, user.locationId, authService)
       
       setDebugData({
         targetUserId: user.userId,
@@ -90,7 +90,7 @@ function ConfigurationDebugger({ user, onConfigurationFound }) {
         created_by: user.userId
       }
 
-      const result = await DatabaseService.createConfiguration(configData)
+      const result = await DatabaseService.createConfiguration(configData, authService)
       
       if (result.success) {
         console.log('✅ Test configuration created:', result.data.id)
@@ -113,7 +113,7 @@ function ConfigurationDebugger({ user, onConfigurationFound }) {
   const linkExistingConfiguration = async (configId) => {
     setLoading(true)
     try {
-      const result = await DatabaseService.linkConfigurationToUser(configId, user.userId)
+      const result = await DatabaseService.linkConfigurationToUser(configId, user.userId, authService)
       
       if (result.success) {
         console.log('✅ Configuration linked:', result.data.id)
@@ -149,7 +149,7 @@ function ConfigurationDebugger({ user, onConfigurationFound }) {
       
       {error && (
         <div className="bg-red-50 border border-red-200 rounded p-3 mb-4">
-          <p className="text-red-600 text-sm font-medium">new row violates row-level security policy for table "ghl_configurations"</p>
+          <p className="text-red-600 text-sm font-medium">{error}</p>
         </div>
       )}
 
@@ -179,6 +179,8 @@ function ConfigurationDebugger({ user, onConfigurationFound }) {
             <div className="text-sm text-gray-600 space-y-1">
               <p><strong>User ID:</strong> {debugData.targetUserId}</p>
               <p><strong>Location ID:</strong> {debugData.targetLocationId}</p>
+              <p><strong>Auth Service:</strong> {authService ? 'Available' : 'Not Available'}</p>
+              <p><strong>JWT:</strong> {authService?.getJWT() ? 'Available' : 'Not Available'}</p>
             </div>
           </div>
 

@@ -7,11 +7,25 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables')
 }
 
+// Create default client
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
+// Function to create authenticated client with JWT
+export function createAuthenticatedClient(jwtToken) {
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${jwtToken}`
+      }
+    }
+  })
+}
+
 // Helper function to get current user's GHL configurations
-export async function getUserGHLConfigurations(userId) {
-  const { data, error } = await supabase
+export async function getUserGHLConfigurations(userId, authService = null) {
+  const client = authService?.getSupabaseClient() || supabase
+  
+  const { data, error } = await client
     .from('ghl_configurations')
     .select('*')
     .eq('user_id', userId)
@@ -26,9 +40,9 @@ export async function getUserGHLConfigurations(userId) {
 }
 
 // Helper function to check if user has any active configurations
-export async function hasActiveGHLConfiguration(userId) {
+export async function hasActiveGHLConfiguration(userId, authService = null) {
   try {
-    const configurations = await getUserGHLConfigurations(userId)
+    const configurations = await getUserGHLConfigurations(userId, authService)
     return configurations.length > 0
   } catch (error) {
     console.error('Error checking GHL configurations:', error)
@@ -37,8 +51,10 @@ export async function hasActiveGHLConfiguration(userId) {
 }
 
 // Helper function to get configuration by location ID
-export async function getGHLConfigurationByLocation(locationId) {
-  const { data, error } = await supabase
+export async function getGHLConfigurationByLocation(locationId, authService = null) {
+  const client = authService?.getSupabaseClient() || supabase
+  
+  const { data, error } = await client
     .from('ghl_configurations')
     .select('*')
     .eq('ghl_account_id', locationId)

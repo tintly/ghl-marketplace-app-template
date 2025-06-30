@@ -59,10 +59,13 @@ export class AuthService {
       const result = await response.json()
       console.log('Authentication successful:', result)
       
-      // Set up Supabase session with the JWT
+      // Store the JWT for later use with Supabase
       if (result.supabaseJWT) {
-        console.log('Setting up Supabase session with JWT...')
-        await this.setupSupabaseSession(result.supabaseJWT)
+        console.log('Storing JWT for Supabase operations...')
+        this.supabaseJWT = result.supabaseJWT
+        
+        // Set up Supabase client with the JWT
+        await this.setupSupabaseClient()
       }
       
       this.currentUser = result.user
@@ -75,28 +78,35 @@ export class AuthService {
     }
   }
 
-  // Set up Supabase session with JWT
-  async setupSupabaseSession(jwtToken) {
+  // Set up Supabase client with custom JWT
+  async setupSupabaseClient() {
     try {
-      const { supabase } = await import('./supabase')
+      const { createClient } = await import('@supabase/supabase-js')
       
-      // Set the session with the JWT
-      const { data, error } = await supabase.auth.setSession({
-        access_token: jwtToken,
-        refresh_token: 'dummy-refresh-token' // Required but not used for custom JWTs
-      })
+      // Create a new Supabase client with the JWT as the access token
+      this.supabaseClient = createClient(
+        import.meta.env.VITE_SUPABASE_URL,
+        import.meta.env.VITE_SUPABASE_ANON_KEY,
+        {
+          global: {
+            headers: {
+              Authorization: `Bearer ${this.supabaseJWT}`
+            }
+          }
+        }
+      )
 
-      if (error) {
-        console.error('Failed to set Supabase session:', error)
-        throw error
-      }
-
-      console.log('Supabase session established successfully')
-      return data
+      console.log('Supabase client configured with custom JWT')
+      return this.supabaseClient
     } catch (error) {
-      console.error('Error setting up Supabase session:', error)
+      console.error('Error setting up Supabase client:', error)
       throw error
     }
+  }
+
+  // Get the configured Supabase client
+  getSupabaseClient() {
+    return this.supabaseClient
   }
 
   // Handle standalone mode for OAuth installations
@@ -122,6 +132,13 @@ export class AuthService {
 
     this.currentUser = standaloneUser
     this.isAuthenticated = true
+    
+    // For standalone mode, use the regular Supabase client
+    const { createClient } = await import('@supabase/supabase-js')
+    this.supabaseClient = createClient(
+      import.meta.env.VITE_SUPABASE_URL,
+      import.meta.env.VITE_SUPABASE_ANON_KEY
+    )
     
     // Clear the installation data after a delay to allow for page refreshes
     setTimeout(() => {
@@ -211,5 +228,9 @@ export class AuthService {
 
   isUserAuthenticated() {
     return this.isAuthenticated
+  }
+
+  getJWT() {
+    return this.supabaseJWT
   }
 }

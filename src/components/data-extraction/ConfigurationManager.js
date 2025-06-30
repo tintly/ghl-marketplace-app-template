@@ -1,9 +1,10 @@
 import { DatabaseService } from '../../services/DatabaseService'
 
 export default class ConfigurationManager {
-  constructor() {
+  constructor(authService = null) {
     this.cache = new Map()
     this.cacheTimeout = 5 * 60 * 1000 // 5 minutes
+    this.authService = authService
   }
 
   async findConfiguration(userId, locationId) {
@@ -22,7 +23,7 @@ export default class ConfigurationManager {
       console.log('=== CONFIGURATION MANAGER LOOKUP ===')
       console.log('Parameters:', { userId, locationId })
 
-      const result = await DatabaseService.findConfiguration(userId, locationId)
+      const result = await DatabaseService.findConfiguration(userId, locationId, this.authService)
       
       if (result.found) {
         console.log('Configuration found:', {

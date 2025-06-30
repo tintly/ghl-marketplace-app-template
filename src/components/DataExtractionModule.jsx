@@ -19,7 +19,8 @@ function DataExtractionModule({ user, authService }) {
       setLoading(true)
       setError(null)
 
-      const configManager = new ConfigurationManager()
+      // Use the authenticated Supabase client from AuthService
+      const configManager = new ConfigurationManager(authService)
       const result = await configManager.findConfiguration(user.userId, user.locationId)
       
       if (result.found) {
@@ -87,6 +88,7 @@ function DataExtractionModule({ user, authService }) {
         {showDebugger && (
           <ConfigurationDebugger 
             user={user} 
+            authService={authService}
             onConfigurationFound={handleConfigurationFound}
           />
         )}
