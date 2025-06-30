@@ -92,8 +92,11 @@ function DataExtractionInterface({ config, user, authService }) {
       const ghlService = new GHLApiService(config.access_token)
       const recreationService = new FieldRecreationService(ghlService)
 
-      // Recreate the field in GoHighLevel
-      console.log('🔄 Recreating field in GoHighLevel...')
+      // Debug the original field metadata to understand folder structure
+      recreationService.debugFieldMetadata(extractionField.original_ghl_field_data)
+
+      // Recreate the field in GoHighLevel with proper folder placement
+      console.log('🔄 Recreating field in GoHighLevel with folder preservation...')
       const recreatedField = await recreationService.recreateField(config.ghl_account_id, extractionField)
       
       console.log('✅ Field recreation completed:', recreatedField)
@@ -280,7 +283,7 @@ function DataExtractionInterface({ config, user, authService }) {
             <span className="text-blue-800">Recreating field in GoHighLevel...</span>
           </div>
           <p className="text-blue-700 text-xs mt-1">
-            This may take a few moments. The field will get a new ID and the configuration will be updated automatically.
+            This may take a few moments. The field will be recreated in the same folder and get a new ID.
           </p>
         </div>
       )}

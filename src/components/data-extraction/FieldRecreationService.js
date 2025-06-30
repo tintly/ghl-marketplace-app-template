@@ -47,6 +47,12 @@ export class FieldRecreationService {
       dataType: originalData.dataType
     }
 
+    // CRITICAL FIX: Preserve the parent folder structure
+    if (originalData.parentId) {
+      fieldData.parentId = originalData.parentId
+      console.log('✅ Preserving parent folder ID:', originalData.parentId)
+    }
+
     // Add optional fields if they exist
     if (originalData.placeholder) {
       fieldData.placeholder = originalData.placeholder
@@ -56,7 +62,17 @@ export class FieldRecreationService {
       fieldData.position = originalData.position
     }
 
-    // Handle picklist options for choice fields - CRITICAL FIX
+    // Preserve field key structure if available
+    if (originalData.fieldKey) {
+      // Extract the field name part from the key for reference
+      const keyParts = originalData.fieldKey.split('.')
+      if (keyParts.length > 1) {
+        console.log('Original field key structure:', originalData.fieldKey)
+        // Note: GHL will generate a new fieldKey, but we log the original for reference
+      }
+    }
+
+    // Handle picklist options for choice fields
     if (this.isChoiceField(originalData.dataType)) {
       const options = this.getFieldOptions(originalData)
       
@@ -75,6 +91,18 @@ export class FieldRecreationService {
     if (originalData.dataType === 'FILE_UPLOAD') {
       fieldData.acceptedFormats = originalData.acceptedFormats || '.pdf,.jpg,.png'
       fieldData.maxFileLimit = originalData.maxFileLimit || 1
+    }
+
+    // Preserve any custom object information
+    if (originalData.model && originalData.model !== 'contact') {
+      fieldData.model = originalData.model
+      console.log('✅ Preserving model type:', originalData.model)
+    }
+
+    // Preserve any additional metadata that might affect folder placement
+    if (originalData.objectId) {
+      fieldData.objectId = originalData.objectId
+      console.log('✅ Preserving object ID:', originalData.objectId)
     }
 
     return fieldData
@@ -221,5 +249,26 @@ export class FieldRecreationService {
     
     console.error('Could not extract field ID from response:', response)
     throw new Error('Unable to extract new field ID from GoHighLevel response')
+  }
+
+  /**
+   * Debug function to log all available field metadata
+   */
+  debugFieldMetadata(originalData) {
+    console.log('=== FIELD METADATA DEBUG ===')
+    console.log('Available properties:', Object.keys(originalData))
+    
+    const importantProps = [
+      'id', 'name', 'dataType', 'fieldKey', 'parentId', 'objectId', 
+      'model', 'position', 'placeholder', 'picklistOptions', 'options'
+    ]
+    
+    importantProps.forEach(prop => {
+      if (originalData.hasOwnProperty(prop)) {
+        console.log(`${prop}:`, originalData[prop])
+      }
+    })
+    
+    console.log('=== END METADATA DEBUG ===')
   }
 }
