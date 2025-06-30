@@ -22,7 +22,7 @@ Go to your Supabase project dashboard → Settings → Edge Functions → Enviro
 - `GHL_MARKETPLACE_CLIENT_ID`: Your GHL marketplace app client ID  
 - `GHL_MARKETPLACE_CLIENT_SECRET`: Your GHL marketplace app client secret
 - `GHL_API_DOMAIN`: `https://services.leadconnectorhq.com`
-- `SUPABASE_JWT_SECRET`: Your Supabase JWT secret (found in Settings → API → JWT Secret)
+- `JWT_SECRET`: Your Supabase JWT secret (found in Settings → API → JWT Secret)
 
 #### In Netlify (for frontend):
 In your Netlify dashboard, add these environment variables:
@@ -44,7 +44,7 @@ This application uses a custom JWT authentication system to bridge GoHighLevel S
 2. **JWT Generation**: Our Edge Function generates a Supabase-compatible JWT with GHL user data
 3. **RLS Enforcement**: Supabase uses the JWT to enforce Row Level Security policies
 
-**Critical**: Make sure `SUPABASE_JWT_SECRET` is set in your Supabase Edge Functions environment. This should be the same secret used to sign your Supabase JWTs (found in Settings → API → JWT Secret).
+**Critical**: Make sure `JWT_SECRET` is set in your Supabase Edge Functions environment. This should be the same secret used to sign your Supabase JWTs (found in Settings → API → JWT Secret).
 
 ### 6. Database Schema
 
@@ -85,7 +85,7 @@ This app integrates with GoHighLevel through:
 - `GHL_MARKETPLACE_CLIENT_ID`: Your GHL marketplace app client ID
 - `GHL_MARKETPLACE_CLIENT_SECRET`: Your GHL marketplace app client secret
 - `GHL_API_DOMAIN`: GoHighLevel API domain (usually `https://services.leadconnectorhq.com`)
-- `SUPABASE_JWT_SECRET`: Your Supabase JWT secret for signing custom JWTs
+- `JWT_SECRET`: Your Supabase JWT secret for signing custom JWTs
 
 ## Project Structure
 
@@ -117,7 +117,7 @@ The app is configured to deploy automatically to Netlify. Make sure to set the r
 ## Troubleshooting
 
 ### JWT Authentication Issues
-- Ensure `SUPABASE_JWT_SECRET` is set in Supabase Edge Functions environment
+- Ensure `JWT_SECRET` is set in Supabase Edge Functions environment
 - Check that the JWT secret matches your Supabase project's JWT secret
 - Verify that RLS policies are using the correct JWT claim functions
 
