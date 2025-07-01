@@ -38,31 +38,42 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
         setFormData({
           field_name: customField.name,
           description: customField.description || `Extract data for ${customField.name} field`,
-          target_ghl_key: customField.key, // Use the key for standard fields
+          target_ghl_key: customField.key,
           field_type: customField.dataType,
           picklist_options: [],
           placeholder: '',
           is_required: false,
           sort_order: 0,
-          original_ghl_field_data: customField // Store the entire standard field object
+          original_ghl_field_data: customField
         })
       } else {
         // This is a GoHighLevel custom field
         const mappedType = mapGHLFieldType(customField.dataType)
         const options = customField.picklistOptions || []
         
+        // Convert simple options to objects with descriptions
+        const enhancedOptions = Array.isArray(options) ? options.map(opt => {
+          if (typeof opt === 'string') {
+            return { value: opt, description: '' }
+          } else if (opt && typeof opt === 'object') {
+            return {
+              value: opt.label || opt.value || opt.key || '',
+              description: opt.description || ''
+            }
+          }
+          return { value: '', description: '' }
+        }).filter(opt => opt.value) : []
+        
         setFormData({
           field_name: customField.name,
           description: `Extract data for ${customField.name} field`,
-          target_ghl_key: customField.id, // Use the id for custom fields
+          target_ghl_key: customField.id,
           field_type: mappedType,
-          picklist_options: Array.isArray(options) ? options.map(opt => 
-            typeof opt === 'string' ? opt : opt.label || opt.value || ''
-          ).filter(Boolean) : [],
+          picklist_options: enhancedOptions,
           placeholder: customField.placeholder || '',
           is_required: false,
           sort_order: 0,
-          original_ghl_field_data: customField // Store the entire GHL field object
+          original_ghl_field_data: customField
         })
       }
     }
@@ -71,7 +82,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    if (loading) return // Prevent double submission
+    if (loading) return
     
     setLoading(true)
     setError(null)
@@ -81,9 +92,8 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
     } catch (error) {
       console.error('Form submission error:', error)
       setError(error.message)
-      setLoading(false) // Only set loading to false on error
+      setLoading(false)
     }
-    // Don't set loading to false on success - let parent component handle it
   }
 
   const handleChange = (field, value) => {
@@ -93,14 +103,20 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
     }))
   }
 
-  const handlePicklistChange = (index, value) => {
+  const handleOptionChange = (index, field, value) => {
     const newOptions = [...formData.picklist_options]
-    newOptions[index] = value
+    newOptions[index] = {
+      ...newOptions[index],
+      [field]: value
+    }
     handleChange('picklist_options', newOptions)
   }
 
   const addPicklistOption = () => {
-    handleChange('picklist_options', [...formData.picklist_options, ''])
+    handleChange('picklist_options', [
+      ...formData.picklist_options, 
+      { value: '', description: '' }
+    ])
   }
 
   const removePicklistOption = (index) => {
@@ -113,7 +129,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 flex-shrink-0">
           <h3 className="text-lg font-medium text-gray-900">
@@ -140,7 +156,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
 
         {/* Scrollable Form Content */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Field Name *
@@ -157,17 +173,20 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description *
+                AI Extraction Instructions *
               </label>
               <textarea
                 value={formData.description}
                 onChange={(e) => handleChange('description', e.target.value)}
-                rows={3}
+                rows={4}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Describe what data should be extracted and how it should be used..."
+                placeholder="Describe what data should be extracted and how the AI should identify it in conversations..."
                 required
                 disabled={loading}
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Write clear instructions for the AI about what to extract and how to identify it in conversations.
+              </p>
             </div>
 
             {/* Show field type for standard fields (read-only) */}
@@ -208,44 +227,83 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
 
             {needsPicklistOptions && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Options
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Choice Options & AI Descriptions *
                 </label>
-                <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md p-3">
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+                  <p className="text-sm text-blue-800">
+                    <strong>💡 AI Tip:</strong> Add descriptions to help the AI understand when to select each option. 
+                    Be specific about the criteria or context that should trigger each choice.
+                  </p>
+                </div>
+                
+                <div className="space-y-4 max-h-64 overflow-y-auto border border-gray-200 rounded-md p-4">
                   {formData.picklist_options.map((option, index) => (
-                    <div key={index} className="flex items-center space-x-2">
-                      <input
-                        type="text"
-                        value={option}
-                        onChange={(e) => handlePicklistChange(index, e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder={`Option ${index + 1}`}
-                        disabled={loading}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removePicklistOption(index)}
-                        className="text-red-600 hover:text-red-700 p-1 disabled:opacity-50"
-                        disabled={loading}
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
+                    <div key={index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm font-medium text-gray-700">Option {index + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => removePicklistOption(index)}
+                          className="text-red-600 hover:text-red-700 p-1 disabled:opacity-50"
+                          disabled={loading || formData.picklist_options.length <= 1}
+                          title="Remove option"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            Option Value *
+                          </label>
+                          <input
+                            type="text"
+                            value={option.value || ''}
+                            onChange={(e) => handleOptionChange(index, 'value', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            placeholder={`Option ${index + 1}`}
+                            disabled={loading}
+                            required
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            AI Description (When to select this option)
+                          </label>
+                          <textarea
+                            value={option.description || ''}
+                            onChange={(e) => handleOptionChange(index, 'description', e.target.value)}
+                            rows={2}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            placeholder="Describe when the AI should select this option..."
+                            disabled={loading}
+                          />
+                        </div>
+                      </div>
                     </div>
                   ))}
+                  
                   <button
                     type="button"
                     onClick={addPicklistOption}
-                    className="text-blue-600 hover:text-blue-700 text-sm flex items-center disabled:opacity-50"
+                    className="w-full text-blue-600 hover:text-blue-700 text-sm flex items-center justify-center py-3 border-2 border-dashed border-blue-300 rounded-lg hover:border-blue-400 transition-colors disabled:opacity-50"
                     disabled={loading}
                   >
-                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
-                    Add Option
+                    Add Another Option
                   </button>
                 </div>
+                
+                <p className="text-xs text-gray-500 mt-2">
+                  Each option needs a value and description. The AI will use descriptions to understand when to select each option.
+                </p>
               </div>
             )}
 
