@@ -7,6 +7,7 @@ import CustomFieldEditForm from './CustomFieldEditForm'
 import CustomFieldsLoader from './CustomFieldsLoader'
 import { GHLApiService } from '../../services/GHLApiService'
 import { FieldRecreationService } from './FieldRecreationService'
+import { isStandardField } from '../../utils/standardContactFields'
 
 function DataExtractionInterface({ config, user, authService }) {
   const [customFields, setCustomFields] = useState([])
@@ -73,7 +74,19 @@ function DataExtractionInterface({ config, user, authService }) {
       throw new Error('Failed to load extraction fields')
     }
 
-    setExtractionFields(data || [])
+    // CRITICAL FIX: Filter out standard fields from custom fields extraction list
+    // Only show extraction fields that correspond to actual custom fields (not standard fields)
+    const customFieldExtractions = (data || []).filter(field => {
+      // Exclude standard fields - they should only appear in the Standard Fields tab
+      const isStandard = isStandardField(field.target_ghl_key)
+      if (isStandard) {
+        console.log(`Filtering out standard field from custom fields list: ${field.field_name} (${field.target_ghl_key})`)
+      }
+      return !isStandard
+    })
+
+    console.log(`Loaded ${data?.length || 0} total extraction fields, ${customFieldExtractions.length} custom field extractions`)
+    setExtractionFields(customFieldExtractions)
   }
 
   const handleCreateNewField = () => {
@@ -302,7 +315,7 @@ function DataExtractionInterface({ config, user, authService }) {
     try {
       // Check if this is a custom field (not standard field) and if options were modified
       const isCustomField = selectedCustomField && !selectedCustomField.key
-      const isEditingCustomField = editingField && !editingField.target_ghl_key.startsWith('contact.')
+      const isEditingCustomField = editingField && !isStandardField(editingField.target_ghl_key)
       
       if ((isCustomField || isEditingCustomField) && needsGHLUpdate(formData)) {
         console.log('=== SYNCING OPTIONS TO GHL CUSTOM FIELD ===')
