@@ -2,6 +2,7 @@ import React from 'react'
 import { Routes, Route } from 'react-router-dom'
 import UserLinking from './UserLinking'
 import DataExtractionModule from './DataExtractionModule'
+import StandardFieldsExtractionModule from './StandardFieldsExtractionModule'
 import InstallationGuide from './InstallationGuide'
 import Navigation from './Navigation'
 
@@ -89,6 +90,15 @@ function DataExtractorApp({ user, authService }) {
               <DataExtractionModule user={user} authService={authService} />
             )
           } />
+          <Route path="/standard-fields" element={
+            needsOAuthInstallation() ? (
+              <div className="text-center py-8">
+                <p className="text-gray-600">Please complete the OAuth installation first.</p>
+              </div>
+            ) : (
+              <StandardFieldsExtractionModule user={user} authService={authService} />
+            )
+          } />
         </Routes>
       </main>
     </div>
@@ -140,9 +150,9 @@ function DashboardHome({ user, needsOAuth }) {
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="text-center p-6 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
-              <div className="text-4xl mb-4">🔍</div>
-              <h4 className="text-lg font-semibold text-gray-900 mb-2">Data Extraction</h4>
-              <p className="text-gray-600 mb-4">Set up custom fields to extract from conversations</p>
+              <div className="text-4xl mb-4">🔧</div>
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">Custom Fields</h4>
+              <p className="text-gray-600 mb-4">Create and configure custom fields for data extraction</p>
               <a
                 href="/data-extraction"
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors inline-block"
@@ -152,12 +162,15 @@ function DashboardHome({ user, needsOAuth }) {
             </div>
             
             <div className="text-center p-6 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
-              <div className="text-4xl mb-4">⚙️</div>
-              <h4 className="text-lg font-semibold text-gray-900 mb-2">Rules & Triggers</h4>
-              <p className="text-gray-600 mb-4">Define when and how data should be extracted</p>
-              <button className="bg-gray-400 text-white px-4 py-2 rounded-md cursor-not-allowed">
-                Coming Soon
-              </button>
+              <div className="text-4xl mb-4">👤</div>
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">Standard Fields</h4>
+              <p className="text-gray-600 mb-4">Configure extraction for built-in contact fields</p>
+              <a
+                href="/standard-fields"
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md transition-colors inline-block"
+              >
+                Configure
+              </a>
             </div>
             
             <div className="text-center p-6 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
