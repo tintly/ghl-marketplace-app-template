@@ -12,7 +12,6 @@ export const GHL_FIELD_TYPE_MAPPING = {
   'PHONE': 'TEXT',
   'MONETORY': 'NUMERICAL',
   'TEXTBOX_LIST': 'TEXT',
-  'FILE_UPLOAD': 'TEXT',
   'EMAIL': 'TEXT'
 }
 
@@ -28,7 +27,6 @@ export const FIELD_TYPE_ICONS = {
   'PHONE': '📞',
   'MONETORY': '💰',
   'TEXTBOX_LIST': '📋',
-  'FILE_UPLOAD': '📎',
   'EMAIL': '📧'
 }
 
@@ -44,7 +42,6 @@ export const FIELD_TYPE_LABELS = {
   'PHONE': 'Phone Number',
   'MONETORY': 'Monetary',
   'TEXTBOX_LIST': 'Text Box List',
-  'FILE_UPLOAD': 'File Upload',
   'EMAIL': 'Email'
 }
 
@@ -86,7 +83,6 @@ export function getExtractionHint(ghlDataType) {
     'PHONE': 'AI will extract phone numbers',
     'MONETORY': 'AI will extract monetary values',
     'TEXTBOX_LIST': 'AI will extract structured text data',
-    'FILE_UPLOAD': 'AI will handle file references',
     'EMAIL': 'AI will extract email addresses'
   }
   

@@ -13,7 +13,7 @@ function CreateCustomFieldForm({ onSubmit, onCancel, customFields = [] }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  // Available field types based on your examples
+  // Available field types (removed FILE_UPLOAD)
   const fieldTypes = [
     { value: 'TEXT', label: 'Single Line Text', icon: '📝' },
     { value: 'LARGE_TEXT', label: 'Multi Line Text', icon: '📄' },
@@ -26,8 +26,7 @@ function CreateCustomFieldForm({ onSubmit, onCancel, customFields = [] }) {
     { value: 'MULTIPLE_OPTIONS', label: 'Multi Select Dropdown', icon: '☑️' },
     { value: 'RADIO', label: 'Radio Select', icon: '🔘' },
     { value: 'CHECKBOX', label: 'Checkbox', icon: '✅' },
-    { value: 'TEXTBOX_LIST', label: 'Text Box List', icon: '📋' },
-    { value: 'FILE_UPLOAD', label: 'File Upload', icon: '📎' }
+    { value: 'TEXTBOX_LIST', label: 'Text Box List', icon: '📋' }
   ]
 
   // Get available folders from existing custom fields

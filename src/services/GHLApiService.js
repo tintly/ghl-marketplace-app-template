@@ -157,15 +157,6 @@ export class GHLApiService {
       }
     }
 
-    // Handle file upload specific fields
-    if (fieldData.dataType === 'FILE_UPLOAD') {
-      payload.acceptedFormat = fieldData.acceptedFormats ? 
-        fieldData.acceptedFormats.split(',').map(f => f.trim()) : 
-        ['.pdf']
-      payload.isMultipleFile = fieldData.maxFileLimit > 1
-      payload.maxNumberOfFiles = fieldData.maxFileLimit || 1
-    }
-
     // Remove any properties that shouldn't be there
     delete payload.picklistOptions
 
