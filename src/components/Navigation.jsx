@@ -32,6 +32,15 @@ function Navigation() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
         </svg>
       )
+    },
+    {
+      path: '/conversations',
+      label: 'Conversations',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-3.582 8-8 8a8.955 8.955 0 01-2.697-.413l-3.178 1.059a1 1 0 01-1.272-1.272l1.059-3.178A8.955 8.955 0 013 12a8 8 0 018-8 8 8 0 018 8z" />
+        </svg>
+      )
     }
   ]
 
