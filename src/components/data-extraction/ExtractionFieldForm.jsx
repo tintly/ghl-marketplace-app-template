@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getFieldTypeLabel, mapGHLFieldType } from '../../utils/customFieldUtils'
+import { getFieldTypeLabel, mapGHLFieldType, mapStandardFieldType } from '../../utils/customFieldUtils'
 import { isStandardField } from '../../utils/standardContactFields'
 
 function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) {
@@ -19,7 +19,6 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
 
   useEffect(() => {
     if (editingField) {
-      // Editing existing field - merge stored options with live GHL options if available
       const enhancedOptions = mergeOptionsWithLiveData(editingField)
       
       setFormData({
@@ -34,14 +33,22 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
         original_ghl_field_data: editingField.original_ghl_field_data || {}
       })
     } else if (customField) {
-      // Creating new field from custom field or standard field
       if (customField.key && isStandardField(customField.key)) {
-        // This is a standard field
+        // CRITICAL FIX: Use the correct field type mapping for standard fields
+        const mappedType = mapStandardFieldType(customField.dataType)
+        
+        console.log('Setting up standard field:', {
+          name: customField.name,
+          key: customField.key,
+          originalDataType: customField.dataType,
+          mappedType: mappedType
+        })
+        
         setFormData({
           field_name: customField.name,
           description: customField.description || `Extract data for ${customField.name} field`,
           target_ghl_key: customField.key,
-          field_type: customField.dataType,
+          field_type: mappedType, // Use the correctly mapped type
           picklist_options: [],
           placeholder: '',
           is_required: false,
@@ -53,7 +60,6 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
         const mappedType = mapGHLFieldType(customField.dataType)
         const options = customField.picklistOptions || []
         
-        // Convert simple options to objects with descriptions
         const enhancedOptions = Array.isArray(options) ? options.map(opt => {
           if (typeof opt === 'string') {
             return { value: opt, description: '' }
@@ -81,14 +87,10 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
     }
   }, [customField, editingField])
 
-  // Helper function to merge stored extraction options with live GHL field data
   const mergeOptionsWithLiveData = (extractionField) => {
-    // Get the live custom field data from the parent component's context
-    // This would be passed down from DataExtractionInterface
     const liveCustomField = window.currentCustomFields?.find(cf => cf.id === extractionField.target_ghl_key)
     
     if (liveCustomField && liveCustomField.picklistOptions) {
-      // We have live data from GHL - use it as the source of truth for option values
       const liveOptions = liveCustomField.picklistOptions
       const storedOptions = extractionField.picklist_options || []
       
@@ -97,11 +99,9 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
         storedOptions
       })
       
-      // Create enhanced options by combining live values with stored descriptions
       return liveOptions.map(liveOption => {
         const liveValue = typeof liveOption === 'string' ? liveOption : (liveOption.label || liveOption.value || liveOption)
         
-        // Find matching stored option by value
         const storedOption = storedOptions.find(stored => {
           const storedValue = typeof stored === 'string' ? stored : stored.value
           return storedValue === liveValue
@@ -114,7 +114,6 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
       })
     }
     
-    // No live data available, use stored options
     const storedOptions = extractionField.picklist_options || []
     return Array.isArray(storedOptions) ? storedOptions.map(opt => {
       if (typeof opt === 'string') {
@@ -138,6 +137,20 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
     setError(null)
 
     try {
+      // CRITICAL FIX: Validate field type before submission
+      const validFieldTypes = ['TEXT', 'NUMERICAL', 'SINGLE_OPTIONS', 'MULTIPLE_OPTIONS', 'DATE', 'EMAIL', 'PHONE']
+      
+      if (!validFieldTypes.includes(formData.field_type)) {
+        throw new Error(`Invalid field type: ${formData.field_type}. Must be one of: ${validFieldTypes.join(', ')}`)
+      }
+
+      console.log('Submitting extraction field with validated data:', {
+        field_name: formData.field_name,
+        field_type: formData.field_type,
+        target_ghl_key: formData.target_ghl_key,
+        is_standard: isStandardField(formData.target_ghl_key)
+      })
+
       await onSubmit(formData)
     } catch (error) {
       console.error('Form submission error:', error)
@@ -252,7 +265,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
                   disabled
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Standard field types cannot be changed
+                  Standard field types cannot be changed. Detected type: {formData.field_type}
                 </p>
               </div>
             ) : (
@@ -267,6 +280,8 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
                   disabled={loading}
                 >
                   <option value="TEXT">Text</option>
+                  <option value="EMAIL">Email</option>
+                  <option value="PHONE">Phone Number</option>
                   <option value="NUMERICAL">Numerical</option>
                   <option value="SINGLE_OPTIONS">Single Choice</option>
                   <option value="MULTIPLE_OPTIONS">Multiple Choice</option>

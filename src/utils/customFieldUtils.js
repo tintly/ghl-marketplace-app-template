@@ -9,10 +9,10 @@ export const GHL_FIELD_TYPE_MAPPING = {
   'CHECKBOX': 'MULTIPLE_OPTIONS',
   'RADIO': 'SINGLE_OPTIONS',
   'DATE': 'DATE',
-  'PHONE': 'TEXT',
+  'PHONE': 'PHONE',
   'MONETORY': 'NUMERICAL',
   'TEXTBOX_LIST': 'TEXT',
-  'EMAIL': 'TEXT'
+  'EMAIL': 'EMAIL'
 }
 
 export const FIELD_TYPE_ICONS = {
@@ -57,6 +57,18 @@ export function mapGHLFieldType(ghlDataType) {
   return GHL_FIELD_TYPE_MAPPING[ghlDataType] || 'TEXT'
 }
 
+// CRITICAL FIX: Map standard field data types correctly
+export function mapStandardFieldType(standardFieldDataType) {
+  const mapping = {
+    'TEXT': 'TEXT',
+    'EMAIL': 'EMAIL',
+    'PHONE': 'PHONE', 
+    'DATE': 'DATE',
+    'NUMERICAL': 'NUMERICAL'
+  }
+  return mapping[standardFieldDataType] || 'TEXT'
+}
+
 export function formatFieldType(dataType) {
   return getFieldTypeLabel(dataType)
 }
@@ -66,7 +78,6 @@ export function isPicklistField(dataType) {
 }
 
 export function canExtractToField(ghlDataType) {
-  // All field types can be extracted to, but some may need special handling
   return true
 }
 
@@ -92,10 +103,8 @@ export function getExtractionHint(ghlDataType) {
 export function validateFieldKey(fieldKey) {
   if (!fieldKey || typeof fieldKey !== 'string') return false
   
-  // Should contain at least one dot
   if (!fieldKey.includes('.')) return false
   
-  // Should not start or end with dot
   if (fieldKey.startsWith('.') || fieldKey.endsWith('.')) return false
   
   return true
@@ -104,7 +113,6 @@ export function validateFieldKey(fieldKey) {
 export function extractObjectKey(fieldKey) {
   if (!fieldKey) return 'contact'
   
-  // For custom objects: "custom_object.pet.name" -> "custom_object.pet"
   if (fieldKey.startsWith('custom_object.')) {
     const parts = fieldKey.split('.')
     if (parts.length >= 3) {
@@ -112,7 +120,6 @@ export function extractObjectKey(fieldKey) {
     }
   }
   
-  // For standard objects: "contact.field_name" -> "contact"
   const parts = fieldKey.split('.')
   return parts[0] || 'contact'
 }
