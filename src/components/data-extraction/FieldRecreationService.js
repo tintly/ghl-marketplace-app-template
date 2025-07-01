@@ -18,24 +18,72 @@ export class FieldRecreationService {
 
       console.log('Original field data:', originalData)
 
-      // Prepare field data for recreation
+      // Debug the parent folder information
+      this.debugParentFolderInfo(originalData)
+
+      // Prepare field data for recreation with explicit parentId handling
       const fieldData = this.prepareFieldDataForRecreation(originalData)
       console.log('Prepared field data for GHL API:', fieldData)
 
       // Validate field data before recreation
       this.validateFieldData(fieldData)
 
-      // Create the field in GoHighLevel
-      console.log('🔄 Creating field in GoHighLevel...')
+      // Create the field in GoHighLevel with explicit parentId
+      console.log('🔄 Creating field in GoHighLevel with parentId:', fieldData.parentId || 'root level')
       const recreatedField = await this.ghlApiService.createCustomField(locationId, fieldData)
       console.log('✅ Field recreated successfully in GHL:', recreatedField)
 
-      // Return the complete response with the new field ID
+      // Verify the parentId was preserved
+      this.verifyParentIdPreservation(originalData, recreatedField)
+
       return recreatedField
     } catch (error) {
       console.error('❌ Field recreation error:', error)
       throw new Error(`Failed to recreate field: ${error.message}`)
     }
+  }
+
+  /**
+   * Debug parent folder information
+   */
+  debugParentFolderInfo(originalData) {
+    console.log('=== PARENT FOLDER DEBUG ===')
+    console.log('Original parentId:', originalData.parentId)
+    console.log('Original fieldKey:', originalData.fieldKey)
+    console.log('Original model:', originalData.model)
+    console.log('Original objectId:', originalData.objectId)
+    console.log('Original position:', originalData.position)
+    
+    if (originalData.parentId) {
+      console.log('🗂️ Field was in folder with ID:', originalData.parentId)
+    } else {
+      console.log('🗂️ Field was at root level (no parent folder)')
+    }
+    console.log('=== END PARENT FOLDER DEBUG ===')
+  }
+
+  /**
+   * Verify that parentId was preserved after recreation
+   */
+  verifyParentIdPreservation(originalData, recreatedField) {
+    const originalParentId = originalData.parentId
+    const newField = recreatedField.customField || recreatedField
+    const newParentId = newField.parentId
+
+    console.log('=== PARENT ID VERIFICATION ===')
+    console.log('Original parentId:', originalParentId)
+    console.log('New parentId:', newParentId)
+
+    if (originalParentId && newParentId === originalParentId) {
+      console.log('✅ SUCCESS: parentId preserved correctly')
+    } else if (!originalParentId && !newParentId) {
+      console.log('✅ SUCCESS: Root level placement preserved')
+    } else {
+      console.log('⚠️ WARNING: parentId mismatch!')
+      console.log('Expected:', originalParentId || 'null (root level)')
+      console.log('Actual:', newParentId || 'null (root level)')
+    }
+    console.log('=== END VERIFICATION ===')
   }
 
   /**
@@ -47,12 +95,21 @@ export class FieldRecreationService {
       dataType: originalData.dataType
     }
 
-    // CRITICAL FIX: Preserve the parent folder structure
+    // CRITICAL: Explicitly preserve the parent folder structure
+    // This is the most important part for maintaining folder placement
     if (originalData.parentId) {
       fieldData.parentId = originalData.parentId
-      console.log('✅ Preserving parent folder ID:', originalData.parentId)
+      console.log('🗂️ CRITICAL: Setting parentId to preserve folder placement:', originalData.parentId)
     } else {
-      console.log('ℹ️ No parent folder - field will be created at root level')
+      console.log('🗂️ INFO: No parentId - field will be created at root level')
+      // Explicitly set to null to ensure it's not undefined
+      fieldData.parentId = null
+    }
+
+    // Preserve position to maintain field ordering within the folder
+    if (originalData.position !== undefined && originalData.position !== null) {
+      fieldData.position = originalData.position
+      console.log('📍 Preserving field position:', originalData.position)
     }
 
     // Add optional fields if they exist
@@ -60,18 +117,21 @@ export class FieldRecreationService {
       fieldData.placeholder = originalData.placeholder
     }
 
-    if (originalData.position !== undefined) {
-      fieldData.position = originalData.position
+    // Preserve model information (contact, custom object, etc.)
+    if (originalData.model) {
+      fieldData.model = originalData.model
+      console.log('📋 Preserving model type:', originalData.model)
     }
 
-    // Preserve field key structure if available
-    if (originalData.fieldKey) {
-      // Extract the field name part from the key for reference
-      const keyParts = originalData.fieldKey.split('.')
-      if (keyParts.length > 1) {
-        console.log('Original field key structure:', originalData.fieldKey)
-        // Note: GHL will generate a new fieldKey, but we log the original for reference
-      }
+    // Preserve object-related IDs that might affect folder placement
+    if (originalData.objectId) {
+      fieldData.objectId = originalData.objectId
+      console.log('🔗 Preserving objectId:', originalData.objectId)
+    }
+
+    if (originalData.objectSchemaId) {
+      fieldData.objectSchemaId = originalData.objectSchemaId
+      console.log('📊 Preserving objectSchemaId:', originalData.objectSchemaId)
     }
 
     // Handle picklist options for choice fields
@@ -79,13 +139,11 @@ export class FieldRecreationService {
       const options = this.getFieldOptions(originalData)
       
       if (options.length === 0) {
-        // If no options are available, create default options
         fieldData.picklistOptions = this.createDefaultOptions(originalData.dataType)
-        console.log('⚠️ Created default options for field (no original options found):', fieldData.picklistOptions)
+        console.log('⚠️ Created default options (no original options found):', fieldData.picklistOptions)
       } else {
-        // Normalize options to simple string array for GHL API
         fieldData.picklistOptions = this.normalizeOptionsToStrings(options)
-        console.log('✅ Using existing options for field:', fieldData.picklistOptions)
+        console.log('✅ Using existing options:', fieldData.picklistOptions)
       }
     }
 
@@ -95,23 +153,15 @@ export class FieldRecreationService {
       fieldData.maxFileLimit = originalData.maxFileLimit || 1
     }
 
-    // Preserve any custom object information
-    if (originalData.model && originalData.model !== 'contact') {
-      fieldData.model = originalData.model
-      console.log('✅ Preserving model type:', originalData.model)
-    }
-
-    // Preserve any additional metadata that might affect folder placement
-    if (originalData.objectId) {
-      fieldData.objectId = originalData.objectId
-      console.log('✅ Preserving object ID:', originalData.objectId)
-    }
-
-    // Preserve any custom object schema information
-    if (originalData.objectSchemaId) {
-      fieldData.objectSchemaId = originalData.objectSchemaId
-      console.log('✅ Preserving object schema ID:', originalData.objectSchemaId)
-    }
+    // Log the final field data to verify parentId is included
+    console.log('🔍 Final field data prepared for API call:', {
+      name: fieldData.name,
+      dataType: fieldData.dataType,
+      parentId: fieldData.parentId,
+      position: fieldData.position,
+      model: fieldData.model,
+      hasOptions: !!fieldData.picklistOptions
+    })
 
     return fieldData
   }
@@ -120,13 +170,12 @@ export class FieldRecreationService {
    * Get field options from various possible sources in the original data
    */
   getFieldOptions(originalData) {
-    // Try multiple possible option sources
     const possibleSources = [
       originalData.picklistOptions,
       originalData.options,
       originalData.choices,
       originalData.values,
-      originalData.textBoxListOptions // For TEXTBOX_LIST fields
+      originalData.textBoxListOptions
     ]
 
     for (const source of possibleSources) {
@@ -172,13 +221,12 @@ export class FieldRecreationService {
       if (typeof option === 'string') {
         return option.trim()
       } else if (option && typeof option === 'object') {
-        // Handle different object structures
         const value = option.label || option.value || option.key || option.name || option.text
         return value ? String(value).trim() : `Option ${index + 1}`
       } else {
         return `Option ${index + 1}`
       }
-    }).filter(Boolean) // Remove any empty values
+    }).filter(Boolean)
   }
 
   /**
@@ -192,7 +240,6 @@ export class FieldRecreationService {
       throw new Error(`Missing required fields for recreation: ${missing.join(', ')}`)
     }
 
-    // Validate field name
     if (!fieldData.name || fieldData.name.trim().length === 0) {
       throw new Error('Field name cannot be empty')
     }
@@ -203,13 +250,11 @@ export class FieldRecreationService {
         throw new Error(`Choice field type ${fieldData.dataType} requires at least one option`)
       }
 
-      // Ensure all options are valid strings
       const invalidOptions = fieldData.picklistOptions.filter(opt => !opt || typeof opt !== 'string' || opt.trim() === '')
       if (invalidOptions.length > 0) {
         throw new Error(`All options must be non-empty strings. Found ${invalidOptions.length} invalid options`)
       }
 
-      // Check for duplicate options
       const uniqueOptions = [...new Set(fieldData.picklistOptions)]
       if (uniqueOptions.length !== fieldData.picklistOptions.length) {
         console.log('⚠️ Removing duplicate options from field')
@@ -217,46 +262,18 @@ export class FieldRecreationService {
       }
     }
 
+    // Validate parentId if present
+    if (fieldData.parentId !== null && fieldData.parentId !== undefined) {
+      if (typeof fieldData.parentId !== 'string' || fieldData.parentId.trim() === '') {
+        console.log('⚠️ Invalid parentId detected, setting to null')
+        fieldData.parentId = null
+      } else {
+        console.log('✅ Valid parentId found:', fieldData.parentId)
+      }
+    }
+
     console.log('✅ Field data validation passed')
     return true
-  }
-
-  /**
-   * Get field type compatibility info
-   */
-  getFieldTypeInfo(dataType) {
-    const supportedTypes = [
-      'TEXT', 'LARGE_TEXT', 'NUMERICAL', 'PHONE', 'MONETORY', 
-      'CHECKBOX', 'SINGLE_OPTIONS', 'MULTIPLE_OPTIONS', 'DATE', 
-      'TEXTBOX_LIST', 'FILE_UPLOAD', 'RADIO', 'EMAIL'
-    ]
-
-    return {
-      isSupported: supportedTypes.includes(dataType),
-      dataType,
-      requiresOptions: this.isChoiceField(dataType)
-    }
-  }
-
-  /**
-   * Extract the new field ID from the GHL API response
-   */
-  extractNewFieldId(response) {
-    // Handle different response structures from GHL API
-    if (response.customField && response.customField.id) {
-      return response.customField.id
-    }
-    
-    if (response.id) {
-      return response.id
-    }
-    
-    if (response.data && response.data.id) {
-      return response.data.id
-    }
-    
-    console.error('Could not extract field ID from response:', response)
-    throw new Error('Unable to extract new field ID from GoHighLevel response')
   }
 
   /**
@@ -269,7 +286,7 @@ export class FieldRecreationService {
     const importantProps = [
       'id', 'name', 'dataType', 'fieldKey', 'parentId', 'objectId', 
       'model', 'position', 'placeholder', 'picklistOptions', 'options',
-      'objectSchemaId', 'standard'
+      'objectSchemaId', 'standard', 'locationId', 'documentType'
     ]
     
     importantProps.forEach(prop => {

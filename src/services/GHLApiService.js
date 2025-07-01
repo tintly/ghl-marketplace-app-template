@@ -51,10 +51,11 @@ export class GHLApiService {
 
   async createCustomField(locationId, fieldData) {
     try {
-      console.log('Creating custom field in GHL:', { locationId, fieldData })
+      console.log('=== GHL API: CREATING CUSTOM FIELD ===')
+      console.log('Location ID:', locationId)
+      console.log('Field Data:', fieldData)
       
       // Always use the contact fields endpoint for now
-      // The custom objects endpoint has different requirements
       return await this.createContactField(locationId, fieldData)
     } catch (error) {
       console.error('Error creating custom field:', error)
@@ -63,7 +64,8 @@ export class GHLApiService {
   }
 
   async createContactField(locationId, fieldData) {
-    console.log('Creating contact field using /locations/{locationId}/customFields endpoint')
+    console.log('=== CREATING CONTACT FIELD ===')
+    console.log('Using endpoint: /locations/{locationId}/customFields')
     
     const endpoint = `/locations/${locationId}/customFields`
     
@@ -71,7 +73,15 @@ export class GHLApiService {
     const payload = {
       name: fieldData.name,
       dataType: fieldData.dataType,
-      model: 'contact' // Required for contact fields
+      model: fieldData.model || 'contact' // Default to contact if not specified
+    }
+
+    // CRITICAL: Include parentId to preserve folder structure
+    if (fieldData.parentId !== null && fieldData.parentId !== undefined) {
+      payload.parentId = fieldData.parentId
+      console.log('🗂️ CRITICAL: Including parentId in API payload:', fieldData.parentId)
+    } else {
+      console.log('🗂️ INFO: No parentId - field will be created at root level')
     }
 
     // Add optional fields if provided
@@ -80,8 +90,20 @@ export class GHLApiService {
     }
 
     // Add position if specified
-    if (fieldData.position !== undefined) {
+    if (fieldData.position !== undefined && fieldData.position !== null) {
       payload.position = fieldData.position
+      console.log('📍 Including position in API payload:', fieldData.position)
+    }
+
+    // Add object-related fields that might affect folder placement
+    if (fieldData.objectId) {
+      payload.objectId = fieldData.objectId
+      console.log('🔗 Including objectId in API payload:', fieldData.objectId)
+    }
+
+    if (fieldData.objectSchemaId) {
+      payload.objectSchemaId = fieldData.objectSchemaId
+      console.log('📊 Including objectSchemaId in API payload:', fieldData.objectSchemaId)
     }
 
     // Handle different field types with their specific requirements
@@ -99,6 +121,7 @@ export class GHLApiService {
             prefillValue: '',
             position: index
           }))
+          console.log('📋 Using textBoxListOptions for TEXTBOX_LIST field')
           break
 
         case 'SINGLE_OPTIONS':
@@ -107,14 +130,15 @@ export class GHLApiService {
           payload.options = fieldData.picklistOptions.map(option => 
             typeof option === 'string' ? option : (option.label || option.key || 'Option')
           )
+          console.log('🔘 Using options array for choice field')
           break
 
         case 'CHECKBOX':
-          // For checkbox, we might need to handle differently
-          // Let's try with options first
+          // For checkbox, use options
           payload.options = fieldData.picklistOptions.map(option => 
             typeof option === 'string' ? option : (option.label || option.key || 'Option')
           )
+          console.log('✅ Using options array for checkbox field')
           break
 
         case 'RADIO':
@@ -122,6 +146,7 @@ export class GHLApiService {
           payload.options = fieldData.picklistOptions.map(option => 
             typeof option === 'string' ? option : (option.label || option.key || 'Option')
           )
+          console.log('🔘 Using options array for radio field')
           break
 
         default:
@@ -142,17 +167,34 @@ export class GHLApiService {
     }
 
     // Remove any properties that shouldn't be there
-    // The API specifically complained about picklistOptions
     delete payload.picklistOptions
 
-    console.log('Contact field payload:', JSON.stringify(payload, null, 2))
+    console.log('=== FINAL API PAYLOAD ===')
+    console.log('Payload being sent to GHL:', JSON.stringify(payload, null, 2))
+    console.log('Key fields for folder placement:')
+    console.log('- parentId:', payload.parentId)
+    console.log('- position:', payload.position)
+    console.log('- model:', payload.model)
+    console.log('- objectId:', payload.objectId)
+    console.log('=== END PAYLOAD DEBUG ===')
 
     const response = await this.makeRequest(endpoint, {
       method: 'POST',
       body: payload
     })
 
-    console.log('Contact field created successfully:', response)
+    console.log('=== GHL API RESPONSE ===')
+    console.log('Field created successfully:', response)
+    
+    // Log the parentId in the response to verify it was preserved
+    const createdField = response.customField || response
+    if (createdField.parentId) {
+      console.log('✅ SUCCESS: Response contains parentId:', createdField.parentId)
+    } else {
+      console.log('⚠️ WARNING: Response does not contain parentId - field may be at root level')
+    }
+    console.log('=== END API RESPONSE ===')
+    
     return response
   }
 
@@ -170,6 +212,12 @@ export class GHLApiService {
         name: fieldData.name,
         placeholder: fieldData.placeholder || '',
         position: fieldData.position
+      }
+
+      // CRITICAL: Include parentId when updating to preserve folder structure
+      if (fieldData.parentId !== null && fieldData.parentId !== undefined) {
+        payload.parentId = fieldData.parentId
+        console.log('🗂️ Including parentId in update payload:', fieldData.parentId)
       }
 
       // For choice fields, use options instead of picklistOptions

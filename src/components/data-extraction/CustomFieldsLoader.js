@@ -64,15 +64,30 @@ export default class CustomFieldsLoader {
               id: freshField.id,
               name: freshField.name,
               dataType: freshField.dataType,
-              parentId: freshField.parentId,
-              fieldKey: freshField.fieldKey
+              parentId: freshField.parentId, // CRITICAL: Log parentId updates
+              fieldKey: freshField.fieldKey,
+              position: freshField.position
             })
 
-            // Update the stored field data with fresh information
+            // CRITICAL: Ensure we preserve ALL field metadata including parentId
+            const completeFieldData = {
+              ...freshField,
+              // Ensure critical folder placement data is preserved
+              parentId: freshField.parentId || null,
+              position: freshField.position || 0,
+              fieldKey: freshField.fieldKey,
+              model: freshField.model || 'contact',
+              objectId: freshField.objectId || null,
+              objectSchemaId: freshField.objectSchemaId || null
+            }
+
+            console.log('🗂️ CRITICAL: Preserving parentId in stored data:', completeFieldData.parentId)
+
+            // Update the stored field data with complete fresh information
             const { error: updateError } = await supabase
               .from('data_extraction_fields')
               .update({
-                original_ghl_field_data: freshField, // Store complete fresh field data
+                original_ghl_field_data: completeFieldData, // Store complete fresh field data with parentId
                 updated_at: new Date().toISOString()
               })
               .eq('id', extractionField.id)
@@ -81,15 +96,17 @@ export default class CustomFieldsLoader {
               console.error(`Error updating field ${extractionField.field_name}:`, updateError)
             } else {
               console.log(`✅ Successfully updated stored data for: ${extractionField.field_name}`)
+              console.log(`🗂️ Stored parentId: ${completeFieldData.parentId}`)
             }
           } else {
             console.log(`⚠️ Field no longer exists in GHL: ${extractionField.field_name} (ID: ${extractionField.target_ghl_key})`)
             
-            // Field was deleted from GHL - keep the existing stored data but log it
+            // Field was deleted from GHL - preserve the existing stored data
             if (!extractionField.original_ghl_field_data || Object.keys(extractionField.original_ghl_field_data).length === 0) {
               console.log(`❌ No stored data available for deleted field: ${extractionField.field_name}`)
             } else {
               console.log(`✅ Preserved stored data for deleted field: ${extractionField.field_name}`)
+              console.log(`🗂️ Preserved parentId: ${extractionField.original_ghl_field_data.parentId}`)
             }
           }
         } catch (error) {
@@ -99,7 +116,7 @@ export default class CustomFieldsLoader {
 
       // Wait for all updates to complete
       await Promise.all(updatePromises)
-      console.log('✅ Finished updating stored field data')
+      console.log('✅ Finished updating stored field data with parentId preservation')
 
     } catch (error) {
       console.error('Error updating stored field data:', error)
@@ -146,7 +163,7 @@ export default class CustomFieldsLoader {
         position: 150,
         standard: false,
         picklistOptions: ["Consultation", "Installation", "Maintenance", "Repair"],
-        parentId: null
+        parentId: "mock-folder-id" // Mock folder to test folder preservation
       },
       {
         id: "mock-date-field",
@@ -169,7 +186,7 @@ export default class CustomFieldsLoader {
         position: 250,
         standard: false,
         picklistOptions: ["Low", "Medium", "High", "Urgent"],
-        parentId: null
+        parentId: "mock-folder-id" // Mock folder to test folder preservation
       }
     ]
   }
