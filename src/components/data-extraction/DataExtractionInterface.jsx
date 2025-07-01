@@ -28,6 +28,14 @@ function DataExtractionInterface({ config, user, authService }) {
     loadData()
   }, [config])
 
+  // Make custom fields available globally for the extraction form
+  useEffect(() => {
+    window.currentCustomFields = customFields
+    return () => {
+      delete window.currentCustomFields
+    }
+  }, [customFields])
+
   const loadData = async () => {
     try {
       setLoading(true)
@@ -561,6 +569,7 @@ function DataExtractionInterface({ config, user, authService }) {
           editingField={editingField}
           onSubmit={handleFormSubmit}
           onCancel={handleFormClose}
+          customFields={customFields}
         />
       )}
     </div>

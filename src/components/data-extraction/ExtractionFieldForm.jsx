@@ -19,13 +19,15 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
 
   useEffect(() => {
     if (editingField) {
-      // Editing existing field
+      // Editing existing field - merge stored options with live GHL options if available
+      const enhancedOptions = mergeOptionsWithLiveData(editingField)
+      
       setFormData({
         field_name: editingField.field_name,
         description: editingField.description,
         target_ghl_key: editingField.target_ghl_key,
         field_type: editingField.field_type,
-        picklist_options: editingField.picklist_options || [],
+        picklist_options: enhancedOptions,
         placeholder: editingField.placeholder || '',
         is_required: editingField.is_required,
         sort_order: editingField.sort_order,
@@ -78,6 +80,54 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
       }
     }
   }, [customField, editingField])
+
+  // Helper function to merge stored extraction options with live GHL field data
+  const mergeOptionsWithLiveData = (extractionField) => {
+    // Get the live custom field data from the parent component's context
+    // This would be passed down from DataExtractionInterface
+    const liveCustomField = window.currentCustomFields?.find(cf => cf.id === extractionField.target_ghl_key)
+    
+    if (liveCustomField && liveCustomField.picklistOptions) {
+      // We have live data from GHL - use it as the source of truth for option values
+      const liveOptions = liveCustomField.picklistOptions
+      const storedOptions = extractionField.picklist_options || []
+      
+      console.log('Merging live GHL options with stored descriptions:', {
+        liveOptions,
+        storedOptions
+      })
+      
+      // Create enhanced options by combining live values with stored descriptions
+      return liveOptions.map(liveOption => {
+        const liveValue = typeof liveOption === 'string' ? liveOption : (liveOption.label || liveOption.value || liveOption)
+        
+        // Find matching stored option by value
+        const storedOption = storedOptions.find(stored => {
+          const storedValue = typeof stored === 'string' ? stored : stored.value
+          return storedValue === liveValue
+        })
+        
+        return {
+          value: liveValue,
+          description: storedOption?.description || ''
+        }
+      })
+    }
+    
+    // No live data available, use stored options
+    const storedOptions = extractionField.picklist_options || []
+    return Array.isArray(storedOptions) ? storedOptions.map(opt => {
+      if (typeof opt === 'string') {
+        return { value: opt, description: '' }
+      } else if (opt && typeof opt === 'object') {
+        return {
+          value: opt.value || opt.label || opt.key || '',
+          description: opt.description || ''
+        }
+      }
+      return { value: '', description: '' }
+    }).filter(opt => opt.value) : []
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -235,6 +285,11 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
                     <strong>💡 AI Tip:</strong> Add descriptions to help the AI understand when to select each option. 
                     Be specific about the criteria or context that should trigger each choice.
                   </p>
+                  {editingField && (
+                    <p className="text-xs text-blue-700 mt-1">
+                      <strong>Note:</strong> Option values are synced from GoHighLevel. You can only edit the AI descriptions here.
+                    </p>
+                  )}
                 </div>
                 
                 <div className="space-y-4 max-h-64 overflow-y-auto border border-gray-200 rounded-md p-4">

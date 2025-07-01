@@ -14,13 +14,13 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
     const customField = getCustomFieldInfo(field.target_ghl_key)
     
     if (customField) {
-      // Field is active in GHL
+      // Field is active in GHL - use LIVE data from GHL
       return {
         isActive: true,
         name: customField.name,
         dataType: customField.dataType,
-        picklistOptions: customField.picklistOptions || [],
-        source: 'ghl'
+        picklistOptions: customField.picklistOptions || [], // Use live options from GHL
+        source: 'ghl_live'
       }
     } else if (field.original_ghl_field_data && Object.keys(field.original_ghl_field_data).length > 0) {
       // Field is inactive, use stored data
@@ -64,6 +64,34 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
     }
   }
 
+  const getOptionsToDisplay = (field, displayData) => {
+    // For active fields, always show the live options from GHL
+    if (displayData.isActive && displayData.picklistOptions && displayData.picklistOptions.length > 0) {
+      return displayData.picklistOptions
+    }
+    
+    // For inactive fields, show stored options
+    if (!displayData.isActive && displayData.picklistOptions && displayData.picklistOptions.length > 0) {
+      return displayData.picklistOptions
+    }
+    
+    // Fallback to extraction field options (legacy)
+    if (field.picklist_options && field.picklist_options.length > 0) {
+      return field.picklist_options
+    }
+    
+    return []
+  }
+
+  const formatOptionForDisplay = (option) => {
+    if (typeof option === 'string') {
+      return option
+    } else if (option && typeof option === 'object') {
+      return option.label || option.value || option.key || option.name || option
+    }
+    return String(option)
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -86,7 +114,8 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
           {extractionFields.map((field) => {
             const displayData = getFieldDisplayData(field)
             const canRecreate = canRecreateField(field)
-            const isRecreatingThis = recreating // You could make this more specific per field if needed
+            const isRecreatingThis = recreating
+            const optionsToDisplay = getOptionsToDisplay(field, displayData)
             
             return (
               <div
@@ -119,6 +148,13 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
                           Required
                         </span>
                       )}
+
+                      {/* Show sync status for active fields */}
+                      {displayData.isActive && displayData.source === 'ghl_live' && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          Live Sync
+                        </span>
+                      )}
                     </div>
                     
                     <div className="text-sm text-gray-600 space-y-1">
@@ -135,21 +171,24 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
                         <p><span className="font-medium">Placeholder:</span> {field.placeholder}</p>
                       )}
                       
-                      {displayData.picklistOptions && displayData.picklistOptions.length > 0 && (
+                      {optionsToDisplay && optionsToDisplay.length > 0 && (
                         <div>
                           <span className="font-medium">Options:</span>
+                          {displayData.isActive && displayData.source === 'ghl_live' && (
+                            <span className="ml-2 text-xs text-blue-600">(live from GHL)</span>
+                          )}
                           <div className="flex flex-wrap gap-1 mt-1">
-                            {displayData.picklistOptions.slice(0, 3).map((option, index) => (
+                            {optionsToDisplay.slice(0, 5).map((option, index) => (
                               <span
                                 key={index}
                                 className="inline-flex items-center px-2 py-1 rounded-md text-xs bg-blue-100 text-blue-800"
                               >
-                                {typeof option === 'string' ? option : option.label || option.value || option}
+                                {formatOptionForDisplay(option)}
                               </span>
                             ))}
-                            {displayData.picklistOptions.length > 3 && (
+                            {optionsToDisplay.length > 5 && (
                               <span className="text-xs text-gray-500">
-                                +{displayData.picklistOptions.length - 3} more
+                                +{optionsToDisplay.length - 5} more
                               </span>
                             )}
                           </div>
