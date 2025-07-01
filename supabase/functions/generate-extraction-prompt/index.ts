@@ -71,7 +71,6 @@ Deno.serve(async (req: Request) => {
     const requestBody = await req.json()
     console.log('Request body received:', requestBody)
     
-    // Handle both direct locationId and nested body.locationId
     const locationId = requestBody.locationId || requestBody.body?.locationId
     
     if (!locationId) {
@@ -93,12 +92,10 @@ Deno.serve(async (req: Request) => {
 
     console.log('Generating extraction prompt for location:', locationId)
 
-    // Initialize Supabase client with service role
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Get the GHL configuration for this location
     console.log('Step 1: Fetching GHL configuration...')
     const ghlConfig = await getGHLConfiguration(supabase, locationId)
     if (!ghlConfig) {
@@ -119,23 +116,19 @@ Deno.serve(async (req: Request) => {
     }
 
     console.log('Step 2: Fetching extraction fields...')
-    // Get all extraction fields for this configuration
     const extractionFields = await getExtractionFields(supabase, ghlConfig.id)
     console.log(`Found ${extractionFields.length} extraction fields`)
     
     console.log('Step 3: Fetching contextual rules...')
-    // Get contextual rules
     const contextualRules = await getContextualRules(supabase, ghlConfig.id)
     console.log(`Found ${contextualRules.length} contextual rules`)
     
     console.log('Step 4: Fetching stop triggers...')
-    // Get stop triggers
     const stopTriggers = await getStopTriggers(supabase, ghlConfig.id)
     console.log(`Found ${stopTriggers.length} stop triggers`)
 
-    console.log('Step 5: Generating comprehensive AI prompt...')
-    // Generate the comprehensive AI prompt
-    const prompt = generateExtractionPrompt({
+    console.log('Step 5: Generating window tint style prompt...')
+    const prompt = generateWindowTintStylePrompt({
       ghlConfig,
       extractionFields,
       contextualRules,
@@ -151,7 +144,6 @@ Deno.serve(async (req: Request) => {
     console.log('- Contextual rules:', contextualRules.length)
     console.log('- Stop triggers:', stopTriggers.length)
 
-    // Log field details for debugging
     if (extractionFields.length > 0) {
       console.log('Extraction fields details:')
       extractionFields.forEach((field, index) => {
@@ -237,7 +229,6 @@ async function getGHLConfiguration(supabase: any, locationId: string): Promise<G
   if (!data) {
     console.log('No configuration found for location:', locationId)
     
-    // Try to find any configuration for debugging
     const { data: allConfigs, error: allError } = await supabase
       .from('ghl_configurations')
       .select('id, ghl_account_id, business_name, is_active')
@@ -290,7 +281,6 @@ async function getExtractionFields(supabase: any, configId: string): Promise<Ext
   console.log(`✅ Found ${fields.length} extraction fields`)
   
   if (fields.length === 0) {
-    // Debug: Check if there are any extraction fields at all
     const { data: allFields, error: allError } = await supabase
       .from('data_extraction_fields')
       .select('id, config_id, field_name, target_ghl_key')
@@ -354,7 +344,7 @@ async function getStopTriggers(supabase: any, configId: string): Promise<StopTri
   return triggers
 }
 
-function generateExtractionPrompt({
+function generateWindowTintStylePrompt({
   ghlConfig,
   extractionFields,
   contextualRules,
@@ -368,257 +358,139 @@ function generateExtractionPrompt({
   locationId: string
 }): string {
   
-  const sections = []
-
-  // Header and role definition
-  sections.push(`# Data Extraction AI Assistant for ${ghlConfig.business_name}
-
-You are an AI assistant specialized in extracting structured data from conversations for ${ghlConfig.business_name}. Your role is to analyze conversation messages and extract relevant information into specific fields.
-
-## Business Context
-**Business Name:** ${ghlConfig.business_name}
-**Location ID:** ${locationId}`)
-
-  // Add business details if available
-  if (ghlConfig.business_description) {
-    sections.push(`**Business Description:** ${ghlConfig.business_description}`)
-  }
+  // Start with the base instruction similar to your window tint prompt
+  let prompt = `You are analyzing a conversation between a customer and ${ghlConfig.business_name}. `
+  prompt += `Your goal is to extract structured data from the entire conversation history, ensuring all necessary fields are populated. `
+  prompt += `Infer missing details based on context. If a customer provides information across multiple messages, combine them correctly. `
+  prompt += `Ensure extracted data is accurate and complete.\\n\\n`
   
-  if (ghlConfig.business_context) {
-    sections.push(`**Business Context:** ${ghlConfig.business_context}`)
-  }
-  
-  if (ghlConfig.target_audience) {
-    sections.push(`**Target Audience:** ${ghlConfig.target_audience}`)
-  }
-  
-  if (ghlConfig.services_offered) {
-    sections.push(`**Services Offered:** ${ghlConfig.services_offered}`)
-  }
-
-  // Extraction instructions
-  sections.push(`
-## Your Task
-Analyze the provided conversation and extract data for the following fields. Only extract information that is explicitly mentioned or clearly implied in the conversation. Do not make assumptions or generate fictional data.
-
-## Extraction Rules
-1. **Accuracy First:** Only extract information that is clearly stated in the conversation
-2. **No Assumptions:** Do not infer information that isn't explicitly mentioned
-3. **Respect Field Types:** Follow the data type requirements for each field
-4. **Handle Options Carefully:** For choice fields, only select from the provided options
-5. **Required Fields:** Pay special attention to required fields
-6. **Context Matters:** Consider the business context when interpreting information`)
-
-  // Add extraction fields
-  if (extractionFields.length > 0) {
-    sections.push(`\n## Fields to Extract (${extractionFields.length} total)`)
-    
-    // Group fields by type for better organization
-    const standardFields = extractionFields.filter(f => f.target_ghl_key.startsWith('contact.'))
-    const customFields = extractionFields.filter(f => !f.target_ghl_key.startsWith('contact.'))
-    
-    if (standardFields.length > 0) {
-      sections.push(`\n### Standard Contact Fields (${standardFields.length} fields)`)
-      standardFields.forEach((field, index) => {
-        sections.push(formatFieldInstruction(field, index + 1))
-      })
+  // Add business context if available
+  if (ghlConfig.business_description || ghlConfig.business_context || ghlConfig.services_offered) {
+    prompt += `Business Context:\\n`
+    if (ghlConfig.business_description) {
+      prompt += `- Business: ${ghlConfig.business_description}\\n`
     }
-    
-    if (customFields.length > 0) {
-      sections.push(`\n### Custom Fields (${customFields.length} fields)`)
-      customFields.forEach((field, index) => {
-        sections.push(formatFieldInstruction(field, standardFields.length + index + 1))
-      })
+    if (ghlConfig.services_offered) {
+      prompt += `- Services: ${ghlConfig.services_offered}\\n`
     }
-  } else {
-    sections.push(`\n## ⚠️ No Extraction Fields Configured
-No fields have been configured for data extraction. Please configure extraction fields in the system before using this AI assistant.`)
+    if (ghlConfig.business_context) {
+      prompt += `- Context: ${ghlConfig.business_context}\\n`
+    }
+    prompt += `\\n`
   }
-
-  // Add contextual rules
+  
+  // Add contextual rules as business context
   if (contextualRules.length > 0) {
-    sections.push(`\n## Contextual Rules and Guidelines (${contextualRules.length} rules)`)
-    
     const employeeRules = contextualRules.filter(r => r.rule_type === 'EMPLOYEE_NAMES')
-    const promptRules = contextualRules.filter(r => r.rule_type === 'PROMPT_RULES')
     const businessRules = contextualRules.filter(r => r.rule_type === 'BUSINESS_CONTEXT')
+    const promptRules = contextualRules.filter(r => r.rule_type === 'PROMPT_RULES')
     
-    if (employeeRules.length > 0) {
-      sections.push(`\n### Employee Information`)
+    if (employeeRules.length > 0 || businessRules.length > 0) {
+      prompt += `Additional Context:\\n`
+      
       employeeRules.forEach(rule => {
-        sections.push(`- **${rule.rule_name}:** ${rule.rule_description}`)
+        prompt += `- ${rule.rule_description}`
         if (rule.rule_value) {
-          sections.push(`  Value: ${rule.rule_value}`)
+          prompt += ` (${rule.rule_value})`
         }
+        prompt += `\\n`
       })
-    }
-    
-    if (businessRules.length > 0) {
-      sections.push(`\n### Business Context Rules`)
+      
       businessRules.forEach(rule => {
-        sections.push(`- **${rule.rule_name}:** ${rule.rule_description}`)
+        prompt += `- ${rule.rule_description}`
         if (rule.rule_value) {
-          sections.push(`  Details: ${rule.rule_value}`)
+          prompt += ` (${rule.rule_value})`
         }
+        prompt += `\\n`
       })
+      
+      prompt += `\\n`
     }
     
+    // Add prompt rules as special instructions
     if (promptRules.length > 0) {
-      sections.push(`\n### Special Instructions`)
+      prompt += `Special Instructions:\\n`
       promptRules.forEach(rule => {
-        sections.push(`- **${rule.rule_name}:** ${rule.rule_description}`)
+        prompt += `- ${rule.rule_description}`
         if (rule.rule_value) {
-          sections.push(`  Instructions: ${rule.rule_value}`)
+          prompt += ` ${rule.rule_value}`
         }
+        prompt += `\\n`
       })
+      prompt += `\\n`
     }
   }
-
-  // Add stop triggers
-  if (stopTriggers.length > 0) {
-    sections.push(`\n## Stop Triggers - When to Escalate to Human (${stopTriggers.length} triggers)`)
-    sections.push(`If you encounter any of the following scenarios, do not attempt data extraction and instead recommend human intervention:`)
-    
-    stopTriggers.forEach((trigger, index) => {
-      sections.push(`\n${index + 1}. **${trigger.trigger_name}**`)
-      sections.push(`   Scenario: ${trigger.scenario_description}`)
-      sections.push(`   Response: "${trigger.escalation_message}"`)
-    })
-  }
-
-  // Output format instructions
-  sections.push(`\n## Output Format
-Respond with a JSON object containing the extracted data. Use the exact field keys provided above. For fields where no data is found, use null.
-
-Example format:
-\`\`\`json
-{`)
-
-  // Add example fields based on actual configured fields
+  
+  prompt += `Extract and return the following structured data:\\n`
+  
+  // Add extraction fields in the window tint style
   if (extractionFields.length > 0) {
-    const exampleFields = extractionFields.slice(0, 3) // Show first 3 fields as examples
-    exampleFields.forEach((field, index) => {
-      const exampleValue = getExampleValue(field)
-      const comma = index < exampleFields.length - 1 ? ',' : ''
-      sections.push(`  "${field.target_ghl_key}": ${exampleValue}${comma}`)
-    })
-    
-    if (extractionFields.length > 3) {
-      sections.push(`  // ... other configured fields`)
-    }
-  } else {
-    sections.push(`  "example_field": "example_value"`)
-  }
-
-  sections.push(`  "extraction_confidence": "high",
-  "notes": "Any relevant observations or context"
-}
-\`\`\`
-
-Include an "extraction_confidence" field with values: "high", "medium", or "low" based on how certain you are about the extracted data.
-
-Add a "notes" field with any relevant observations or context that might be useful.`)
-
-  // Final instructions
-  sections.push(`\n## Important Reminders
-- Only extract information that is clearly present in the conversation
-- Respect the business context and industry-specific terminology
-- For choice fields, only select from the provided options
-- If you're unsure about any information, mark confidence as "low"
-- If stop triggers are encountered, prioritize human escalation over data extraction
-- Always maintain data accuracy over completeness
-- Use the exact field keys provided in the "Fields to Extract" section`)
-
-  return sections.join('\n')
-}
-
-function formatFieldInstruction(field: ExtractionField, index: number): string {
-  const sections = []
-  
-  sections.push(`\n${index}. **${field.field_name}** (${field.field_type})`)
-  sections.push(`   Key: \`${field.target_ghl_key}\``)
-  sections.push(`   Instructions: ${field.description}`)
-  
-  if (field.is_required) {
-    sections.push(`   ⚠️ **REQUIRED FIELD**`)
-  }
-  
-  if (field.placeholder) {
-    sections.push(`   Placeholder: ${field.placeholder}`)
-  }
-  
-  // Handle choice fields with options
-  if (['SINGLE_OPTIONS', 'MULTIPLE_OPTIONS'].includes(field.field_type) && field.picklist_options?.length > 0) {
-    sections.push(`   Available Options:`)
-    
-    field.picklist_options.forEach((option: any) => {
-      if (typeof option === 'string') {
-        sections.push(`   - "${option}"`)
-      } else if (option && typeof option === 'object') {
-        const value = option.value || option.label || option.key || option
-        const description = option.description
+    extractionFields.forEach(field => {
+      prompt += `- **${field.target_ghl_key}**: ${field.description}`
+      
+      // Add choice options if applicable
+      if (['SINGLE_OPTIONS', 'MULTIPLE_OPTIONS'].includes(field.field_type) && field.picklist_options?.length > 0) {
+        const options = field.picklist_options.map(opt => {
+          if (typeof opt === 'string') {
+            return `'${opt}'`
+          } else if (opt && typeof opt === 'object') {
+            const value = opt.value || opt.label || opt.key || opt
+            const description = opt.description
+            if (description && description.trim()) {
+              return `'${value}' (${description})`
+            }
+            return `'${value}'`
+          }
+          return `'${opt}'`
+        }).join(', ')
         
-        if (description && description.trim()) {
-          sections.push(`   - "${value}" - ${description}`)
+        if (field.field_type === 'SINGLE_OPTIONS') {
+          prompt += ` Choose from: ${options}.`
         } else {
-          sections.push(`   - "${value}"`)
+          prompt += ` Select one or more from: ${options}. Use comma separation for multiple selections.`
         }
       }
+      
+      // Add field-specific formatting instructions
+      switch (field.field_type) {
+        case 'DATE':
+          prompt += ` Format as YYYY-MM-DD.`
+          break
+        case 'EMAIL':
+          prompt += ` Must be a valid email address.`
+          break
+        case 'PHONE':
+          prompt += ` Include area code and formatting as provided.`
+          break
+        case 'NUMERICAL':
+          prompt += ` Extract numbers only.`
+          break
+      }
+      
+      if (field.is_required) {
+        prompt += ` **REQUIRED FIELD**.`
+      }
+      
+      prompt += `\\n`
     })
-    
-    if (field.field_type === 'SINGLE_OPTIONS') {
-      sections.push(`   (Select exactly ONE option)`)
-    } else {
-      sections.push(`   (Select one or more options as applicable)`)
-    }
+  } else {
+    prompt += `- No extraction fields have been configured yet. Please configure fields in the system.\\n`
   }
   
-  // Add field-specific guidance based on type
-  switch (field.field_type) {
-    case 'DATE':
-      sections.push(`   Format: Use ISO date format (YYYY-MM-DD) when possible`)
-      break
-    case 'NUMERICAL':
-      sections.push(`   Format: Extract numbers only, no currency symbols or units`)
-      break
-    case 'EMAIL':
-      sections.push(`   Format: Must be a valid email address`)
-      break
-    case 'PHONE':
-      sections.push(`   Format: Include area code and country code if mentioned`)
-      break
+  // Add stop trigger instructions
+  if (stopTriggers.length > 0) {
+    prompt += `\\nStop Triggers - Escalate to human if:\\n`
+    stopTriggers.forEach(trigger => {
+      prompt += `- ${trigger.scenario_description}\\n`
+    })
   }
   
-  return sections.join('\n')
-}
-
-function getExampleValue(field: ExtractionField): string {
-  switch (field.field_type) {
-    case 'TEXT':
-      return '"John Doe"'
-    case 'EMAIL':
-      return '"john@example.com"'
-    case 'PHONE':
-      return '"+1-555-123-4567"'
-    case 'DATE':
-      return '"2024-01-15"'
-    case 'NUMERICAL':
-      return '25'
-    case 'SINGLE_OPTIONS':
-      if (field.picklist_options && field.picklist_options.length > 0) {
-        const firstOption = field.picklist_options[0]
-        const value = typeof firstOption === 'string' ? firstOption : (firstOption.value || firstOption.label || 'Option 1')
-        return `"${value}"`
-      }
-      return '"Option 1"'
-    case 'MULTIPLE_OPTIONS':
-      if (field.picklist_options && field.picklist_options.length > 0) {
-        const firstOption = field.picklist_options[0]
-        const value = typeof firstOption === 'string' ? firstOption : (firstOption.value || firstOption.label || 'Option 1')
-        return `["${value}"]`
-      }
-      return '["Option 1"]'
-    default:
-      return '"extracted_value"'
-  }
+  // Add final instructions
+  prompt += `- Scan the entire conversation history to extract missing fields.\\n`
+  prompt += `- If details are spread across multiple messages, combine them appropriately.\\n`
+  prompt += `- Use context to determine if names mentioned are actually the customer's name vs. referrals or business owners.\\n`
+  prompt += `- Only extract information that is clearly stated or strongly implied.\\n`
+  prompt += `- Ensure the response is VALID JSON ONLY, with no explanations or markdown.`
+  
+  return prompt
 }
