@@ -40,7 +40,7 @@ function DataExtractionInterface({ config, user, authService }) {
   }
 
   const loadCustomFields = async () => {
-    const loader = new CustomFieldsLoader()
+    const loader = new CustomFieldsLoader(authService)
     const fields = await loader.loadFields(config)
     setCustomFields(fields)
   }
@@ -146,18 +146,19 @@ function DataExtractionInterface({ config, user, authService }) {
   const refreshInterface = async () => {
     try {
       setRefreshing(true)
-      console.log('🔄 Refreshing interface after field recreation...')
+      console.log('🔄 Refreshing interface and updating stored field data...')
       
-      // Wait a moment for GHL to process the new field
+      // Wait a moment for GHL to process any changes
       await new Promise(resolve => setTimeout(resolve, 2000))
       
       // Reload both custom fields and extraction fields
+      // The loadCustomFields will automatically update stored field data
       await Promise.all([
         loadCustomFields(),
         loadExtractionFields()
       ])
       
-      console.log('✅ Interface refresh completed')
+      console.log('✅ Interface refresh completed with updated field data')
     } catch (error) {
       console.error('Error refreshing interface:', error)
       setError('Failed to refresh interface. Please reload the page.')
@@ -225,7 +226,15 @@ function DataExtractionInterface({ config, user, authService }) {
   const handleRefreshFields = async () => {
     try {
       setRefreshing(true)
+      console.log('🔄 Manual refresh triggered - updating stored field data...')
+      
+      // This will automatically update stored field data for existing extraction fields
       await loadCustomFields()
+      
+      // Also reload extraction fields to show any updates
+      await loadExtractionFields()
+      
+      console.log('✅ Manual refresh completed with updated field data')
     } catch (error) {
       console.error('Error refreshing fields:', error)
       setError('Failed to refresh custom fields')
@@ -293,10 +302,10 @@ function DataExtractionInterface({ config, user, authService }) {
         <div className="mx-6 mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
           <div className="flex items-center">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600 mr-2"></div>
-            <span className="text-green-800">Refreshing interface...</span>
+            <span className="text-green-800">Refreshing and updating field data...</span>
           </div>
           <p className="text-green-700 text-xs mt-1">
-            Updating field status and configurations.
+            Updating field status, configurations, and stored metadata.
           </p>
         </div>
       )}

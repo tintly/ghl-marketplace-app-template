@@ -51,6 +51,8 @@ export class FieldRecreationService {
     if (originalData.parentId) {
       fieldData.parentId = originalData.parentId
       console.log('✅ Preserving parent folder ID:', originalData.parentId)
+    } else {
+      console.log('ℹ️ No parent folder - field will be created at root level')
     }
 
     // Add optional fields if they exist
@@ -103,6 +105,12 @@ export class FieldRecreationService {
     if (originalData.objectId) {
       fieldData.objectId = originalData.objectId
       console.log('✅ Preserving object ID:', originalData.objectId)
+    }
+
+    // Preserve any custom object schema information
+    if (originalData.objectSchemaId) {
+      fieldData.objectSchemaId = originalData.objectSchemaId
+      console.log('✅ Preserving object schema ID:', originalData.objectSchemaId)
     }
 
     return fieldData
@@ -260,7 +268,8 @@ export class FieldRecreationService {
     
     const importantProps = [
       'id', 'name', 'dataType', 'fieldKey', 'parentId', 'objectId', 
-      'model', 'position', 'placeholder', 'picklistOptions', 'options'
+      'model', 'position', 'placeholder', 'picklistOptions', 'options',
+      'objectSchemaId', 'standard'
     ]
     
     importantProps.forEach(prop => {
@@ -268,6 +277,13 @@ export class FieldRecreationService {
         console.log(`${prop}:`, originalData[prop])
       }
     })
+    
+    // Special attention to folder structure
+    if (originalData.parentId) {
+      console.log('🗂️ FOLDER STRUCTURE: Field belongs to folder/parent:', originalData.parentId)
+    } else {
+      console.log('🗂️ FOLDER STRUCTURE: Field is at root level (no parent)')
+    }
     
     console.log('=== END METADATA DEBUG ===')
   }
