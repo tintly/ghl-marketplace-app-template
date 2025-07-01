@@ -168,7 +168,7 @@ Deno.serve(async (req: Request) => {
             id: f.id,
             name: f.field_name,
             type: f.field_type,
-            key: f.target_ghl_key,
+            ghlKey: f.target_ghl_key,
             required: f.is_required
           }))
         }
@@ -424,10 +424,11 @@ function generateWindowTintStylePrompt({
   
   prompt += `Extract and return the following structured data:\\n`
   
-  // Add extraction fields in the window tint style
+  // CRITICAL FIX: Use target_ghl_key (the actual GHL field ID) instead of the UUID
   if (extractionFields.length > 0) {
     extractionFields.forEach(field => {
-      prompt += `- **${field.target_ghl_key}** (ID: ${field.id}): ${field.description}`
+      // Use the GHL field ID (target_ghl_key) in the prompt, not the UUID
+      prompt += `- **${field.target_ghl_key}** (ID: ${field.target_ghl_key}): ${field.description}`
       
       // Add choice options if applicable
       if (['SINGLE_OPTIONS', 'MULTIPLE_OPTIONS'].includes(field.field_type) && field.picklist_options?.length > 0) {
