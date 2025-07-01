@@ -3,6 +3,7 @@ import CustomFieldsList from './CustomFieldsList'
 import ExtractionFieldForm from './ExtractionFieldForm'
 import ExtractionFieldsList from './ExtractionFieldsList'
 import CreateCustomFieldForm from './CreateCustomFieldForm'
+import CustomFieldEditForm from './CustomFieldEditForm'
 import CustomFieldsLoader from './CustomFieldsLoader'
 import { GHLApiService } from '../../services/GHLApiService'
 import { FieldRecreationService } from './FieldRecreationService'
@@ -11,14 +12,17 @@ function DataExtractionInterface({ config, user, authService }) {
   const [customFields, setCustomFields] = useState([])
   const [extractionFields, setExtractionFields] = useState([])
   const [selectedCustomField, setSelectedCustomField] = useState(null)
+  const [editingCustomField, setEditingCustomField] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [showEditForm, setShowEditForm] = useState(false)
   const [editingField, setEditingField] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [recreating, setRecreating] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [updating, setUpdating] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -68,6 +72,78 @@ function DataExtractionInterface({ config, user, authService }) {
 
   const handleCreateNewField = () => {
     setShowCreateForm(true)
+  }
+
+  const handleEditField = (customField) => {
+    setEditingCustomField(customField)
+    setShowEditForm(true)
+  }
+
+  const handleUpdateFieldSubmit = async (updateData) => {
+    try {
+      setUpdating(true)
+      setError(null)
+
+      console.log('=== UPDATING CUSTOM FIELD ===')
+      console.log('Field ID:', editingCustomField.id)
+      console.log('Update data:', updateData)
+
+      // Update the field in GoHighLevel
+      const ghlService = new GHLApiService(config.access_token)
+      const updatedField = await ghlService.updateCustomField(
+        config.ghl_account_id, 
+        editingCustomField.id, 
+        updateData
+      )
+      
+      console.log('✅ Field updated successfully in GHL:', updatedField)
+
+      // Close the edit form
+      setShowEditForm(false)
+      setEditingCustomField(null)
+
+      // Refresh the custom fields list to show the updated field
+      console.log('🔄 Refreshing custom fields list...')
+      await refreshInterface()
+
+      console.log('🎉 Field update completed successfully!')
+
+    } catch (error) {
+      console.error('❌ Field update failed:', error)
+      setError(`Failed to update custom field: ${error.message}`)
+      setUpdating(false)
+    }
+  }
+
+  const handleDeleteField = async (fieldId) => {
+    try {
+      setUpdating(true)
+      setError(null)
+
+      console.log('=== DELETING CUSTOM FIELD ===')
+      console.log('Field ID:', fieldId)
+
+      // Delete the field from GoHighLevel
+      const ghlService = new GHLApiService(config.access_token)
+      await ghlService.deleteCustomField(config.ghl_account_id, fieldId)
+      
+      console.log('✅ Field deleted successfully from GHL')
+
+      // Close the edit form
+      setShowEditForm(false)
+      setEditingCustomField(null)
+
+      // Refresh the interface to remove the deleted field
+      console.log('🔄 Refreshing interface after deletion...')
+      await refreshInterface()
+
+      console.log('🎉 Field deletion completed successfully!')
+
+    } catch (error) {
+      console.error('❌ Field deletion failed:', error)
+      setError(`Failed to delete custom field: ${error.message}`)
+      setUpdating(false)
+    }
   }
 
   const handleCreateFieldSubmit = async (fieldData) => {
@@ -126,6 +202,12 @@ function DataExtractionInterface({ config, user, authService }) {
   const handleCreateFieldCancel = () => {
     setShowCreateForm(false)
     setCreating(false)
+  }
+
+  const handleEditFieldCancel = () => {
+    setShowEditForm(false)
+    setEditingCustomField(null)
+    setUpdating(false)
   }
 
   const handleCreateExtraction = (customField) => {
@@ -363,6 +445,19 @@ function DataExtractionInterface({ config, user, authService }) {
         </div>
       )}
 
+      {/* Update Loading Indicator */}
+      {updating && (
+        <div className="mx-6 mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+            <span className="text-blue-800">Updating custom field in GoHighLevel...</span>
+          </div>
+          <p className="text-blue-700 text-xs mt-1">
+            This may take a few moments. The field will be updated with new settings.
+          </p>
+        </div>
+      )}
+
       {/* Recreation Loading Indicator */}
       {recreating && (
         <div className="mx-6 mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -399,6 +494,7 @@ function DataExtractionInterface({ config, user, authService }) {
               onCreateExtraction={handleCreateExtraction}
               onRefresh={handleRefreshFields}
               onCreateNewField={handleCreateNewField}
+              onEditField={handleEditField}
               refreshing={refreshing}
             />
           </div>
@@ -423,6 +519,16 @@ function DataExtractionInterface({ config, user, authService }) {
           customFields={customFields}
           onSubmit={handleCreateFieldSubmit}
           onCancel={handleCreateFieldCancel}
+        />
+      )}
+
+      {/* Edit Custom Field Form Modal */}
+      {showEditForm && editingCustomField && (
+        <CustomFieldEditForm
+          customField={editingCustomField}
+          onSubmit={handleUpdateFieldSubmit}
+          onCancel={handleEditFieldCancel}
+          onDelete={handleDeleteField}
         />
       )}
 
