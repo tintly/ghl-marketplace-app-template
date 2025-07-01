@@ -68,12 +68,19 @@ Deno.serve(async (req: Request) => {
   try {
     console.log('=== AI PROMPT GENERATION REQUEST ===')
     
-    const { body } = await req.json()
-    const locationId = body?.locationId
+    const requestBody = await req.json()
+    console.log('Request body received:', requestBody)
+    
+    // Handle both direct locationId and nested body.locationId
+    const locationId = requestBody.locationId || requestBody.body?.locationId
     
     if (!locationId) {
+      console.error('No locationId found in request:', requestBody)
       return new Response(
-        JSON.stringify({ error: "locationId is required in request body" }),
+        JSON.stringify({ 
+          error: "locationId is required",
+          receivedBody: requestBody
+        }),
         {
           status: 400,
           headers: {
@@ -92,12 +99,14 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     // Get the GHL configuration for this location
+    console.log('Step 1: Fetching GHL configuration...')
     const ghlConfig = await getGHLConfiguration(supabase, locationId)
     if (!ghlConfig) {
       return new Response(
         JSON.stringify({ 
           error: "No configuration found for this location",
-          locationId 
+          locationId,
+          message: "Please ensure the app is properly installed and configured for this location"
         }),
         {
           status: 404,
@@ -109,15 +118,22 @@ Deno.serve(async (req: Request) => {
       )
     }
 
+    console.log('Step 2: Fetching extraction fields...')
     // Get all extraction fields for this configuration
     const extractionFields = await getExtractionFields(supabase, ghlConfig.id)
+    console.log(`Found ${extractionFields.length} extraction fields`)
     
+    console.log('Step 3: Fetching contextual rules...')
     // Get contextual rules
     const contextualRules = await getContextualRules(supabase, ghlConfig.id)
+    console.log(`Found ${contextualRules.length} contextual rules`)
     
+    console.log('Step 4: Fetching stop triggers...')
     // Get stop triggers
     const stopTriggers = await getStopTriggers(supabase, ghlConfig.id)
+    console.log(`Found ${stopTriggers.length} stop triggers`)
 
+    console.log('Step 5: Generating comprehensive AI prompt...')
     // Generate the comprehensive AI prompt
     const prompt = generateExtractionPrompt({
       ghlConfig,
@@ -129,9 +145,19 @@ Deno.serve(async (req: Request) => {
 
     console.log('✅ AI prompt generated successfully')
     console.log('Prompt length:', prompt.length, 'characters')
-    console.log('Extraction fields:', extractionFields.length)
-    console.log('Contextual rules:', contextualRules.length)
-    console.log('Stop triggers:', stopTriggers.length)
+    console.log('Summary:')
+    console.log('- Business:', ghlConfig.business_name)
+    console.log('- Extraction fields:', extractionFields.length)
+    console.log('- Contextual rules:', contextualRules.length)
+    console.log('- Stop triggers:', stopTriggers.length)
+
+    // Log field details for debugging
+    if (extractionFields.length > 0) {
+      console.log('Extraction fields details:')
+      extractionFields.forEach((field, index) => {
+        console.log(`  ${index + 1}. ${field.field_name} (${field.field_type}) -> ${field.target_ghl_key}`)
+      })
+    }
 
     return new Response(
       JSON.stringify({
@@ -140,11 +166,18 @@ Deno.serve(async (req: Request) => {
         prompt,
         metadata: {
           businessName: ghlConfig.business_name,
+          configId: ghlConfig.id,
           extractionFieldsCount: extractionFields.length,
           contextualRulesCount: contextualRules.length,
           stopTriggersCount: stopTriggers.length,
           promptLength: prompt.length,
-          generatedAt: new Date().toISOString()
+          generatedAt: new Date().toISOString(),
+          fields: extractionFields.map(f => ({
+            name: f.field_name,
+            type: f.field_type,
+            key: f.target_ghl_key,
+            required: f.is_required
+          }))
         }
       }),
       {
@@ -164,7 +197,8 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({ 
         error: `Prompt generation failed: ${error.message}`,
-        details: error.toString()
+        details: error.toString(),
+        stack: error.stack
       }),
       {
         status: 500,
@@ -202,10 +236,28 @@ async function getGHLConfiguration(supabase: any, locationId: string): Promise<G
 
   if (!data) {
     console.log('No configuration found for location:', locationId)
+    
+    // Try to find any configuration for debugging
+    const { data: allConfigs, error: allError } = await supabase
+      .from('ghl_configurations')
+      .select('id, ghl_account_id, business_name, is_active')
+      .limit(5)
+    
+    if (!allError && allConfigs) {
+      console.log('Available configurations in database:')
+      allConfigs.forEach(config => {
+        console.log(`  - ${config.ghl_account_id} (${config.business_name}) - Active: ${config.is_active}`)
+      })
+    }
+    
     return null
   }
 
-  console.log('Found configuration:', data.id, '-', data.business_name)
+  console.log('✅ Found configuration:', {
+    id: data.id,
+    name: data.business_name,
+    locationId: data.ghl_account_id
+  })
   return data
 }
 
@@ -214,7 +266,18 @@ async function getExtractionFields(supabase: any, configId: string): Promise<Ext
   
   const { data, error } = await supabase
     .from('data_extraction_fields')
-    .select('*')
+    .select(`
+      id,
+      field_name,
+      description,
+      target_ghl_key,
+      field_type,
+      picklist_options,
+      placeholder,
+      is_required,
+      sort_order,
+      original_ghl_field_data
+    `)
     .eq('config_id', configId)
     .order('sort_order', { ascending: true })
 
@@ -223,8 +286,34 @@ async function getExtractionFields(supabase: any, configId: string): Promise<Ext
     throw new Error(`Failed to fetch extraction fields: ${error.message}`)
   }
 
-  console.log('Found extraction fields:', data?.length || 0)
-  return data || []
+  const fields = data || []
+  console.log(`✅ Found ${fields.length} extraction fields`)
+  
+  if (fields.length === 0) {
+    // Debug: Check if there are any extraction fields at all
+    const { data: allFields, error: allError } = await supabase
+      .from('data_extraction_fields')
+      .select('id, config_id, field_name, target_ghl_key')
+      .limit(10)
+    
+    if (!allError && allFields) {
+      console.log('Available extraction fields in database:')
+      allFields.forEach(field => {
+        console.log(`  - ${field.field_name} (${field.target_ghl_key}) - Config: ${field.config_id}`)
+      })
+      console.log(`Looking for config_id: ${configId}`)
+    }
+  } else {
+    console.log('Extraction fields found:')
+    fields.forEach((field, index) => {
+      console.log(`  ${index + 1}. ${field.field_name} (${field.field_type}) -> ${field.target_ghl_key}`)
+      if (field.is_required) {
+        console.log(`     ⚠️ REQUIRED`)
+      }
+    })
+  }
+  
+  return fields
 }
 
 async function getContextualRules(supabase: any, configId: string): Promise<ContextualRule[]> {
@@ -241,8 +330,9 @@ async function getContextualRules(supabase: any, configId: string): Promise<Cont
     throw new Error(`Failed to fetch contextual rules: ${error.message}`)
   }
 
-  console.log('Found contextual rules:', data?.length || 0)
-  return data || []
+  const rules = data || []
+  console.log(`✅ Found ${rules.length} contextual rules`)
+  return rules
 }
 
 async function getStopTriggers(supabase: any, configId: string): Promise<StopTrigger[]> {
@@ -259,8 +349,9 @@ async function getStopTriggers(supabase: any, configId: string): Promise<StopTri
     throw new Error(`Failed to fetch stop triggers: ${error.message}`)
   }
 
-  console.log('Found stop triggers:', data?.length || 0)
-  return data || []
+  const triggers = data || []
+  console.log(`✅ Found ${triggers.length} stop triggers`)
+  return triggers
 }
 
 function generateExtractionPrompt({
@@ -327,26 +418,26 @@ Analyze the provided conversation and extract data for the following fields. Onl
     const customFields = extractionFields.filter(f => !f.target_ghl_key.startsWith('contact.'))
     
     if (standardFields.length > 0) {
-      sections.push(`\n### Standard Contact Fields`)
+      sections.push(`\n### Standard Contact Fields (${standardFields.length} fields)`)
       standardFields.forEach((field, index) => {
         sections.push(formatFieldInstruction(field, index + 1))
       })
     }
     
     if (customFields.length > 0) {
-      sections.push(`\n### Custom Fields`)
+      sections.push(`\n### Custom Fields (${customFields.length} fields)`)
       customFields.forEach((field, index) => {
         sections.push(formatFieldInstruction(field, standardFields.length + index + 1))
       })
     }
   } else {
-    sections.push(`\n## No Extraction Fields Configured
-No fields have been configured for data extraction. Please configure extraction fields in the system.`)
+    sections.push(`\n## ⚠️ No Extraction Fields Configured
+No fields have been configured for data extraction. Please configure extraction fields in the system before using this AI assistant.`)
   }
 
   // Add contextual rules
   if (contextualRules.length > 0) {
-    sections.push(`\n## Contextual Rules and Guidelines`)
+    sections.push(`\n## Contextual Rules and Guidelines (${contextualRules.length} rules)`)
     
     const employeeRules = contextualRules.filter(r => r.rule_type === 'EMPLOYEE_NAMES')
     const promptRules = contextualRules.filter(r => r.rule_type === 'PROMPT_RULES')
@@ -385,7 +476,7 @@ No fields have been configured for data extraction. Please configure extraction 
 
   // Add stop triggers
   if (stopTriggers.length > 0) {
-    sections.push(`\n## Stop Triggers - When to Escalate to Human`)
+    sections.push(`\n## Stop Triggers - When to Escalate to Human (${stopTriggers.length} triggers)`)
     sections.push(`If you encounter any of the following scenarios, do not attempt data extraction and instead recommend human intervention:`)
     
     stopTriggers.forEach((trigger, index) => {
@@ -401,12 +492,26 @@ Respond with a JSON object containing the extracted data. Use the exact field ke
 
 Example format:
 \`\`\`json
-{
-  "contact.first_name": "John",
-  "contact.email": "john@example.com",
-  "custom_field_id_123": "Consultation",
-  "extraction_confidence": "high",
-  "notes": "Customer interested in premium service package"
+{`)
+
+  // Add example fields based on actual configured fields
+  if (extractionFields.length > 0) {
+    const exampleFields = extractionFields.slice(0, 3) // Show first 3 fields as examples
+    exampleFields.forEach((field, index) => {
+      const exampleValue = getExampleValue(field)
+      const comma = index < exampleFields.length - 1 ? ',' : ''
+      sections.push(`  "${field.target_ghl_key}": ${exampleValue}${comma}`)
+    })
+    
+    if (extractionFields.length > 3) {
+      sections.push(`  // ... other configured fields`)
+    }
+  } else {
+    sections.push(`  "example_field": "example_value"`)
+  }
+
+  sections.push(`  "extraction_confidence": "high",
+  "notes": "Any relevant observations or context"
 }
 \`\`\`
 
@@ -421,7 +526,8 @@ Add a "notes" field with any relevant observations or context that might be usef
 - For choice fields, only select from the provided options
 - If you're unsure about any information, mark confidence as "low"
 - If stop triggers are encountered, prioritize human escalation over data extraction
-- Always maintain data accuracy over completeness`)
+- Always maintain data accuracy over completeness
+- Use the exact field keys provided in the "Fields to Extract" section`)
 
   return sections.join('\n')
 }
@@ -452,7 +558,7 @@ function formatFieldInstruction(field: ExtractionField, index: number): string {
         const value = option.value || option.label || option.key || option
         const description = option.description
         
-        if (description) {
+        if (description && description.trim()) {
           sections.push(`   - "${value}" - ${description}`)
         } else {
           sections.push(`   - "${value}"`)
@@ -484,4 +590,35 @@ function formatFieldInstruction(field: ExtractionField, index: number): string {
   }
   
   return sections.join('\n')
+}
+
+function getExampleValue(field: ExtractionField): string {
+  switch (field.field_type) {
+    case 'TEXT':
+      return '"John Doe"'
+    case 'EMAIL':
+      return '"john@example.com"'
+    case 'PHONE':
+      return '"+1-555-123-4567"'
+    case 'DATE':
+      return '"2024-01-15"'
+    case 'NUMERICAL':
+      return '25'
+    case 'SINGLE_OPTIONS':
+      if (field.picklist_options && field.picklist_options.length > 0) {
+        const firstOption = field.picklist_options[0]
+        const value = typeof firstOption === 'string' ? firstOption : (firstOption.value || firstOption.label || 'Option 1')
+        return `"${value}"`
+      }
+      return '"Option 1"'
+    case 'MULTIPLE_OPTIONS':
+      if (field.picklist_options && field.picklist_options.length > 0) {
+        const firstOption = field.picklist_options[0]
+        const value = typeof firstOption === 'string' ? firstOption : (firstOption.value || firstOption.label || 'Option 1')
+        return `["${value}"]`
+      }
+      return '["Option 1"]'
+    default:
+      return '"extracted_value"'
+  }
 }
