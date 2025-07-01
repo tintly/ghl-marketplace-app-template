@@ -127,8 +127,8 @@ Deno.serve(async (req: Request) => {
     const stopTriggers = await getStopTriggers(supabase, ghlConfig.id)
     console.log(`Found ${stopTriggers.length} stop triggers`)
 
-    console.log('Step 5: Generating prompt with proper field keys...')
-    const prompt = generatePromptWithProperFieldKeys({
+    console.log('Step 5: Generating prompt with separated field types...')
+    const prompt = generatePromptWithSeparatedFields({
       ghlConfig,
       extractionFields,
       contextualRules,
@@ -144,11 +144,17 @@ Deno.serve(async (req: Request) => {
     console.log('- Contextual rules:', contextualRules.length)
     console.log('- Stop triggers:', stopTriggers.length)
 
+    // Separate fields for logging
+    const { standardFields, customFields } = separateFieldTypes(extractionFields)
+    console.log(`- Standard fields: ${standardFields.length}`)
+    console.log(`- Custom fields: ${customFields.length}`)
+
     if (extractionFields.length > 0) {
       console.log('Extraction fields details:')
       extractionFields.forEach((field, index) => {
         const fieldKey = getProperFieldKey(field)
-        console.log(`  ${index + 1}. ${field.field_name} (${field.field_type}) -> ${fieldKey} [GHL ID: ${field.target_ghl_key}]`)
+        const fieldType = isStandardField(field) ? 'STANDARD' : 'CUSTOM'
+        console.log(`  ${index + 1}. [${fieldType}] ${field.field_name} (${field.field_type}) -> ${fieldKey} [GHL ID: ${field.target_ghl_key}]`)
       })
     }
 
@@ -161,6 +167,8 @@ Deno.serve(async (req: Request) => {
           businessName: ghlConfig.business_name,
           configId: ghlConfig.id,
           extractionFieldsCount: extractionFields.length,
+          standardFieldsCount: standardFields.length,
+          customFieldsCount: customFields.length,
           contextualRulesCount: contextualRules.length,
           stopTriggersCount: stopTriggers.length,
           promptLength: prompt.length,
@@ -171,7 +179,8 @@ Deno.serve(async (req: Request) => {
             type: f.field_type,
             ghlKey: f.target_ghl_key,
             fieldKey: getProperFieldKey(f),
-            required: f.is_required
+            required: f.is_required,
+            isStandard: isStandardField(f)
           }))
         }
       }),
@@ -206,7 +215,32 @@ Deno.serve(async (req: Request) => {
   }
 })
 
-// CRITICAL FIX: Function to get the proper field key for prompt generation
+// Function to determine if a field is a standard field
+function isStandardField(field: ExtractionField): boolean {
+  // Standard fields have field keys that contain dots (e.g., "contact.first_name")
+  return field.target_ghl_key.includes('.')
+}
+
+// Function to separate fields into standard and custom arrays
+function separateFieldTypes(extractionFields: ExtractionField[]): {
+  standardFields: ExtractionField[]
+  customFields: ExtractionField[]
+} {
+  const standardFields: ExtractionField[] = []
+  const customFields: ExtractionField[] = []
+  
+  extractionFields.forEach(field => {
+    if (isStandardField(field)) {
+      standardFields.push(field)
+    } else {
+      customFields.push(field)
+    }
+  })
+  
+  return { standardFields, customFields }
+}
+
+// Function to get the proper field key for prompt generation
 function getProperFieldKey(field: ExtractionField): string {
   // For standard fields, target_ghl_key IS the field key (e.g., "contact.first_name")
   if (field.target_ghl_key.includes('.')) {
@@ -326,7 +360,8 @@ async function getExtractionFields(supabase: any, configId: string): Promise<Ext
     console.log('Extraction fields found:')
     fields.forEach((field, index) => {
       const fieldKey = getProperFieldKey(field)
-      console.log(`  ${index + 1}. ${field.field_name} (${field.field_type}) -> ${fieldKey} [GHL ID: ${field.target_ghl_key}]`)
+      const fieldType = isStandardField(field) ? 'STANDARD' : 'CUSTOM'
+      console.log(`  ${index + 1}. [${fieldType}] ${field.field_name} (${field.field_type}) -> ${fieldKey} [GHL ID: ${field.target_ghl_key}]`)
       if (field.is_required) {
         console.log(`     ⚠️ REQUIRED`)
       }
@@ -374,7 +409,7 @@ async function getStopTriggers(supabase: any, configId: string): Promise<StopTri
   return triggers
 }
 
-function generatePromptWithProperFieldKeys({
+function generatePromptWithSeparatedFields({
   ghlConfig,
   extractionFields,
   contextualRules,
@@ -450,17 +485,52 @@ function generatePromptWithProperFieldKeys({
     }
   }
   
-  prompt += `Extract and return the following structured data:\\n`
+  // CRITICAL NEW FEATURE: Separate fields into standard and custom arrays
+  const { standardFields, customFields } = separateFieldTypes(extractionFields)
   
-  // CRITICAL FIX: Show field key with GHL ID in parentheses
-  if (extractionFields.length > 0) {
-    extractionFields.forEach(field => {
-      // Get the proper field key (e.g., "contact.owner_alert")
+  prompt += `Extract and return the following structured data:\\n\\n`
+  
+  // Standard Contact Fields Section
+  if (standardFields.length > 0) {
+    prompt += `**STANDARD CONTACT FIELDS** (Built-in GoHighLevel fields):\\n`
+    standardFields.forEach(field => {
       const fieldKey = getProperFieldKey(field)
+      console.log(`Adding standard field to prompt: ${field.field_name} -> ${fieldKey}`)
       
-      console.log(`Adding field to prompt: ${field.field_name} -> ${fieldKey} (GHL ID: ${field.target_ghl_key})`)
+      prompt += `- **${fieldKey}** (ID: ${field.target_ghl_key}): ${field.description}`
       
-      // CRITICAL FIX: Show "contact.owner_alert (ID: tdDS2NY397uYgP80UBfg)"
+      // Add field-specific formatting instructions for standard fields
+      switch (field.field_type) {
+        case 'DATE':
+          prompt += ` Format as YYYY-MM-DD.`
+          break
+        case 'EMAIL':
+          prompt += ` Must be a valid email address.`
+          break
+        case 'PHONE':
+          prompt += ` Include area code and formatting as provided.`
+          break
+        case 'NUMERICAL':
+          prompt += ` Extract numbers only.`
+          break
+      }
+      
+      if (field.is_required) {
+        prompt += ` **REQUIRED FIELD**.`
+      }
+      
+      prompt += `\\n`
+    })
+    prompt += `\\n`
+  }
+  
+  // Custom Fields Section
+  if (customFields.length > 0) {
+    prompt += `**CUSTOM FIELDS** (Business-specific fields):\\n`
+    customFields.forEach(field => {
+      const fieldKey = getProperFieldKey(field)
+      console.log(`Adding custom field to prompt: ${field.field_name} -> ${fieldKey} (GHL ID: ${field.target_ghl_key})`)
+      
       prompt += `- **${fieldKey}** (ID: ${field.target_ghl_key}): ${field.description}`
       
       // Add choice options if applicable
@@ -486,7 +556,7 @@ function generatePromptWithProperFieldKeys({
         }
       }
       
-      // Add field-specific formatting instructions
+      // Add field-specific formatting instructions for custom fields
       switch (field.field_type) {
         case 'DATE':
           prompt += ` Format as YYYY-MM-DD.`
@@ -508,25 +578,31 @@ function generatePromptWithProperFieldKeys({
       
       prompt += `\\n`
     })
-  } else {
-    prompt += `- No extraction fields have been configured yet. Please configure fields in the system.\\n`
+    prompt += `\\n`
+  }
+  
+  // If no fields are configured
+  if (extractionFields.length === 0) {
+    prompt += `- No extraction fields have been configured yet. Please configure fields in the system.\\n\\n`
   }
   
   // Add stop trigger instructions
   if (stopTriggers.length > 0) {
-    prompt += `\\nStop Triggers - Escalate to human if:\\n`
+    prompt += `**STOP TRIGGERS** - Escalate to human if:\\n`
     stopTriggers.forEach(trigger => {
       prompt += `- ${trigger.scenario_description}\\n`
     })
+    prompt += `\\n`
   }
   
   // Add final instructions
-  prompt += `\\nImportant Instructions:\\n`
+  prompt += `**IMPORTANT INSTRUCTIONS:**\\n`
   prompt += `- Scan the entire conversation history to extract missing fields.\\n`
   prompt += `- If details are spread across multiple messages, combine them appropriately.\\n`
   prompt += `- Use context to determine if names mentioned are actually the customer's name vs. referrals or business owners.\\n`
   prompt += `- Only extract information that is clearly stated or strongly implied.\\n`
   prompt += `- For each field, use the exact field key shown above in your JSON response.\\n`
+  prompt += `- Standard fields update built-in contact properties, custom fields update business-specific data.\\n`
   prompt += `- Ensure the response is VALID JSON ONLY, with no explanations or markdown.`
   
   return prompt
