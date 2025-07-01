@@ -452,16 +452,16 @@ function generatePromptWithProperFieldKeys({
   
   prompt += `Extract and return the following structured data:\\n`
   
-  // CRITICAL FIX: Use the proper field key instead of the GHL ID
+  // CRITICAL FIX: Show field key with GHL ID in parentheses
   if (extractionFields.length > 0) {
     extractionFields.forEach(field => {
-      // Get the proper field key (e.g., "contact.owner_alert" instead of "tdDS2NY397uYgP80UBfg")
+      // Get the proper field key (e.g., "contact.owner_alert")
       const fieldKey = getProperFieldKey(field)
       
       console.log(`Adding field to prompt: ${field.field_name} -> ${fieldKey} (GHL ID: ${field.target_ghl_key})`)
       
-      // Use the proper field key in the prompt
-      prompt += `- **${fieldKey}** (ID: ${fieldKey}): ${field.description}`
+      // CRITICAL FIX: Show "contact.owner_alert (ID: tdDS2NY397uYgP80UBfg)"
+      prompt += `- **${fieldKey}** (ID: ${field.target_ghl_key}): ${field.description}`
       
       // Add choice options if applicable
       if (['SINGLE_OPTIONS', 'MULTIPLE_OPTIONS'].includes(field.field_type) && field.picklist_options?.length > 0) {
