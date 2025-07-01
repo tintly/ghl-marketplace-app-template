@@ -127,6 +127,8 @@ function DataExtractionInterface({ config, user, authService }) {
     } catch (error) {
       console.error('❌ Field update failed:', error)
       setError(`Failed to update custom field: ${error.message}`)
+    } finally {
+      // CRITICAL FIX: Always reset updating state
       setUpdating(false)
     }
   }
@@ -139,23 +141,80 @@ function DataExtractionInterface({ config, user, authService }) {
       console.log('=== DELETING CUSTOM FIELD ===')
       console.log('Field ID:', fieldId)
 
+      // Step 1: Delete the field from GoHighLevel
       const ghlService = new GHLApiService(config.access_token)
       await ghlService.deleteCustomField(config.ghl_account_id, fieldId)
       
       console.log('✅ Field deleted successfully from GHL')
 
+      // Step 2: Clean up any extraction configurations that reference this field
+      console.log('🧹 Cleaning up extraction configurations...')
+      await cleanupExtractionConfigurations(fieldId)
+
+      // Step 3: Close the edit form
       setShowEditForm(false)
       setEditingCustomField(null)
 
+      // Step 4: Refresh the interface
       console.log('🔄 Refreshing interface after deletion...')
       await refreshInterface()
 
-      console.log('🎉 Field deletion completed successfully!')
+      console.log('🎉 Field deletion and cleanup completed successfully!')
 
     } catch (error) {
       console.error('❌ Field deletion failed:', error)
       setError(`Failed to delete custom field: ${error.message}`)
+    } finally {
+      // CRITICAL FIX: Always reset updating state
       setUpdating(false)
+    }
+  }
+
+  // NEW: Function to clean up extraction configurations when a field is deleted
+  const cleanupExtractionConfigurations = async (deletedFieldId) => {
+    try {
+      const supabase = authService?.getSupabaseClient() || (await import('../../services/supabase')).supabase
+
+      console.log('Looking for extraction configurations to clean up for field:', deletedFieldId)
+
+      // Find extraction fields that reference the deleted custom field
+      const { data: extractionsToDelete, error: findError } = await supabase
+        .from('data_extraction_fields')
+        .select('id, field_name, target_ghl_key')
+        .eq('config_id', config.id)
+        .eq('target_ghl_key', deletedFieldId)
+
+      if (findError) {
+        console.error('Error finding extraction configurations to clean up:', findError)
+        return
+      }
+
+      if (!extractionsToDelete || extractionsToDelete.length === 0) {
+        console.log('No extraction configurations found for deleted field')
+        return
+      }
+
+      console.log(`Found ${extractionsToDelete.length} extraction configurations to clean up:`, 
+        extractionsToDelete.map(e => e.field_name))
+
+      // Delete the extraction configurations
+      const { error: deleteError } = await supabase
+        .from('data_extraction_fields')
+        .delete()
+        .eq('config_id', config.id)
+        .eq('target_ghl_key', deletedFieldId)
+
+      if (deleteError) {
+        console.error('Error deleting extraction configurations:', deleteError)
+        throw new Error(`Failed to clean up extraction configurations: ${deleteError.message}`)
+      }
+
+      console.log('✅ Successfully cleaned up extraction configurations')
+
+    } catch (error) {
+      console.error('Error in cleanup process:', error)
+      // Don't throw here - we want the field deletion to succeed even if cleanup fails
+      console.warn('⚠️ Field was deleted but extraction cleanup may have failed')
     }
   }
 
@@ -200,6 +259,7 @@ function DataExtractionInterface({ config, user, authService }) {
     } catch (error) {
       console.error('❌ Field creation failed:', error)
       setError(`Failed to create custom field: ${error.message}`)
+    } finally {
       setCreating(false)
     }
   }
@@ -497,10 +557,12 @@ function DataExtractionInterface({ config, user, authService }) {
         <div className="mx-6 mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-center">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-            <span className="text-blue-800">Updating custom field in GoHighLevel...</span>
+            <span className="text-blue-800">
+              {editingCustomField ? 'Updating custom field in GoHighLevel...' : 'Processing field operation...'}
+            </span>
           </div>
           <p className="text-blue-700 text-xs mt-1">
-            This may take a few moments. The field will be updated with new settings.
+            This may take a few moments. {editingCustomField ? 'The field will be updated with new settings.' : 'Please wait while the operation completes.'}
           </p>
         </div>
       )}
