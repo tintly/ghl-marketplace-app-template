@@ -10,6 +10,12 @@ function TokenStatusAlert({ config }) {
     return null
   }
 
+  const openOAuthInstall = () => {
+    const OAUTH_INSTALL_URL = 'https://marketplace.gohighlevel.com/oauth/chooselocation?response_type=code&redirect_uri=https%3A%2F%2Feloquent-moonbeam-8a5386.netlify.app%2Foauth%2Fcallback&client_id=685c90c16a67491ca1f5f7de-mcf0wxc1&scope=conversations.readonly+conversations%2Fmessage.readonly+conversations%2Freports.readonly+contacts.readonly+contacts.write+locations.readonly+locations%2FcustomFields.readonly+locations%2FcustomFields.write+oauth.readonly+oauth.write'
+    console.log('Opening OAuth installation URL:', OAUTH_INSTALL_URL)
+    window.open(OAUTH_INSTALL_URL, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes')
+  }
+
   // Only show errors for invalid tokens that need user intervention
   if (['missing_access_token', 'missing_refresh_token'].includes(tokenStatus.status)) {
     return (
@@ -19,10 +25,10 @@ function TokenStatusAlert({ config }) {
         
         <div className="mt-3">
           <button
-            onClick={() => window.open('https://marketplace.gohighlevel.com', '_blank')}
+            onClick={openOAuthInstall}
             className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
           >
-            Reinstall App
+            Install via OAuth
           </button>
         </div>
       </div>
@@ -37,12 +43,12 @@ function TokenStatusAlert({ config }) {
         <p className="text-yellow-600 text-sm mt-1">{tokenStatus.message}</p>
         
         <div className="mt-3">
-          <a
-            href="/"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm transition-colors inline-block"
+          <button
+            onClick={openOAuthInstall}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
           >
             Install via OAuth
-          </a>
+          </button>
         </div>
       </div>
     )

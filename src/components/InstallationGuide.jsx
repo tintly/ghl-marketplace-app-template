@@ -3,8 +3,8 @@ import React, { useState } from 'react'
 function InstallationGuide({ user, onInstallationComplete }) {
   const [copied, setCopied] = useState(false)
   
-  // The EXACT URL that should be opened - no variables, no construction
-  const EXACT_INSTALL_URL = 'https://marketplace.leadconnectorhq.com/oauth/chooselocation?response_type=code&redirect_uri=https%3A%2F%2Feloquent-moonbeam-8a5386.netlify.app%2Foauth%2Fcallback&client_id=685c90c16a67491ca1f5f7de-mcf0wxc1&scope=conversations.readonly+conversations%2Fmessage.readonly+conversations%2Freports.readonly+contacts.readonly+contacts.write+locations.readonly+locations%2FcustomFields.readonly+locations%2FcustomFields.write+oauth.readonly+oauth.write'
+  // The EXACT OAuth URL that should be opened
+  const OAUTH_INSTALL_URL = 'https://marketplace.gohighlevel.com/oauth/chooselocation?response_type=code&redirect_uri=https%3A%2F%2Feloquent-moonbeam-8a5386.netlify.app%2Foauth%2Fcallback&client_id=685c90c16a67491ca1f5f7de-mcf0wxc1&scope=conversations.readonly+conversations%2Fmessage.readonly+conversations%2Freports.readonly+contacts.readonly+contacts.write+locations.readonly+locations%2FcustomFields.readonly+locations%2FcustomFields.write+oauth.readonly+oauth.write'
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text)
@@ -13,8 +13,9 @@ function InstallationGuide({ user, onInstallationComplete }) {
   }
 
   const openInstallWindow = () => {
-    // Simply open the exact URL in a new window
-    window.open(EXACT_INSTALL_URL, '_blank')
+    console.log('Opening OAuth installation URL:', OAUTH_INSTALL_URL)
+    // Open the OAuth URL in a new window
+    window.open(OAUTH_INSTALL_URL, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes')
   }
 
   return (
@@ -60,7 +61,7 @@ function InstallationGuide({ user, onInstallationComplete }) {
               What Happens Next?
             </h3>
             <div className="text-green-800 space-y-2">
-              <p>1. Click the install button above (opens in new tab)</p>
+              <p>1. Click the install button above (opens in new window)</p>
               <p>2. You'll be redirected to GoHighLevel to authorize the app</p>
               <p>3. Choose the location you want to integrate with</p>
               <p>4. The app will receive real access tokens and store them securely</p>
@@ -75,9 +76,9 @@ function InstallationGuide({ user, onInstallationComplete }) {
             </h3>
             <div className="bg-white border rounded-md p-3 font-mono text-xs break-all">
               <div className="flex items-start justify-between">
-                <span className="text-gray-800 flex-1 mr-2">{EXACT_INSTALL_URL}</span>
+                <span className="text-gray-800 flex-1 mr-2">{OAUTH_INSTALL_URL}</span>
                 <button
-                  onClick={() => copyToClipboard(EXACT_INSTALL_URL)}
+                  onClick={() => copyToClipboard(OAUTH_INSTALL_URL)}
                   className="ml-2 px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
                 >
                   {copied ? 'Copied!' : 'Copy'}
