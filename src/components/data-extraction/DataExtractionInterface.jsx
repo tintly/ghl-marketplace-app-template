@@ -33,7 +33,6 @@ function DataExtractionInterface({ config, user, authService }) {
       setLoading(true)
       setError(null)
 
-      // Load custom fields and extraction fields in parallel
       await Promise.all([
         loadCustomFields(),
         loadExtractionFields()
@@ -53,7 +52,6 @@ function DataExtractionInterface({ config, user, authService }) {
   }
 
   const loadExtractionFields = async () => {
-    // Use the authenticated Supabase client
     const supabase = authService?.getSupabaseClient() || (await import('../../services/supabase')).supabase
 
     const { data, error } = await supabase
@@ -88,7 +86,6 @@ function DataExtractionInterface({ config, user, authService }) {
       console.log('Field ID:', editingCustomField.id)
       console.log('Update data:', updateData)
 
-      // Update the field in GoHighLevel
       const ghlService = new GHLApiService(config.access_token)
       const updatedField = await ghlService.updateCustomField(
         config.ghl_account_id, 
@@ -98,11 +95,9 @@ function DataExtractionInterface({ config, user, authService }) {
       
       console.log('✅ Field updated successfully in GHL:', updatedField)
 
-      // Close the edit form
       setShowEditForm(false)
       setEditingCustomField(null)
 
-      // Refresh the custom fields list to show the updated field
       console.log('🔄 Refreshing custom fields list...')
       await refreshInterface()
 
@@ -123,17 +118,14 @@ function DataExtractionInterface({ config, user, authService }) {
       console.log('=== DELETING CUSTOM FIELD ===')
       console.log('Field ID:', fieldId)
 
-      // Delete the field from GoHighLevel
       const ghlService = new GHLApiService(config.access_token)
       await ghlService.deleteCustomField(config.ghl_account_id, fieldId)
       
       console.log('✅ Field deleted successfully from GHL')
 
-      // Close the edit form
       setShowEditForm(false)
       setEditingCustomField(null)
 
-      // Refresh the interface to remove the deleted field
       console.log('🔄 Refreshing interface after deletion...')
       await refreshInterface()
 
@@ -154,36 +146,28 @@ function DataExtractionInterface({ config, user, authService }) {
       console.log('=== CREATING NEW CUSTOM FIELD ===')
       console.log('Field data:', fieldData)
 
-      // Create the field in GoHighLevel
       const ghlService = new GHLApiService(config.access_token)
       const createdField = await ghlService.createCustomField(config.ghl_account_id, fieldData)
       
       console.log('✅ Field created successfully in GHL:', createdField)
 
-      // Close the create form
       setShowCreateForm(false)
 
-      // Refresh the custom fields list to show the new field
       console.log('🔄 Refreshing custom fields list...')
       await refreshInterface()
 
-      // Extract the new field from the response
       const newField = createdField.customField || createdField
       if (newField && newField.id) {
         console.log('🎯 Auto-configuring new field for extraction...')
         
-        // Wait a moment for the field to be available
         await new Promise(resolve => setTimeout(resolve, 1000))
         
-        // Refresh again to ensure we have the latest data
         await loadCustomFields()
         
-        // Find the newly created field in our list
         const freshFields = await new CustomFieldsLoader(authService).loadFields(config)
         const createdFieldInList = freshFields.find(f => f.id === newField.id)
         
         if (createdFieldInList) {
-          // Automatically open the extraction configuration form
           handleCreateExtraction(createdFieldInList)
         } else {
           console.log('⚠️ Could not find newly created field in list, manual configuration needed')
@@ -230,25 +214,20 @@ function DataExtractionInterface({ config, user, authService }) {
       console.log('=== STARTING FIELD RECREATION ===')
       console.log('Extraction field:', extractionField)
 
-      // Validate that we have the necessary data
       if (!extractionField.original_ghl_field_data || Object.keys(extractionField.original_ghl_field_data).length === 0) {
         throw new Error('No original field data available for recreation. This field cannot be recreated.')
       }
 
-      // Initialize GHL API service and recreation service
       const ghlService = new GHLApiService(config.access_token)
       const recreationService = new FieldRecreationService(ghlService)
 
-      // Debug the original field metadata to understand folder structure
       recreationService.debugFieldMetadata(extractionField.original_ghl_field_data)
 
-      // Recreate the field in GoHighLevel with proper folder placement
       console.log('🔄 Recreating field in GoHighLevel with folder preservation...')
       const recreatedField = await recreationService.recreateField(config.ghl_account_id, extractionField)
       
       console.log('✅ Field recreation completed:', recreatedField)
 
-      // Extract the new field ID from the response
       const newFieldId = recreatedField.customField?.id || recreatedField.id
       if (!newFieldId) {
         throw new Error('Failed to get new field ID from recreation response')
@@ -256,15 +235,14 @@ function DataExtractionInterface({ config, user, authService }) {
 
       console.log('🔄 Updating extraction field with new ID:', newFieldId)
 
-      // Update the extraction field with the new GHL field ID and updated field data
       const supabase = authService?.getSupabaseClient() || (await import('../../services/supabase')).supabase
 
       const updatedFieldData = recreatedField.customField || recreatedField
       const { error: updateError } = await supabase
         .from('data_extraction_fields')
         .update({
-          target_ghl_key: newFieldId, // This is the key fix - update to new field ID
-          original_ghl_field_data: updatedFieldData, // Store the new field data
+          target_ghl_key: newFieldId,
+          original_ghl_field_data: updatedFieldData,
           updated_at: new Date().toISOString()
         })
         .eq('id', extractionField.id)
@@ -276,7 +254,6 @@ function DataExtractionInterface({ config, user, authService }) {
 
       console.log('✅ Extraction field updated with new ID successfully')
 
-      // Force refresh the interface to show updated state
       console.log('🔄 Refreshing interface to show updated state...')
       await refreshInterface()
 
@@ -295,11 +272,8 @@ function DataExtractionInterface({ config, user, authService }) {
       setRefreshing(true)
       console.log('🔄 Refreshing interface and updating stored field data...')
       
-      // Wait a moment for GHL to process any changes
       await new Promise(resolve => setTimeout(resolve, 2000))
       
-      // Reload both custom fields and extraction fields
-      // The loadCustomFields will automatically update stored field data
       await Promise.all([
         loadCustomFields(),
         loadExtractionFields()
@@ -317,32 +291,89 @@ function DataExtractionInterface({ config, user, authService }) {
   const handleFormSubmit = async (formData) => {
     const supabase = authService?.getSupabaseClient() || (await import('../../services/supabase')).supabase
 
-    if (editingField) {
-      // Update existing field
-      const { error } = await supabase
-        .from('data_extraction_fields')
-        .update({
-          ...formData,
-          updated_at: new Date().toISOString()
+    try {
+      // Check if this is a custom field (not standard field) and if options were modified
+      const isCustomField = selectedCustomField && !selectedCustomField.key
+      const isEditingCustomField = editingField && !editingField.target_ghl_key.startsWith('contact.')
+      
+      if ((isCustomField || isEditingCustomField) && needsGHLUpdate(formData)) {
+        console.log('=== SYNCING OPTIONS TO GHL CUSTOM FIELD ===')
+        
+        // Get the field ID to update
+        const fieldId = editingField ? editingField.target_ghl_key : selectedCustomField.id
+        
+        // Prepare options for GHL API (convert from enhanced format back to simple strings)
+        const ghlOptions = formData.picklist_options.map(opt => 
+          typeof opt === 'string' ? opt : opt.value
+        ).filter(Boolean)
+        
+        console.log('Updating GHL field with options:', ghlOptions)
+        
+        // Update the custom field in GHL
+        const ghlService = new GHLApiService(config.access_token)
+        await ghlService.updateCustomField(config.ghl_account_id, fieldId, {
+          name: selectedCustomField?.name || editingField?.field_name,
+          picklistOptions: ghlOptions,
+          dataType: selectedCustomField?.dataType || mapFieldTypeToGHL(formData.field_type)
         })
-        .eq('id', editingField.id)
+        
+        console.log('✅ Successfully updated GHL custom field with new options')
+      }
 
-      if (error) throw error
-    } else {
-      // Create new field
-      const { error } = await supabase
-        .from('data_extraction_fields')
-        .insert({
-          config_id: config.id,
-          ...formData
-        })
+      if (editingField) {
+        // Update existing field
+        const { error } = await supabase
+          .from('data_extraction_fields')
+          .update({
+            ...formData,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingField.id)
 
-      if (error) throw error
+        if (error) throw error
+      } else {
+        // Create new field
+        const { error } = await supabase
+          .from('data_extraction_fields')
+          .insert({
+            config_id: config.id,
+            ...formData
+          })
+
+        if (error) throw error
+      }
+
+      // Reload extraction fields and close form
+      await loadExtractionFields()
+      
+      // If we updated a custom field, refresh the custom fields list too
+      if (isCustomField || isEditingCustomField) {
+        await loadCustomFields()
+      }
+      
+      handleFormClose()
+    } catch (error) {
+      console.error('Error in form submission:', error)
+      throw error
     }
+  }
 
-    // Reload extraction fields and close form
-    await loadExtractionFields()
-    handleFormClose()
+  const needsGHLUpdate = (formData) => {
+    // Check if this field type supports options and has options
+    return ['SINGLE_OPTIONS', 'MULTIPLE_OPTIONS'].includes(formData.field_type) && 
+           formData.picklist_options && 
+           formData.picklist_options.length > 0
+  }
+
+  const mapFieldTypeToGHL = (extractionFieldType) => {
+    const mapping = {
+      'SINGLE_OPTIONS': 'SINGLE_OPTIONS',
+      'MULTIPLE_OPTIONS': 'MULTIPLE_OPTIONS',
+      'TEXT': 'TEXT',
+      'NUMERICAL': 'NUMERICAL',
+      'DATE': 'DATE'
+    }
+    return mapping[extractionFieldType] || 'TEXT'
   }
 
   const handleFormClose = () => {
@@ -363,7 +394,6 @@ function DataExtractionInterface({ config, user, authService }) {
 
       if (error) throw error
 
-      // Reload extraction fields
       await loadExtractionFields()
     } catch (error) {
       console.error('Error deleting extraction field:', error)
@@ -376,10 +406,7 @@ function DataExtractionInterface({ config, user, authService }) {
       setRefreshing(true)
       console.log('🔄 Manual refresh triggered - updating stored field data...')
       
-      // This will automatically update stored field data for existing extraction fields
       await loadCustomFields()
-      
-      // Also reload extraction fields to show any updates
       await loadExtractionFields()
       
       console.log('✅ Manual refresh completed with updated field data')
@@ -432,7 +459,7 @@ function DataExtractionInterface({ config, user, authService }) {
         </p>
       </div>
 
-      {/* Creation Loading Indicator */}
+      {/* Loading Indicators */}
       {creating && (
         <div className="mx-6 mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
           <div className="flex items-center">
@@ -445,7 +472,6 @@ function DataExtractionInterface({ config, user, authService }) {
         </div>
       )}
 
-      {/* Update Loading Indicator */}
       {updating && (
         <div className="mx-6 mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-center">
@@ -458,7 +484,6 @@ function DataExtractionInterface({ config, user, authService }) {
         </div>
       )}
 
-      {/* Recreation Loading Indicator */}
       {recreating && (
         <div className="mx-6 mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-center">
@@ -471,7 +496,6 @@ function DataExtractionInterface({ config, user, authService }) {
         </div>
       )}
 
-      {/* Refresh Loading Indicator */}
       {refreshing && (
         <div className="mx-6 mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <div className="flex items-center">
@@ -513,7 +537,7 @@ function DataExtractionInterface({ config, user, authService }) {
         </div>
       </div>
 
-      {/* Create Custom Field Form Modal */}
+      {/* Modals */}
       {showCreateForm && (
         <CreateCustomFieldForm
           customFields={customFields}
@@ -522,7 +546,6 @@ function DataExtractionInterface({ config, user, authService }) {
         />
       )}
 
-      {/* Edit Custom Field Form Modal */}
       {showEditForm && editingCustomField && (
         <CustomFieldEditForm
           customField={editingCustomField}
@@ -532,7 +555,6 @@ function DataExtractionInterface({ config, user, authService }) {
         />
       )}
 
-      {/* Extraction Configuration Form Modal */}
       {showForm && (
         <ExtractionFieldForm
           customField={selectedCustomField}
