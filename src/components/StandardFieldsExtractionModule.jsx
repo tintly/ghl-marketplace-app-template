@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react'
 import StandardFieldsList from './StandardFieldsList'
 import StandardExtractionFieldsList from './StandardExtractionFieldsList'
 import ExtractionFieldForm from './data-extraction/ExtractionFieldForm'
+import ConfigurationManager from './data-extraction/ConfigurationManager'
 import { isStandardField } from '../utils/standardContactFields'
 
-function StandardFieldsExtractionModule({ config, user, authService }) {
+function StandardFieldsExtractionModule({ user, authService }) {
+  const [ghlConfig, setGhlConfig] = useState(null)
   const [extractionFields, setExtractionFields] = useState([])
   const [selectedStandardField, setSelectedStandardField] = useState(null)
   const [editingField, setEditingField] = useState(null)
@@ -13,21 +15,43 @@ function StandardFieldsExtractionModule({ config, user, authService }) {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    loadExtractionFields()
-  }, [config])
+    loadData()
+  }, [user])
 
-  const loadExtractionFields = async () => {
+  const loadData = async () => {
     try {
       setLoading(true)
       setError(null)
 
+      // Load GHL configuration first
+      const configManager = new ConfigurationManager(authService)
+      const configResult = await configManager.findConfiguration(user.userId, user.locationId)
+      
+      if (!configResult.found) {
+        throw new Error('No GoHighLevel configuration found. Please set up the integration first.')
+      }
+
+      setGhlConfig(configResult.data)
+
+      // Load extraction fields for this configuration
+      await loadExtractionFields(configResult.data.id)
+    } catch (error) {
+      console.error('Error loading standard fields module:', error)
+      setError(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadExtractionFields = async (configId) => {
+    try {
       // Use the authenticated Supabase client
       const supabase = authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
 
       const { data, error } = await supabase
         .from('data_extraction_fields')
         .select('*')
-        .eq('config_id', config.id)
+        .eq('config_id', configId)
         .order('sort_order', { ascending: true })
 
       if (error) {
@@ -43,9 +67,7 @@ function StandardFieldsExtractionModule({ config, user, authService }) {
       setExtractionFields(standardFields)
     } catch (error) {
       console.error('Error loading standard extraction fields:', error)
-      setError(error.message)
-    } finally {
-      setLoading(false)
+      throw error
     }
   }
 
@@ -80,7 +102,7 @@ function StandardFieldsExtractionModule({ config, user, authService }) {
       const { error } = await supabase
         .from('data_extraction_fields')
         .insert({
-          config_id: config.id,
+          config_id: ghlConfig.id,
           ...formData
         })
 
@@ -88,7 +110,7 @@ function StandardFieldsExtractionModule({ config, user, authService }) {
     }
 
     // Reload extraction fields and close form
-    await loadExtractionFields()
+    await loadExtractionFields(ghlConfig.id)
     handleFormClose()
   }
 
@@ -110,7 +132,7 @@ function StandardFieldsExtractionModule({ config, user, authService }) {
       if (error) throw error
 
       // Reload extraction fields
-      await loadExtractionFields()
+      await loadExtractionFields(ghlConfig.id)
     } catch (error) {
       console.error('Error deleting extraction field:', error)
       throw error
@@ -132,11 +154,22 @@ function StandardFieldsExtractionModule({ config, user, authService }) {
         <h3 className="text-red-800 font-medium">Error Loading Standard Fields</h3>
         <p className="text-red-600 text-sm mt-1">{error}</p>
         <button
-          onClick={loadExtractionFields}
+          onClick={loadData}
           className="mt-3 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
         >
           Retry
         </button>
+      </div>
+    )
+  }
+
+  if (!ghlConfig) {
+    return (
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <h3 className="text-yellow-800 font-medium">Configuration Required</h3>
+        <p className="text-yellow-600 text-sm mt-1">
+          Please set up your GoHighLevel integration first before configuring standard field extraction.
+        </p>
       </div>
     )
   }
