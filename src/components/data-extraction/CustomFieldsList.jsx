@@ -1,7 +1,7 @@
 import React from 'react'
 import { getFieldTypeIcon, getFieldTypeLabel, formatFieldType } from '../../utils/customFieldUtils'
 
-function CustomFieldsList({ customFields, extractionFields, onCreateExtraction, onRefresh, refreshing = false }) {
+function CustomFieldsList({ customFields, extractionFields, onCreateExtraction, onRefresh, onCreateNewField, refreshing = false }) {
   const isFieldConfigured = (fieldId) => {
     return extractionFields.some(ef => ef.target_ghl_key === fieldId)
   }
@@ -36,21 +36,32 @@ function CustomFieldsList({ customFields, extractionFields, onCreateExtraction, 
     <div>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-medium text-gray-900">Available Custom Fields</h3>
-        <button
-          onClick={onRefresh}
-          disabled={refreshing}
-          className="text-sm text-blue-600 hover:text-blue-700 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <svg 
-            className={`w-4 h-4 mr-1 ${refreshing ? 'animate-spin' : ''}`} 
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24"
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={onCreateNewField}
+            className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-md text-sm transition-colors flex items-center"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          {refreshing ? 'Refreshing...' : 'Refresh'}
-        </button>
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            New Field
+          </button>
+          <button
+            onClick={onRefresh}
+            disabled={refreshing}
+            className="text-sm text-blue-600 hover:text-blue-700 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg 
+              className={`w-4 h-4 mr-1 ${refreshing ? 'animate-spin' : ''}`} 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {refreshing ? 'Refreshing...' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       {customFields.length === 0 ? (
@@ -59,7 +70,16 @@ function CustomFieldsList({ customFields, extractionFields, onCreateExtraction, 
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
           <p>No custom fields found</p>
-          <p className="text-sm mt-1">Create custom fields in your GoHighLevel location first.</p>
+          <p className="text-sm mt-1 mb-4">Create custom fields in your GoHighLevel location or create them directly here.</p>
+          <button
+            onClick={onCreateNewField}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm transition-colors inline-flex items-center"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Create Your First Field
+          </button>
         </div>
       ) : (
         <div className="space-y-3 max-h-96 overflow-y-auto">

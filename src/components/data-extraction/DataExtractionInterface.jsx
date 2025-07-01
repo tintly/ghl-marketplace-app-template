@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import CustomFieldsList from './CustomFieldsList'
 import ExtractionFieldForm from './ExtractionFieldForm'
 import ExtractionFieldsList from './ExtractionFieldsList'
+import CreateCustomFieldForm from './CreateCustomFieldForm'
 import CustomFieldsLoader from './CustomFieldsLoader'
 import { GHLApiService } from '../../services/GHLApiService'
 import { FieldRecreationService } from './FieldRecreationService'
@@ -11,11 +12,13 @@ function DataExtractionInterface({ config, user, authService }) {
   const [extractionFields, setExtractionFields] = useState([])
   const [selectedCustomField, setSelectedCustomField] = useState(null)
   const [showForm, setShowForm] = useState(false)
+  const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingField, setEditingField] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [recreating, setRecreating] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [creating, setCreating] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -61,6 +64,68 @@ function DataExtractionInterface({ config, user, authService }) {
     }
 
     setExtractionFields(data || [])
+  }
+
+  const handleCreateNewField = () => {
+    setShowCreateForm(true)
+  }
+
+  const handleCreateFieldSubmit = async (fieldData) => {
+    try {
+      setCreating(true)
+      setError(null)
+
+      console.log('=== CREATING NEW CUSTOM FIELD ===')
+      console.log('Field data:', fieldData)
+
+      // Create the field in GoHighLevel
+      const ghlService = new GHLApiService(config.access_token)
+      const createdField = await ghlService.createCustomField(config.ghl_account_id, fieldData)
+      
+      console.log('✅ Field created successfully in GHL:', createdField)
+
+      // Close the create form
+      setShowCreateForm(false)
+
+      // Refresh the custom fields list to show the new field
+      console.log('🔄 Refreshing custom fields list...')
+      await refreshInterface()
+
+      // Extract the new field from the response
+      const newField = createdField.customField || createdField
+      if (newField && newField.id) {
+        console.log('🎯 Auto-configuring new field for extraction...')
+        
+        // Wait a moment for the field to be available
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        // Refresh again to ensure we have the latest data
+        await loadCustomFields()
+        
+        // Find the newly created field in our list
+        const freshFields = await new CustomFieldsLoader(authService).loadFields(config)
+        const createdFieldInList = freshFields.find(f => f.id === newField.id)
+        
+        if (createdFieldInList) {
+          // Automatically open the extraction configuration form
+          handleCreateExtraction(createdFieldInList)
+        } else {
+          console.log('⚠️ Could not find newly created field in list, manual configuration needed')
+        }
+      }
+
+      console.log('🎉 Field creation and setup completed successfully!')
+
+    } catch (error) {
+      console.error('❌ Field creation failed:', error)
+      setError(`Failed to create custom field: ${error.message}`)
+      setCreating(false)
+    }
+  }
+
+  const handleCreateFieldCancel = () => {
+    setShowCreateForm(false)
+    setCreating(false)
   }
 
   const handleCreateExtraction = (customField) => {
@@ -202,6 +267,7 @@ function DataExtractionInterface({ config, user, authService }) {
     setShowForm(false)
     setSelectedCustomField(null)
     setEditingField(null)
+    setCreating(false)
   }
 
   const handleDeleteExtraction = async (fieldId) => {
@@ -284,6 +350,19 @@ function DataExtractionInterface({ config, user, authService }) {
         </p>
       </div>
 
+      {/* Creation Loading Indicator */}
+      {creating && (
+        <div className="mx-6 mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600 mr-2"></div>
+            <span className="text-green-800">Creating new custom field in GoHighLevel...</span>
+          </div>
+          <p className="text-green-700 text-xs mt-1">
+            This may take a few moments. The field will be created and automatically configured for extraction.
+          </p>
+        </div>
+      )}
+
       {/* Recreation Loading Indicator */}
       {recreating && (
         <div className="mx-6 mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -299,12 +378,12 @@ function DataExtractionInterface({ config, user, authService }) {
 
       {/* Refresh Loading Indicator */}
       {refreshing && (
-        <div className="mx-6 mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
+        <div className="mx-6 mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <div className="flex items-center">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600 mr-2"></div>
-            <span className="text-green-800">Refreshing and updating field data...</span>
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600 mr-2"></div>
+            <span className="text-yellow-800">Refreshing and updating field data...</span>
           </div>
-          <p className="text-green-700 text-xs mt-1">
+          <p className="text-yellow-700 text-xs mt-1">
             Updating field status, configurations, and stored metadata.
           </p>
         </div>
@@ -319,6 +398,7 @@ function DataExtractionInterface({ config, user, authService }) {
               extractionFields={extractionFields}
               onCreateExtraction={handleCreateExtraction}
               onRefresh={handleRefreshFields}
+              onCreateNewField={handleCreateNewField}
               refreshing={refreshing}
             />
           </div>
@@ -337,7 +417,16 @@ function DataExtractionInterface({ config, user, authService }) {
         </div>
       </div>
 
-      {/* Form Modal */}
+      {/* Create Custom Field Form Modal */}
+      {showCreateForm && (
+        <CreateCustomFieldForm
+          customFields={customFields}
+          onSubmit={handleCreateFieldSubmit}
+          onCancel={handleCreateFieldCancel}
+        />
+      )}
+
+      {/* Extraction Configuration Form Modal */}
       {showForm && (
         <ExtractionFieldForm
           customField={selectedCustomField}
