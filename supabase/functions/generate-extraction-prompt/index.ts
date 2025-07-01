@@ -147,7 +147,7 @@ Deno.serve(async (req: Request) => {
     if (extractionFields.length > 0) {
       console.log('Extraction fields details:')
       extractionFields.forEach((field, index) => {
-        console.log(`  ${index + 1}. ${field.field_name} (${field.field_type}) -> ${field.target_ghl_key}`)
+        console.log(`  ${index + 1}. ${field.field_name} (${field.field_type}) -> ${field.target_ghl_key} [ID: ${field.id}]`)
       })
     }
 
@@ -165,6 +165,7 @@ Deno.serve(async (req: Request) => {
           promptLength: prompt.length,
           generatedAt: new Date().toISOString(),
           fields: extractionFields.map(f => ({
+            id: f.id,
             name: f.field_name,
             type: f.field_type,
             key: f.target_ghl_key,
@@ -296,7 +297,7 @@ async function getExtractionFields(supabase: any, configId: string): Promise<Ext
   } else {
     console.log('Extraction fields found:')
     fields.forEach((field, index) => {
-      console.log(`  ${index + 1}. ${field.field_name} (${field.field_type}) -> ${field.target_ghl_key}`)
+      console.log(`  ${index + 1}. ${field.field_name} (${field.field_type}) -> ${field.target_ghl_key} [ID: ${field.id}]`)
       if (field.is_required) {
         console.log(`     ⚠️ REQUIRED`)
       }
@@ -485,12 +486,85 @@ function generateWindowTintStylePrompt({
     })
   }
   
+  // CRITICAL: Add the field mapping and response format instructions
+  prompt += `\\nResponse Format:\\n`
+  prompt += `Return a JSON object with the extracted data. Use the exact field keys above for the data, and include a special "_field_mappings" object that maps each field key to its extraction field ID for processing.\\n\\n`
+  
+  // Generate the field mappings for the response
+  if (extractionFields.length > 0) {
+    prompt += `Example response structure:\\n`
+    prompt += `{\\n`
+    
+    // Add example data fields
+    extractionFields.slice(0, 3).forEach((field, index) => {
+      const exampleValue = getExampleValue(field)
+      prompt += `  "${field.target_ghl_key}": ${exampleValue}`
+      if (index < Math.min(extractionFields.length, 3) - 1) prompt += `,`
+      prompt += `\\n`
+    })
+    
+    if (extractionFields.length > 3) {
+      prompt += `  // ... other fields ...\\n`
+    }
+    
+    // Add the field mappings object
+    prompt += `  "_field_mappings": {\\n`
+    extractionFields.forEach((field, index) => {
+      prompt += `    "${field.target_ghl_key}": "${field.id}"`
+      if (index < extractionFields.length - 1) prompt += `,`
+      prompt += `\\n`
+    })
+    prompt += `  },\\n`
+    
+    // Add metadata fields
+    prompt += `  "extraction_confidence": "high",\\n`
+    prompt += `  "notes": "Any relevant observations"\\n`
+    prompt += `}\\n\\n`
+  }
+  
   // Add final instructions
+  prompt += `Important Instructions:\\n`
   prompt += `- Scan the entire conversation history to extract missing fields.\\n`
   prompt += `- If details are spread across multiple messages, combine them appropriately.\\n`
   prompt += `- Use context to determine if names mentioned are actually the customer's name vs. referrals or business owners.\\n`
   prompt += `- Only extract information that is clearly stated or strongly implied.\\n`
+  prompt += `- ALWAYS include the "_field_mappings" object in your response for proper field identification.\\n`
+  prompt += `- Include "extraction_confidence" field with values: "high", "medium", or "low".\\n`
+  prompt += `- Add a "notes" field with any relevant observations.\\n`
   prompt += `- Ensure the response is VALID JSON ONLY, with no explanations or markdown.`
   
   return prompt
+}
+
+function getExampleValue(field: ExtractionField): string {
+  switch (field.field_type) {
+    case 'TEXT':
+      return `"John Smith"`
+    case 'EMAIL':
+      return `"john@example.com"`
+    case 'PHONE':
+      return `"(555) 123-4567"`
+    case 'DATE':
+      return `"2024-01-15"`
+    case 'NUMERICAL':
+      return `25`
+    case 'SINGLE_OPTIONS':
+      if (field.picklist_options?.length > 0) {
+        const firstOption = field.picklist_options[0]
+        const value = typeof firstOption === 'string' ? firstOption : (firstOption?.value || firstOption?.label || 'Option 1')
+        return `"${value}"`
+      }
+      return `"Option 1"`
+    case 'MULTIPLE_OPTIONS':
+      if (field.picklist_options?.length > 1) {
+        const firstOption = field.picklist_options[0]
+        const secondOption = field.picklist_options[1]
+        const value1 = typeof firstOption === 'string' ? firstOption : (firstOption?.value || firstOption?.label || 'Option 1')
+        const value2 = typeof secondOption === 'string' ? secondOption : (secondOption?.value || secondOption?.label || 'Option 2')
+        return `"${value1}, ${value2}"`
+      }
+      return `"Option 1, Option 2"`
+    default:
+      return `"extracted_value"`
+  }
 }
