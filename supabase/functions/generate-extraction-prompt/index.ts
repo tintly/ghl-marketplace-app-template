@@ -423,7 +423,15 @@ function generatePromptWithSeparatedFields({
   locationId: string
 }): string {
   
-  let prompt = `You are analyzing a conversation between a customer and ${ghlConfig.business_name}. `
+  // CRITICAL FIX: Use the actual business name from the configuration
+  const businessDisplayName = ghlConfig.business_name || `Location ${locationId}`
+  
+  console.log('🏢 BUSINESS NAME DEBUG:')
+  console.log('- Raw business_name from DB:', ghlConfig.business_name)
+  console.log('- Final display name:', businessDisplayName)
+  console.log('- Location ID:', locationId)
+  
+  let prompt = `You are analyzing a conversation between a customer and ${businessDisplayName}. `
   prompt += `Your goal is to extract structured data from the entire conversation history, ensuring all necessary fields are populated. `
   prompt += `Infer missing details based on context. If a customer provides information across multiple messages, combine them correctly. `
   prompt += `Ensure extracted data is accurate and complete.\\n\\n`
