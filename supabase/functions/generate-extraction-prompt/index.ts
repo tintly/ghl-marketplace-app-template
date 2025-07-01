@@ -127,8 +127,8 @@ Deno.serve(async (req: Request) => {
     const stopTriggers = await getStopTriggers(supabase, ghlConfig.id)
     console.log(`Found ${stopTriggers.length} stop triggers`)
 
-    console.log('Step 5: Generating window tint style prompt...')
-    const prompt = generateWindowTintStylePrompt({
+    console.log('Step 5: Generating prompt with proper field keys...')
+    const prompt = generatePromptWithProperFieldKeys({
       ghlConfig,
       extractionFields,
       contextualRules,
@@ -147,7 +147,8 @@ Deno.serve(async (req: Request) => {
     if (extractionFields.length > 0) {
       console.log('Extraction fields details:')
       extractionFields.forEach((field, index) => {
-        console.log(`  ${index + 1}. ${field.field_name} (${field.field_type}) -> ${field.target_ghl_key} [ID: ${field.id}]`)
+        const fieldKey = getProperFieldKey(field)
+        console.log(`  ${index + 1}. ${field.field_name} (${field.field_type}) -> ${fieldKey} [GHL ID: ${field.target_ghl_key}]`)
       })
     }
 
@@ -169,6 +170,7 @@ Deno.serve(async (req: Request) => {
             name: f.field_name,
             type: f.field_type,
             ghlKey: f.target_ghl_key,
+            fieldKey: getProperFieldKey(f),
             required: f.is_required
           }))
         }
@@ -203,6 +205,32 @@ Deno.serve(async (req: Request) => {
     )
   }
 })
+
+// CRITICAL FIX: Function to get the proper field key for prompt generation
+function getProperFieldKey(field: ExtractionField): string {
+  // For standard fields, target_ghl_key IS the field key (e.g., "contact.first_name")
+  if (field.target_ghl_key.includes('.')) {
+    console.log(`Standard field detected: ${field.target_ghl_key}`)
+    return field.target_ghl_key
+  }
+  
+  // For custom fields, we need to get the fieldKey from original_ghl_field_data
+  if (field.original_ghl_field_data && field.original_ghl_field_data.fieldKey) {
+    console.log(`Custom field detected: ${field.target_ghl_key} -> ${field.original_ghl_field_data.fieldKey}`)
+    return field.original_ghl_field_data.fieldKey
+  }
+  
+  // Fallback: if no fieldKey in stored data, construct one from the field name
+  const sanitizedName = field.field_name.toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '') // Remove special characters
+    .replace(/\s+/g, '_') // Replace spaces with underscores
+    .replace(/_+/g, '_') // Replace multiple underscores with single
+    .replace(/^_|_$/g, '') // Remove leading/trailing underscores
+  
+  const fallbackKey = `contact.${sanitizedName}`
+  console.log(`⚠️ Fallback field key generated: ${field.target_ghl_key} -> ${fallbackKey}`)
+  return fallbackKey
+}
 
 async function getGHLConfiguration(supabase: any, locationId: string): Promise<GHLConfiguration | null> {
   console.log('Fetching GHL configuration for location:', locationId)
@@ -297,7 +325,8 @@ async function getExtractionFields(supabase: any, configId: string): Promise<Ext
   } else {
     console.log('Extraction fields found:')
     fields.forEach((field, index) => {
-      console.log(`  ${index + 1}. ${field.field_name} (${field.field_type}) -> ${field.target_ghl_key} [ID: ${field.id}]`)
+      const fieldKey = getProperFieldKey(field)
+      console.log(`  ${index + 1}. ${field.field_name} (${field.field_type}) -> ${fieldKey} [GHL ID: ${field.target_ghl_key}]`)
       if (field.is_required) {
         console.log(`     ⚠️ REQUIRED`)
       }
@@ -345,7 +374,7 @@ async function getStopTriggers(supabase: any, configId: string): Promise<StopTri
   return triggers
 }
 
-function generateWindowTintStylePrompt({
+function generatePromptWithProperFieldKeys({
   ghlConfig,
   extractionFields,
   contextualRules,
@@ -359,7 +388,6 @@ function generateWindowTintStylePrompt({
   locationId: string
 }): string {
   
-  // Start with the base instruction similar to your window tint prompt
   let prompt = `You are analyzing a conversation between a customer and ${ghlConfig.business_name}. `
   prompt += `Your goal is to extract structured data from the entire conversation history, ensuring all necessary fields are populated. `
   prompt += `Infer missing details based on context. If a customer provides information across multiple messages, combine them correctly. `
@@ -424,11 +452,16 @@ function generateWindowTintStylePrompt({
   
   prompt += `Extract and return the following structured data:\\n`
   
-  // CRITICAL FIX: Use target_ghl_key (the actual GHL field ID) instead of the UUID
+  // CRITICAL FIX: Use the proper field key instead of the GHL ID
   if (extractionFields.length > 0) {
     extractionFields.forEach(field => {
-      // Use the GHL field ID (target_ghl_key) in the prompt, not the UUID
-      prompt += `- **${field.target_ghl_key}** (ID: ${field.target_ghl_key}): ${field.description}`
+      // Get the proper field key (e.g., "contact.owner_alert" instead of "tdDS2NY397uYgP80UBfg")
+      const fieldKey = getProperFieldKey(field)
+      
+      console.log(`Adding field to prompt: ${field.field_name} -> ${fieldKey} (GHL ID: ${field.target_ghl_key})`)
+      
+      // Use the proper field key in the prompt
+      prompt += `- **${fieldKey}** (ID: ${fieldKey}): ${field.description}`
       
       // Add choice options if applicable
       if (['SINGLE_OPTIONS', 'MULTIPLE_OPTIONS'].includes(field.field_type) && field.picklist_options?.length > 0) {
@@ -493,7 +526,7 @@ function generateWindowTintStylePrompt({
   prompt += `- If details are spread across multiple messages, combine them appropriately.\\n`
   prompt += `- Use context to determine if names mentioned are actually the customer's name vs. referrals or business owners.\\n`
   prompt += `- Only extract information that is clearly stated or strongly implied.\\n`
-  prompt += `- For each field, include the field ID in parentheses in your response for easy parsing.\\n`
+  prompt += `- For each field, use the exact field key shown above in your JSON response.\\n`
   prompt += `- Ensure the response is VALID JSON ONLY, with no explanations or markdown.`
   
   return prompt
