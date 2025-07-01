@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { getFieldTypeLabel, mapGHLFieldType } from '../../utils/customFieldUtils'
+import { isStandardField } from '../../utils/standardContactFields'
 
 function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
@@ -31,23 +32,39 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
         original_ghl_field_data: editingField.original_ghl_field_data || {}
       })
     } else if (customField) {
-      // Creating new field from custom field
-      const mappedType = mapGHLFieldType(customField.dataType)
-      const options = customField.picklistOptions || []
-      
-      setFormData({
-        field_name: customField.name,
-        description: `Extract data for ${customField.name} field`,
-        target_ghl_key: customField.id,
-        field_type: mappedType,
-        picklist_options: Array.isArray(options) ? options.map(opt => 
-          typeof opt === 'string' ? opt : opt.label || opt.value || ''
-        ).filter(Boolean) : [],
-        placeholder: customField.placeholder || '',
-        is_required: false,
-        sort_order: 0,
-        original_ghl_field_data: customField // Store the entire GHL field object
-      })
+      // Creating new field from custom field or standard field
+      if (customField.key && isStandardField(customField.key)) {
+        // This is a standard field
+        setFormData({
+          field_name: customField.name,
+          description: customField.description || `Extract data for ${customField.name} field`,
+          target_ghl_key: customField.key, // Use the key for standard fields
+          field_type: customField.dataType,
+          picklist_options: [],
+          placeholder: '',
+          is_required: false,
+          sort_order: 0,
+          original_ghl_field_data: customField // Store the entire standard field object
+        })
+      } else {
+        // This is a GoHighLevel custom field
+        const mappedType = mapGHLFieldType(customField.dataType)
+        const options = customField.picklistOptions || []
+        
+        setFormData({
+          field_name: customField.name,
+          description: `Extract data for ${customField.name} field`,
+          target_ghl_key: customField.id, // Use the id for custom fields
+          field_type: mappedType,
+          picklist_options: Array.isArray(options) ? options.map(opt => 
+            typeof opt === 'string' ? opt : opt.label || opt.value || ''
+          ).filter(Boolean) : [],
+          placeholder: customField.placeholder || '',
+          is_required: false,
+          sort_order: 0,
+          original_ghl_field_data: customField // Store the entire GHL field object
+        })
+      }
     }
   }, [customField, editingField])
 
@@ -92,6 +109,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
   }
 
   const needsPicklistOptions = ['SINGLE_OPTIONS', 'MULTIPLE_OPTIONS'].includes(formData.field_type)
+  const isStandardFieldForm = customField && customField.key && isStandardField(customField.key)
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -104,6 +122,11 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
           {customField && (
             <p className="text-sm text-gray-600 mt-1">
               Setting up extraction for: <span className="font-medium">{customField.name}</span>
+              {isStandardFieldForm && (
+                <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  Standard Field
+                </span>
+              )}
             </p>
           )}
         </div>
@@ -147,23 +170,41 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Field Type
-              </label>
-              <select
-                value={formData.field_type}
-                onChange={(e) => handleChange('field_type', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={loading}
-              >
-                <option value="TEXT">Text</option>
-                <option value="NUMERICAL">Numerical</option>
-                <option value="SINGLE_OPTIONS">Single Choice</option>
-                <option value="MULTIPLE_OPTIONS">Multiple Choice</option>
-                <option value="DATE">Date</option>
-              </select>
-            </div>
+            {/* Show field type for standard fields (read-only) */}
+            {isStandardFieldForm ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Field Type
+                </label>
+                <input
+                  type="text"
+                  value={getFieldTypeLabel(formData.field_type)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600"
+                  disabled
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Standard field types cannot be changed
+                </p>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Field Type
+                </label>
+                <select
+                  value={formData.field_type}
+                  onChange={(e) => handleChange('field_type', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={loading}
+                >
+                  <option value="TEXT">Text</option>
+                  <option value="NUMERICAL">Numerical</option>
+                  <option value="SINGLE_OPTIONS">Single Choice</option>
+                  <option value="MULTIPLE_OPTIONS">Multiple Choice</option>
+                  <option value="DATE">Date</option>
+                </select>
+              </div>
+            )}
 
             {needsPicklistOptions && (
               <div>
