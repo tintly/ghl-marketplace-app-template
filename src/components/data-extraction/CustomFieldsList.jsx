@@ -1,7 +1,15 @@
 import React from 'react'
 import { getFieldTypeIcon, getFieldTypeLabel, formatFieldType } from '../../utils/customFieldUtils'
 
-function CustomFieldsList({ customFields, extractionFields, onCreateExtraction, onRefresh, onCreateNewField, refreshing = false }) {
+function CustomFieldsList({ 
+  customFields, 
+  extractionFields, 
+  onCreateExtraction, 
+  onRefresh, 
+  onCreateNewField, 
+  onEditField,
+  refreshing = false 
+}) {
   const isFieldConfigured = (fieldId) => {
     return extractionFields.some(ef => ef.target_ghl_key === fieldId)
   }
@@ -130,7 +138,19 @@ function CustomFieldsList({ customFields, extractionFields, onCreateExtraction, 
                     </div>
                   </div>
                   
-                  <div className="ml-4">
+                  <div className="ml-4 flex space-x-2">
+                    {/* Edit Field Button */}
+                    <button
+                      onClick={() => onEditField(field)}
+                      className="text-gray-600 hover:text-gray-700 p-1"
+                      title="Edit field"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+
+                    {/* Configure/Active Button */}
                     {!isFieldConfigured(field.id) ? (
                       <button
                         onClick={() => onCreateExtraction(field)}
