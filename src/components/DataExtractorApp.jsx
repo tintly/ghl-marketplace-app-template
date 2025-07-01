@@ -3,7 +3,6 @@ import { Routes, Route } from 'react-router-dom'
 import UserLinking from './UserLinking'
 import DataExtractionModule from './DataExtractionModule'
 import StandardFieldsExtractionModule from './StandardFieldsExtractionModule'
-import ConversationsViewer from './ConversationsViewer'
 import InstallationGuide from './InstallationGuide'
 import Navigation from './Navigation'
 
@@ -93,15 +92,6 @@ function DataExtractorApp({ user, authService }) {
               <StandardFieldsExtractionModule user={user} authService={authService} />
             )
           } />
-          <Route path="/conversations" element={
-            needsOAuthInstallation() ? (
-              <div className="text-center py-8">
-                <p className="text-gray-600">Please complete the OAuth installation first.</p>
-              </div>
-            ) : (
-              <ConversationsViewer user={user} authService={authService} />
-            )
-          } />
         </Routes>
       </main>
     </div>
@@ -151,7 +141,7 @@ function DashboardHome({ user, needsOAuth }) {
           <h3 className="text-lg font-medium text-gray-900">Available Features</h3>
         </div>
         <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="text-center p-6 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
               <div className="text-4xl mb-4">🔧</div>
               <h4 className="text-lg font-semibold text-gray-900 mb-2">Custom Fields</h4>
@@ -173,18 +163,6 @@ function DashboardHome({ user, needsOAuth }) {
                 className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md transition-colors inline-block"
               >
                 Configure
-              </a>
-            </div>
-            
-            <div className="text-center p-6 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
-              <div className="text-4xl mb-4">💬</div>
-              <h4 className="text-lg font-semibold text-gray-900 mb-2">Conversations</h4>
-              <p className="text-gray-600 mb-4">View incoming messages and processing status</p>
-              <a
-                href="/conversations"
-                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md transition-colors inline-block"
-              >
-                View Messages
               </a>
             </div>
             
