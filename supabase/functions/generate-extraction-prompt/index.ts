@@ -507,7 +507,7 @@ function generatePromptWithSeparatedFields({
       const fieldKey = getProperFieldKey(field)
       console.log(`Adding standard field to prompt: ${field.field_name} -> ${fieldKey}`)
       
-      prompt += `- **${fieldKey}** (ID: ${field.target_ghl_key}): ${field.description}`
+      prompt += `- **${fieldKey}** (${field.field_name}): ${field.description}`
       
       // Add field-specific formatting instructions for standard fields
       switch (field.field_type) {
