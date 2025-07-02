@@ -91,6 +91,7 @@ Deno.serve(async (req: Request) => {
     
     const requestBody = await req.json()
     const conversationId = requestBody.conversation_id || requestBody.conversationId
+    const autoExtract = requestBody.auto_extract !== false // Default to true unless explicitly set to false
     
     if (!conversationId) {
       console.error('No conversation_id provided in request')
@@ -110,6 +111,7 @@ Deno.serve(async (req: Request) => {
     }
 
     console.log('Building AI extraction payload for conversation:', conversationId)
+    console.log('Auto-extract enabled:', autoExtract)
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -254,25 +256,110 @@ Deno.serve(async (req: Request) => {
     console.log(`- Business: ${payload.business_context.name}`)
     console.log(`- Fields to extract: ${payload.fields_to_extract.length}`)
     console.log(`- Conversation messages: ${payload.conversation_history.length}`)
-    console.log(`- Conversation metadata: ${JSON.stringify(payload.conversation_metadata)}`)
-    console.log(`- Prompt metadata included: ${Object.keys(payload.metadata).join(', ')}`)
 
-    // Log field summary
-    console.log('Fields to extract:')
-    payload.fields_to_extract.forEach((field, index) => {
-      console.log(`  ${index + 1}. ${field.name} (${field.ghl_key}) - ${field.type || 'TEXT'}`)
-    })
+    // Step 4: Auto-invoke OpenAI extraction if enabled
+    if (autoExtract) {
+      console.log('Step 4: Auto-invoking OpenAI extraction...')
+      
+      try {
+        const extractionResponse = await fetch(`${supabaseUrl}/functions/v1/openai-extraction`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`
+          },
+          body: JSON.stringify(payload)
+        })
 
-    return new Response(
-      JSON.stringify(payload, null, 2),
-      {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          ...corsHeaders,
-        },
+        if (!extractionResponse.ok) {
+          const errorText = await extractionResponse.text()
+          console.error('OpenAI extraction failed:', errorText)
+          
+          // Return payload with extraction error info
+          return new Response(
+            JSON.stringify({
+              success: false,
+              payload: payload,
+              extraction_error: {
+                status: extractionResponse.status,
+                message: errorText
+              },
+              message: "Payload built successfully but OpenAI extraction failed"
+            }),
+            {
+              status: 200, // Still return 200 since payload was built successfully
+              headers: {
+                "Content-Type": "application/json",
+                ...corsHeaders,
+              },
+            }
+          )
+        }
+
+        const extractionResult = await extractionResponse.json()
+        console.log('✅ OpenAI extraction completed successfully')
+        console.log('Extracted fields:', Object.keys(extractionResult.extracted_data || {}))
+        console.log('Usage cost:', `$${extractionResult.usage?.cost_estimate || 0}`)
+
+        // Return combined result with both payload and extraction
+        return new Response(
+          JSON.stringify({
+            success: true,
+            payload: payload,
+            extraction_result: extractionResult,
+            message: "Payload built and extraction completed successfully"
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              ...corsHeaders,
+            },
+          }
+        )
+
+      } catch (extractionError) {
+        console.error('Error during auto-extraction:', extractionError)
+        
+        // Return payload with extraction error
+        return new Response(
+          JSON.stringify({
+            success: false,
+            payload: payload,
+            extraction_error: {
+              message: extractionError.message,
+              details: extractionError.toString()
+            },
+            message: "Payload built successfully but auto-extraction failed"
+          }),
+          {
+            status: 200, // Still return 200 since payload was built successfully
+            headers: {
+              "Content-Type": "application/json",
+              ...corsHeaders,
+            },
+          }
+        )
       }
-    )
+    } else {
+      // Return just the payload if auto-extract is disabled
+      console.log('Auto-extract disabled, returning payload only')
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          payload: payload,
+          message: "Payload built successfully (auto-extract disabled)"
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            ...corsHeaders,
+          },
+        }
+      )
+    }
 
   } catch (error) {
     console.error("=== AI EXTRACTION PAYLOAD ERROR ===")
