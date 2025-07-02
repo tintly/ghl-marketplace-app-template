@@ -16,7 +16,7 @@ interface ExtractionField {
   placeholder: string
   is_required: boolean
   sort_order: number
-  overwrite_policy: string // NEW: Include overwrite policy
+  overwrite_policy: string
   original_ghl_field_data: any
 }
 
@@ -155,7 +155,7 @@ Deno.serve(async (req: Request) => {
       extractionFields.forEach((field, index) => {
         const fieldKey = getProperFieldKey(field)
         const fieldType = isStandardField(field) ? 'STANDARD' : 'CUSTOM'
-        console.log(`  ${index + 1}. [${fieldType}] ${field.field_name} (${field.field_type}) -> ${fieldKey} [GHL ID: ${field.target_ghl_key}] [Policy: ${field.overwrite_policy || 'ask'}]`)
+        console.log(`  ${index + 1}. [${fieldType}] ${field.field_name} (${field.field_type}) -> ${fieldKey} [GHL ID: ${field.target_ghl_key}] [Policy: ${field.overwrite_policy || 'always'}]`)
       })
     }
 
@@ -182,7 +182,7 @@ Deno.serve(async (req: Request) => {
             fieldKey: getProperFieldKey(f),
             required: f.is_required,
             isStandard: isStandardField(f),
-            overwritePolicy: f.overwrite_policy || 'ask' // NEW: Include overwrite policy in metadata
+            overwritePolicy: f.overwrite_policy || 'always'
           }))
         }
       }),
@@ -364,7 +364,7 @@ async function getExtractionFields(supabase: any, configId: string): Promise<Ext
     fields.forEach((field, index) => {
       const fieldKey = getProperFieldKey(field)
       const fieldType = isStandardField(field) ? 'STANDARD' : 'CUSTOM'
-      console.log(`  ${index + 1}. [${fieldType}] ${field.field_name} (${field.field_type}) -> ${fieldKey} [GHL ID: ${field.target_ghl_key}] [Policy: ${field.overwrite_policy || 'ask'}]`)
+      console.log(`  ${index + 1}. [${fieldType}] ${field.field_name} (${field.field_type}) -> ${fieldKey} [GHL ID: ${field.target_ghl_key}] [Policy: ${field.overwrite_policy || 'always'}]`)
       if (field.is_required) {
         console.log(`     ⚠️ REQUIRED`)
       }
@@ -426,7 +426,6 @@ function generatePromptWithSeparatedFields({
   locationId: string
 }): string {
   
-  // CRITICAL FIX: Use the actual business name from the configuration
   const businessDisplayName = ghlConfig.business_name || `Location ${locationId}`
   
   console.log('🏢 BUSINESS NAME DEBUG:')
@@ -496,7 +495,7 @@ function generatePromptWithSeparatedFields({
     }
   }
   
-  // CRITICAL NEW FEATURE: Separate fields into standard and custom arrays
+  // Separate fields into standard and custom arrays
   const { standardFields, customFields } = separateFieldTypes(extractionFields)
   
   prompt += `Extract and return the following structured data:\\n\\n`
@@ -539,10 +538,12 @@ function generatePromptWithSeparatedFields({
   if (customFields.length > 0) {
     prompt += `**CUSTOM FIELDS** (Business-specific fields):\\n`
     customFields.forEach(field => {
-      const fieldKey = getProperFieldKey(field)
-      console.log(`Adding custom field to prompt: ${field.field_name} -> ${fieldKey} (GHL ID: ${field.target_ghl_key})`)
+      // For custom fields, we need to use the target_ghl_key (GHL field ID) directly
+      // This is critical for the update function to work correctly
+      const fieldKey = field.target_ghl_key
+      console.log(`Adding custom field to prompt: ${field.field_name} -> ${fieldKey}`)
       
-      prompt += `- **${fieldKey}** (ID: ${field.target_ghl_key}): ${field.description}`
+      prompt += `- **${fieldKey}** (${field.field_name}): ${field.description}`
       
       // Add choice options if applicable
       if (['SINGLE_OPTIONS', 'MULTIPLE_OPTIONS'].includes(field.field_type) && field.picklist_options?.length > 0) {

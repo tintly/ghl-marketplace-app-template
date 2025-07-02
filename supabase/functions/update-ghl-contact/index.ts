@@ -145,7 +145,7 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    // Step 5: Apply overwrite policies and prepare update payload
+    // Step 5: Prepare update payload
     console.log('Step 5: Preparing update payload...')
     const updateResult = prepareUpdatePayload(
       existingContact,
@@ -177,11 +177,8 @@ Deno.serve(async (req: Request) => {
     console.log('Step 6: Sending update to GHL...')
     console.log('Fields to update:', Object.keys(updateResult.updatePayload))
     
-    if (updateResult.updatePayload.customFields) {
-      console.log('Custom fields to update:', updateResult.updatePayload.customFields.map((cf: any) => 
-        `${cf.id}: ${typeof cf.value === 'object' ? JSON.stringify(cf.value) : cf.value}`
-      ))
-    }
+    // Log the update payload for debugging
+    console.log('Update payload:', JSON.stringify(updateResult.updatePayload, null, 2))
     
     const ghlUpdateResult = await updateGHLContact(
       ghlConfig.access_token, 
@@ -504,7 +501,7 @@ function prepareUpdatePayload(
 
     if (shouldUpdate) {
       if (isStandardField) {
-        // Handle standard fields
+        // For standard fields, we need to use the field name without the "contact." prefix
         const standardFieldKey = fieldKey.split('.')[1]
         
         // Special handling for specific field types
@@ -517,30 +514,28 @@ function prepareUpdatePayload(
             break
             
           default:
+            // For standard fields, just add them directly to the update payload
             updatePayload[standardFieldKey] = newValue
             break
         }
+        
+        console.log(`✅ Will update standard field ${standardFieldKey}: ${currentValue} → ${newValue}`)
       } else {
-        // Handle custom fields - CRITICAL FIX: Use the target_ghl_key (GHL field ID)
+        // For custom fields, we need to use the customFields array with the field ID
         if (!updatePayload.customFields) {
-          updatePayload.customFields = [...(existingContact.customFields || [])]
+          updatePayload.customFields = []
         }
         
-        // Find existing custom field or add new one
-        const existingFieldIndex = updatePayload.customFields.findIndex((cf: any) => cf.id === targetFieldId)
+        // Add the custom field to the update payload
+        updatePayload.customFields.push({
+          id: targetFieldId,
+          value: newValue
+        })
         
-        if (existingFieldIndex >= 0) {
-          updatePayload.customFields[existingFieldIndex].value = newValue
-        } else {
-          updatePayload.customFields.push({
-            id: targetFieldId,
-            value: newValue
-          })
-        }
+        console.log(`✅ Will update custom field ${targetFieldId}: ${currentValue} → ${newValue}`)
       }
       
       updatedFields.push(fieldKey)
-      console.log(`✅ Will update ${fieldKey} (${targetFieldId}): ${currentValue} → ${newValue}`)
     } else {
       skippedFields.push(fieldKey)
       console.log(`⏭️ Skipping ${fieldKey}: ${skipReason}`)
