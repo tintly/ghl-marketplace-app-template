@@ -1,415 +1,277 @@
-import { createClient } from 'npm:@supabase/supabase-js@2'
-
+import { createClient } from 'npm:@supabase/supabase-js@2';
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-}
-
-interface ConversationMessage {
-  role: 'user' | 'assistant'
-  content: string
-  timestamp: string
-}
-
-interface FieldToExtract {
-  name: string
-  ghl_key: string
-  instructions: string
-  type?: string
-  options?: string[]
-}
-
-interface ConversationMetadata {
-  total_messages: number
-  location_id: string
-  contact_id?: string
-  message?: string
-}
-
-interface PromptMetadata {
-  businessName: string
-  configId: string
-  extractionFieldsCount: number
-  standardFieldsCount: number
-  customFieldsCount: number
-  contextualRulesCount: number
-  stopTriggersCount: number
-  promptLength: number
-  generatedAt: string
-  fields: Array<{
-    id: string
-    name: string
-    type: string
-    ghlKey: string
-    fieldKey: string
-    required: boolean
-    isStandard: boolean
-  }>
-}
-
-interface AIExtractionPayload {
-  conversation_id: string
-  location_id: string
-  contact_id?: string
-  business_context: {
-    name: string
-    description: string
-  }
-  fields_to_extract: FieldToExtract[]
-  conversation_history: ConversationMessage[]
-  conversation_metadata: ConversationMetadata
-  metadata: PromptMetadata
-  instructions: string
-  response_format: {
-    type: string
-    rules: string[]
-  }
-}
-
-Deno.serve(async (req: Request) => {
+  "Access-Control-Allow-Headers": "Content-Type, Authorization"
+};
+Deno.serve(async (req)=>{
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 200,
-      headers: corsHeaders,
-    })
+      headers: corsHeaders
+    });
   }
-
   if (req.method !== "POST") {
-    return new Response(
-      JSON.stringify({ error: "Method not allowed. Use POST." }),
-      {
-        status: 405,
+    return new Response(JSON.stringify({
+      error: "Method not allowed. Use POST."
+    }), {
+      status: 405,
+      headers: {
+        "Content-Type": "application/json",
+        ...corsHeaders
+      }
+    });
+  }
+  try {
+    console.log('=== AI EXTRACTION PAYLOAD REQUEST ===');
+    const requestBody = await req.json();
+    const conversationId = requestBody.conversation_id || requestBody.conversationId;
+    const autoExtract = requestBody.auto_extract !== false // Default to true unless explicitly set to false
+    ;
+    if (!conversationId) {
+      console.error('No conversation_id provided in request');
+      return new Response(JSON.stringify({
+        error: "conversation_id is required",
+        example: {
+          conversation_id: "abc123"
+        }
+      }), {
+        status: 400,
         headers: {
           "Content-Type": "application/json",
-          ...corsHeaders,
-        },
-      }
-    )
-  }
-
-  try {
-    console.log('=== AI EXTRACTION PAYLOAD REQUEST ===')
-    
-    const requestBody = await req.json()
-    const conversationId = requestBody.conversation_id || requestBody.conversationId
-    const autoExtract = requestBody.auto_extract !== false // Default to true unless explicitly set to false
-    
-    if (!conversationId) {
-      console.error('No conversation_id provided in request')
-      return new Response(
-        JSON.stringify({ 
-          error: "conversation_id is required",
-          example: { conversation_id: "abc123" }
-        }),
-        {
-          status: 400,
-          headers: {
-            "Content-Type": "application/json",
-            ...corsHeaders,
-          },
+          ...corsHeaders
         }
-      )
+      });
     }
-
-    console.log('Building AI extraction payload for conversation:', conversationId)
-    console.log('Auto-extract enabled:', autoExtract)
-
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    console.log('Building AI extraction payload for conversation:', conversationId);
+    console.log('Auto-extract enabled:', autoExtract);
+    // Initialize Supabase client (not strictly needed here as we're calling functions, but good for consistency)
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
     // Step 1: Get conversation history
-    console.log('Step 1: Fetching conversation history...')
+    console.log('Step 1: Fetching conversation history...');
     const conversationResponse = await fetch(`${supabaseUrl}/functions/v1/get-conversation-history`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${supabaseServiceKey}`
       },
-      body: JSON.stringify({ conversation_id: conversationId })
-    })
-
+      body: JSON.stringify({
+        conversation_id: conversationId
+      })
+    });
     if (!conversationResponse.ok) {
-      const errorText = await conversationResponse.text()
-      throw new Error(`Failed to get conversation history: ${conversationResponse.status} - ${errorText}`)
+      const errorText = await conversationResponse.text();
+      throw new Error(`Failed to get conversation history: ${conversationResponse.status} - ${errorText}`);
     }
-
-    const conversationData = await conversationResponse.json()
-    console.log(`✅ Got conversation history with ${conversationData.messages.length} messages`)
+    const conversationData = await conversationResponse.json();
+    console.log(`✅ Got conversation history with ${conversationData.messages.length} messages`);
 
     if (!conversationData.location_id) {
-      throw new Error('No location_id found in conversation data')
+      throw new Error('No location_id found in conversation data');
     }
 
     // Step 2: Get extraction prompt
-    console.log('Step 2: Generating extraction prompt...')
+    console.log('Step 2: Generating extraction prompt...');
     const promptResponse = await fetch(`${supabaseUrl}/functions/v1/generate-extraction-prompt`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${supabaseServiceKey}`
       },
-      body: JSON.stringify({ locationId: conversationData.location_id })
-    })
-
+      body: JSON.stringify({
+        locationId: conversationData.location_id
+      })
+    });
     if (!promptResponse.ok) {
-      const errorText = await promptResponse.text()
-      throw new Error(`Failed to generate extraction prompt: ${promptResponse.status} - ${errorText}`)
+      const errorText = await promptResponse.text();
+      throw new Error(`Failed to generate extraction prompt: ${promptResponse.status} - ${errorText}`);
     }
+    const promptData = await promptResponse.json();
+    console.log(`✅ Generated extraction prompt for ${promptData.metadata.extractionFieldsCount} fields`);
 
-    const promptData = await promptResponse.json()
-    console.log(`✅ Generated extraction prompt for ${promptData.metadata.extractionFieldsCount} fields`)
-    
     // Log the full prompt
-    console.log('=== FULL EXTRACTION PROMPT ===')
-    console.log(promptData.prompt)
-    console.log('=== END FULL EXTRACTION PROMPT ===')
+    console.log('=== FULL EXTRACTION PROMPT (FROM GENERATION SERVICE) ===');
+    console.log(promptData.prompt);
+    console.log('=== END FULL EXTRACTION PROMPT ===');
 
     // Step 3: Build the structured payload
-    console.log('Step 3: Building structured payload...')
+    console.log('Step 3: Building structured payload...');
 
-    // Extract business context from prompt metadata
+    // Extract business context from prompt metadata (now properly populated)
     const businessContext = {
       name: promptData.metadata.businessName || `Location ${conversationData.location_id}`,
-      description: promptData.metadata.businessDescription || "GoHighLevel location"
-    }
+      description: promptData.metadata.businessDescription || "A GoHighLevel location",
+      context: promptData.metadata.businessContext,
+      services: promptData.metadata.servicesOffered,
+    };
 
     // Extract conversation metadata (including contact_id)
-    const conversationMetadata: ConversationMetadata = {
+    const conversationMetadata = {
       total_messages: conversationData.total_messages,
       location_id: conversationData.location_id,
-      contact_id: conversationData.contact_id
-    }
-
+      contact_id: conversationData.contact_id,
+    };
     // Include optional message if present
     if (conversationData.message) {
-      conversationMetadata.message = conversationData.message
+      conversationMetadata.message = conversationData.message;
     }
 
     // Convert fields from prompt metadata to extraction format
-    const fieldsToExtract: FieldToExtract[] = promptData.metadata.fields.map((field: any) => {
-      let instructions = `Extract data for ${field.name} field`
-      
-      // Add type-specific instructions
-      switch (field.type) {
-        case 'EMAIL':
-          instructions = `Extract valid email addresses mentioned in the conversation. Only extract properly formatted emails.`
-          break
-        case 'PHONE':
-          instructions = `Extract phone numbers mentioned in any format. Include area codes and formatting.`
-          break
-        case 'DATE':
-          instructions = `Extract dates mentioned in the conversation. Format as YYYY-MM-DD.`
-          break
-        case 'TEXT':
-          if (field.name.toLowerCase().includes('name')) {
-            if (field.name.toLowerCase().includes('first')) {
-              instructions = `Extract the given name from the conversation. Look for introductions or references to their first name.`
-            } else if (field.name.toLowerCase().includes('last')) {
-              instructions = `Extract the person's surname. Look for full name introductions or formal signatures.`
-            } else {
-              instructions = `Extract the person's name from the conversation. Look for introductions or signatures.`
-            }
-          }
-          break
-        case 'SINGLE_OPTIONS':
-          instructions = `Select one option from the available choices based on conversation context.`
-          break
-        case 'MULTIPLE_OPTIONS':
-          instructions = `Select one or more options from the available choices. Use comma separation for multiple selections.`
-          break
-      }
-
-      // Add specific instructions for known custom fields
-      if (field.ghlKey === 'contact.multi_select_dropdown') {
-        instructions = `Select one or more from: 'Option 1' (Front doors), 'Option 2' (Back window), 'Option 3' (Sides & Rear). Use comma separation for multiple selections.`
-      }
-
+    // We now mostly just pass the field definition, as the main prompt handles the instructions
+    const fieldsToExtract = promptData.metadata.fields.map((field)=>{
       return {
+        id: field.id, // Keep the original ID for traceability
         name: field.name,
-        ghl_key: field.fieldKey || field.ghlKey,
-        instructions: instructions,
-        type: field.type
-      }
-    })
+        ghl_key: field.fieldKey, // Use fieldKey as that's what the AI should output
+        type: field.type,
+        description: field.description, // Pass the field's description
+        required: field.required,
+        picklistOptions: field.picklistOptions, // Pass picklist options for AI to use
+      };
+    });
 
-    // Create simplified instructions
-    const instructions = `You are analyzing a conversation between a customer and ${businessContext.name}. Your goal is to extract structured data from the entire conversation history. Use the field list to determine what to extract. Combine multi-message details, use contextual clues, and format values as specified. Return a valid JSON with the exact field keys. Do not include extra text or markdown.`
+    // The primary instructions for the LLM are now the full prompt generated by the other function.
+    const systemPromptForLLM = promptData.prompt;
 
     // Build the final payload
-    const payload: AIExtractionPayload = {
+    const payload = {
       conversation_id: conversationId,
       location_id: conversationData.location_id,
       contact_id: conversationData.contact_id,
       business_context: businessContext,
-      fields_to_extract: fieldsToExtract,
+      fields_to_extract: fieldsToExtract, // Simplified, but rich with metadata
       conversation_history: conversationData.messages,
       conversation_metadata: conversationMetadata,
-      metadata: promptData.metadata,
-      instructions: instructions,
-      response_format: {
+      metadata: promptData.metadata, // Keep the full metadata from prompt generation
+      system_prompt: systemPromptForLLM, // This is the crucial change: pass the full prompt
+      response_format: { // Still useful to pass these as separate instructions to LLM if needed
         type: "json",
         rules: [
-          "Key names must match `ghl_key` values.",
-          "Only include fields that have values.",
+          "Key names must match `ghl_key` values defined in the system prompt.",
+          "Only include fields that have values. Do not include empty fields.",
           "Ensure date fields use YYYY-MM-DD format.",
           "Ensure phone and email fields are valid formats."
         ]
       }
-    }
+    };
 
-    console.log('✅ AI extraction payload built successfully')
-    console.log(`- Conversation ID: ${payload.conversation_id}`)
-    console.log(`- Location ID: ${payload.location_id}`)
-    console.log(`- Contact ID: ${payload.contact_id || 'Not available'}`)
-    console.log(`- Business: ${payload.business_context.name}`)
-    console.log(`- Fields to extract: ${payload.fields_to_extract.length}`)
-    console.log(`- Conversation messages: ${payload.conversation_history.length}`)
+    console.log('✅ AI extraction payload built successfully');
+    console.log(`- Conversation ID: ${payload.conversation_id}`);
+    console.log(`- Location ID: ${payload.location_id}`);
+    console.log(`- Contact ID: ${payload.contact_id || 'Not available'}`);
+    console.log(`- Business: ${payload.business_context.name}`);
+    console.log(`- Fields to extract count: ${payload.fields_to_extract.length}`);
+    console.log(`- Conversation messages count: ${payload.conversation_history.length}`);
+    console.log(`- System prompt length: ${payload.system_prompt.length} characters`);
+
 
     // Step 4: Auto-invoke OpenAI extraction if enabled
     if (autoExtract) {
-      console.log('Step 4: Auto-invoking OpenAI extraction...')
-      
+      console.log('Step 4: Auto-invoking OpenAI extraction...');
       try {
-        // Log the system prompt that will be sent to OpenAI
-        console.log('=== SYSTEM PROMPT FOR OPENAI ===')
-        const systemPrompt = `You are a data extraction AI analyzing a conversation between a customer and ${payload.business_context.name}. Extract structured data from the conversation and return it as valid JSON.\n\nEXTRACTION FIELDS:\n`
-        
-        // Add each field to extract with its instructions
-        let fullSystemPrompt = systemPrompt
-        payload.fields_to_extract.forEach((field, index) => {
-          fullSystemPrompt += `${index + 1}. "${field.ghl_key}": ${field.instructions}\n`
-          if (field.type) {
-            fullSystemPrompt += `   Type: ${field.type}\n`
-          }
-        })
-        
-        // Add instructions and format rules
-        fullSystemPrompt += `\nINSTRUCTIONS:\n- ${payload.instructions}\n`
-        payload.response_format.rules.forEach(rule => {
-          fullSystemPrompt += `- ${rule}\n`
-        })
-        
-        console.log(fullSystemPrompt)
-        console.log('=== END SYSTEM PROMPT FOR OPENAI ===')
-        
+        // The system prompt to be sent to OpenAI is now directly from promptData.prompt
+        console.log('=== SYSTEM PROMPT SENT TO OPENAI ===');
+        console.log(payload.system_prompt);
+        console.log('=== END SYSTEM PROMPT SENT TO OPENAI ===');
+
         const extractionResponse = await fetch(`${supabaseUrl}/functions/v1/openai-extraction`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${supabaseServiceKey}`
           },
-          body: JSON.stringify(payload)
-        })
+          body: JSON.stringify(payload) // Send the full payload
+        });
 
         if (!extractionResponse.ok) {
-          const errorText = await extractionResponse.text()
-          console.error('OpenAI extraction failed:', errorText)
-          
-          // Return payload with extraction error info
-          return new Response(
-            JSON.stringify({
-              success: false,
-              payload: payload,
-              extraction_error: {
-                status: extractionResponse.status,
-                message: errorText
-              },
-              message: "Payload built successfully but OpenAI extraction failed"
-            }),
-            {
-              status: 200, // Still return 200 since payload was built successfully
-              headers: {
-                "Content-Type": "application/json",
-                ...corsHeaders,
-              },
-            }
-          )
-        }
-
-        const extractionResult = await extractionResponse.json()
-        console.log('✅ OpenAI extraction completed successfully')
-        console.log('Extracted fields:', Object.keys(extractionResult.extracted_data || {}))
-        console.log('Usage cost:', `$${extractionResult.usage?.cost_estimate || 0}`)
-
-        // Return combined result with both payload and extraction
-        return new Response(
-          JSON.stringify({
-            success: true,
-            payload: payload,
-            extraction_result: extractionResult,
-            message: "Payload built and extraction completed successfully"
-          }),
-          {
-            status: 200,
-            headers: {
-              "Content-Type": "application/json",
-              ...corsHeaders,
-            },
-          }
-        )
-
-      } catch (extractionError) {
-        console.error('Error during auto-extraction:', extractionError)
-        
-        // Return payload with extraction error
-        return new Response(
-          JSON.stringify({
+          const errorText = await extractionResponse.text();
+          console.error('OpenAI extraction failed:', errorText);
+          // Return payload with extraction error info, keeping status 200 for internal errors
+          return new Response(JSON.stringify({
             success: false,
             payload: payload,
             extraction_error: {
-              message: extractionError.message,
-              details: extractionError.toString()
+              status: extractionResponse.status,
+              message: errorText
             },
-            message: "Payload built successfully but auto-extraction failed"
-          }),
-          {
-            status: 200, // Still return 200 since payload was built successfully
+            message: "Payload built successfully but OpenAI extraction failed"
+          }), {
+            status: 200, // Still 200 as requested for this type of error handling
             headers: {
               "Content-Type": "application/json",
-              ...corsHeaders,
-            },
-          }
-        )
-      }
-    } else {
-      // Return just the payload if auto-extract is disabled
-      console.log('Auto-extract disabled, returning payload only')
-      
-      return new Response(
-        JSON.stringify({
+              ...corsHeaders
+            }
+          });
+        }
+
+        const extractionResult = await extractionResponse.json();
+        console.log('✅ OpenAI extraction completed successfully');
+        console.log('Extracted fields:', Object.keys(extractionResult.extracted_data || {}));
+        console.log('Usage cost:', `$${extractionResult.usage?.cost_estimate || 0}`);
+
+        // Return combined result with both payload and extraction
+        return new Response(JSON.stringify({
           success: true,
           payload: payload,
-          message: "Payload built successfully (auto-extract disabled)"
-        }),
-        {
+          extraction_result: extractionResult,
+          message: "Payload built and extraction completed successfully"
+        }), {
           status: 200,
           headers: {
             "Content-Type": "application/json",
-            ...corsHeaders,
-          },
-        }
-      )
-    }
+            ...corsHeaders
+          }
+        });
 
-  } catch (error) {
-    console.error("=== AI EXTRACTION PAYLOAD ERROR ===")
-    console.error("Error message:", error.message)
-    console.error("Stack trace:", error.stack)
-    
-    return new Response(
-      JSON.stringify({ 
-        error: `Failed to build AI extraction payload: ${error.message}`,
-        details: error.toString()
-      }),
-      {
-        status: 500,
+      } catch (extractionError) {
+        console.error('Error during auto-extraction:', extractionError);
+        // Return payload with extraction error
+        return new Response(JSON.stringify({
+          success: false,
+          payload: payload,
+          extraction_error: {
+            message: extractionError.message,
+            details: extractionError.toString()
+          },
+          message: "Payload built successfully but auto-extraction failed"
+        }), {
+          status: 200, // Still 200 as requested for this type of error handling
+          headers: {
+            "Content-Type": "application/json",
+            ...corsHeaders
+          }
+        });
+      }
+    } else {
+      // Return just the payload if auto-extract is disabled
+      console.log('Auto-extract disabled, returning payload only');
+      return new Response(JSON.stringify({
+        success: true,
+        payload: payload,
+        message: "Payload built successfully (auto-extract disabled)"
+      }), {
+        status: 200,
         headers: {
           "Content-Type": "application/json",
-          ...corsHeaders,
-        },
+          ...corsHeaders
+        }
+      });
+    }
+  } catch (error) {
+    console.error("=== AI EXTRACTION PAYLOAD ERROR ===");
+    console.error("Error message:", error.message);
+    console.error("Stack trace:", error.stack);
+    return new Response(JSON.stringify({
+      error: `Failed to build AI extraction payload: ${error.message}`,
+      details: error.toString()
+    }), {
+      status: 500,
+      headers: {
+        "Content-Type": "application/json",
+        ...corsHeaders
       }
-    )
+    });
   }
-})
+});
