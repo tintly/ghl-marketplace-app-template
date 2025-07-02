@@ -4,7 +4,6 @@ import UserLinking from './UserLinking'
 import DataExtractionModule from './DataExtractionModule'
 import StandardFieldsExtractionModule from './StandardFieldsExtractionModule'
 import InstallationGuide from './InstallationGuide'
-import TestExtractionButton from './TestExtractionButton'
 import Navigation from './Navigation'
 
 function DataExtractorApp({ user, authService }) {
@@ -178,9 +177,6 @@ function DashboardHome({ user, authService, needsOAuth }) {
           </div>
         </div>
       </div>
-
-      {/* Test Extraction Section */}
-      <TestExtractionButton user={user} authService={authService} />
     </div>
   )
 }
