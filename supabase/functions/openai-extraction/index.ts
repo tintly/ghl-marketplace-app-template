@@ -34,7 +34,7 @@ interface OpenAIResponse {
 interface ExtractionPayload {
   conversation_id: string
   location_id: string
-  contact_id?: string // Added contact_id to payload interface
+  contact_id?: string
   business_context: {
     name: string
     description: string
@@ -200,6 +200,7 @@ Deno.serve(async (req: Request) => {
     let extractedData
     try {
       extractedData = JSON.parse(openaiData.choices[0].message.content)
+      console.log('Extracted data:', extractedData)
     } catch (parseError) {
       console.error('Failed to parse OpenAI response as JSON:', parseError)
       console.error('Raw response:', openaiData.choices[0].message.content)
@@ -233,7 +234,7 @@ Deno.serve(async (req: Request) => {
         if (contactUpdateResponse.ok) {
           contactUpdateResult = await contactUpdateResponse.json()
           console.log('✅ Contact updated successfully in GHL')
-          console.log('Updated fields:', contactUpdateResult.updatedFields)
+          console.log('Updated fields:', contactUpdateResult.updated_fields)
         } else {
           const errorText = await contactUpdateResponse.text()
           console.error('Contact update failed:', errorText)

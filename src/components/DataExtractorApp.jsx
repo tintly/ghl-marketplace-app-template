@@ -5,6 +5,7 @@ import DataExtractionModule from './DataExtractionModule'
 import StandardFieldsExtractionModule from './StandardFieldsExtractionModule'
 import InstallationGuide from './InstallationGuide'
 import Navigation from './Navigation'
+import LogViewer from './LogViewer'
 
 function DataExtractorApp({ user, authService }) {
   const getLocationDisplay = () => {
@@ -92,6 +93,15 @@ function DataExtractorApp({ user, authService }) {
               <StandardFieldsExtractionModule user={user} authService={authService} />
             )
           } />
+          <Route path="/logs" element={
+            needsOAuthInstallation() ? (
+              <div className="text-center py-8">
+                <p className="text-gray-600">Please complete the OAuth installation first.</p>
+              </div>
+            ) : (
+              <LogViewer />
+            )
+          } />
         </Routes>
       </main>
     </div>
@@ -141,7 +151,7 @@ function DashboardHome({ user, authService, needsOAuth }) {
           <h3 className="section-title">Available Features</h3>
         </div>
         <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="text-center p-6 border border-gray-200 rounded-lg card-hover">
               <div className="text-4xl mb-4">🔧</div>
               <h4 className="text-lg font-semibold text-gray-900 mb-2">Custom Fields</h4>
@@ -165,7 +175,39 @@ function DashboardHome({ user, authService, needsOAuth }) {
                 Configure
               </a>
             </div>
+            
+            <div className="text-center p-6 border border-gray-200 rounded-lg card-hover">
+              <div className="text-4xl mb-4">📊</div>
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">Extraction Logs</h4>
+              <p className="text-gray-600 mb-4">View extraction history and message processing</p>
+              <a
+                href="/logs"
+                className="btn-secondary inline-block"
+              >
+                View Logs
+              </a>
+            </div>
           </div>
+        </div>
+      </div>
+      
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
+        <p className="text-sm text-gray-600">
+          Send a message to your GoHighLevel contact to see the AI extraction in action. 
+          The system will automatically process new messages and extract data based on your configuration.
+        </p>
+        
+        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <h4 className="text-md font-medium text-blue-800 mb-2">Test with this message:</h4>
+          <div className="bg-white p-3 rounded border border-blue-100 text-sm">
+            "Hi, my name is John Smith. I'm interested in getting my 2018 Toyota Tundra windows tinted. 
+            I'd like to do the front doors and windshield. My email is john.smith@example.com and my phone is 555-123-4567. 
+            I'm available next Tuesday afternoon. Thanks!"
+          </div>
+          <p className="text-xs text-blue-700 mt-2">
+            Send this message to a contact in your GoHighLevel account to test the extraction system.
+          </p>
         </div>
       </div>
     </div>
