@@ -72,6 +72,9 @@ Deno.serve(async (req: Request) => {
     console.log('Message type:', webhookData.messageType)
     console.log('Direction:', webhookData.direction)
     console.log('Conversation ID:', webhookData.conversationId)
+    console.log('Contact ID:', webhookData.contactId || 'Not provided')
+    console.log('Message ID:', webhookData.messageId || 'Not provided')
+    console.log('Message body:', webhookData.body ? webhookData.body.substring(0, 100) + (webhookData.body.length > 100 ? '...' : '') : 'No body')
     
     // Validate required fields
     if (!webhookData.locationId || !webhookData.conversationId || !webhookData.dateAdded) {
@@ -102,19 +105,30 @@ Deno.serve(async (req: Request) => {
 
     // Check if this message already exists (deduplication)
     if (webhookData.messageId) {
+      console.log('Checking for duplicate message:', webhookData.messageId)
       const { data: existingMessage } = await supabase
         .from('ghl_conversations')
-        .select('id')
+        .select('id, processed, processing_error')
         .eq('message_id', webhookData.messageId)
         .maybeSingle()
 
       if (existingMessage) {
         console.log('Message already exists, skipping:', webhookData.messageId)
+        console.log('Previous processing status:', existingMessage.processed ? 'Processed' : 'Not processed')
+        if (existingMessage.processing_error) {
+          console.log('Previous processing error:', existingMessage.processing_error)
+        }
+        
         return new Response(
           JSON.stringify({ 
             success: true, 
             message: "Message already processed",
-            messageId: webhookData.messageId
+            messageId: webhookData.messageId,
+            previousRecord: {
+              id: existingMessage.id,
+              processed: existingMessage.processed,
+              hasError: !!existingMessage.processing_error
+            }
           }),
           {
             status: 200,
@@ -189,6 +203,7 @@ Deno.serve(async (req: Request) => {
       
       try {
         // Call the ai-extraction-payload function
+        console.log('Calling ai-extraction-payload with conversation_id:', webhookData.conversationId)
         const extractionResponse = await fetch(`${supabaseUrl}/functions/v1/ai-extraction-payload`, {
           method: 'POST',
           headers: {
@@ -200,6 +215,8 @@ Deno.serve(async (req: Request) => {
             auto_extract: true // Enable automatic extraction
           })
         })
+        
+        console.log('Extraction response status:', extractionResponse.status)
         
         if (!extractionResponse.ok) {
           const errorText = await extractionResponse.text()
@@ -236,6 +253,14 @@ Deno.serve(async (req: Request) => {
         
         const extractionResult = await extractionResponse.json()
         console.log('✅ AI extraction completed successfully')
+        console.log('Extraction result success:', extractionResult.success)
+        console.log('Extracted fields:', Object.keys(extractionResult.extraction_result?.extracted_data || {}).length)
+        
+        if (extractionResult.extraction_result?.usage) {
+          console.log('Model used:', extractionResult.extraction_result.usage.model)
+          console.log('Total tokens:', extractionResult.extraction_result.usage.total_tokens)
+          console.log('Cost estimate:', `$${extractionResult.extraction_result.usage.cost_estimate}`)
+        }
         
         // Update the conversation record to mark as processed
         await supabase
@@ -269,6 +294,7 @@ Deno.serve(async (req: Request) => {
         
       } catch (extractionError) {
         console.error('Error triggering extraction:', extractionError)
+        console.error('Error details:', extractionError.stack || 'No stack trace available')
         
         // Update the conversation record to mark as processed with error
         await supabase
@@ -310,7 +336,8 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({ 
         error: `Webhook processing failed: ${error.message}`,
-        details: error.toString()
+        details: error.toString(),
+        stack: error.stack
       }),
       {
         status: 500,
