@@ -419,6 +419,9 @@ function prepareUpdatePayload(
     })
   }
 
+  // Initialize customFields array if we'll need it
+  updatePayload.customFields = []
+
   // Process each extracted field
   for (const [fieldKey, newValue] of Object.entries(extractedData)) {
     // Skip empty values
@@ -521,12 +524,7 @@ function prepareUpdatePayload(
         
         console.log(`✅ Will update standard field ${standardFieldKey}: ${currentValue} → ${newValue}`)
       } else {
-        // For custom fields, we need to use the customFields array with the field ID
-        if (!updatePayload.customFields) {
-          updatePayload.customFields = []
-        }
-        
-        // Add the custom field to the update payload
+        // For custom fields, add to the customFields array with the correct format
         updatePayload.customFields.push({
           id: targetFieldId,
           value: newValue
@@ -540,6 +538,11 @@ function prepareUpdatePayload(
       skippedFields.push(fieldKey)
       console.log(`⏭️ Skipping ${fieldKey}: ${skipReason}`)
     }
+  }
+
+  // If no custom fields were added, remove the empty array
+  if (updatePayload.customFields.length === 0) {
+    delete updatePayload.customFields
   }
 
   return {
