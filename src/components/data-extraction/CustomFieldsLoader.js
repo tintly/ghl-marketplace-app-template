@@ -64,12 +64,18 @@ export default class CustomFieldsLoader {
               id: freshField.id,
               name: freshField.name,
               dataType: freshField.dataType,
-              parentId: freshField.parentId, // CRITICAL: Log parentId updates
+              parentId: freshField.parentId,
               fieldKey: freshField.fieldKey,
               position: freshField.position
             })
 
-            // CRITICAL: Ensure we preserve ALL field metadata including parentId
+            // CRITICAL: Check if the field name has changed in GHL
+            const nameChanged = freshField.name !== extractionField.field_name
+            if (nameChanged) {
+              console.log(`🔄 FIELD NAME CHANGED: "${extractionField.field_name}" → "${freshField.name}"`)
+            }
+
+            // Ensure we preserve ALL field metadata including parentId
             const completeFieldData = {
               ...freshField,
               // Ensure critical folder placement data is preserved
@@ -83,19 +89,30 @@ export default class CustomFieldsLoader {
 
             console.log('🗂️ CRITICAL: Preserving parentId in stored data:', completeFieldData.parentId)
 
-            // Update the stored field data with complete fresh information
+            // Update both the stored field data AND the field name if it changed
+            const updateData = {
+              original_ghl_field_data: completeFieldData,
+              updated_at: new Date().toISOString()
+            }
+
+            // CRITICAL FIX: Update the field_name if it changed in GHL
+            if (nameChanged) {
+              updateData.field_name = freshField.name
+              console.log(`📝 UPDATING FIELD NAME: "${extractionField.field_name}" → "${freshField.name}"`)
+            }
+
             const { error: updateError } = await supabase
               .from('data_extraction_fields')
-              .update({
-                original_ghl_field_data: completeFieldData, // Store complete fresh field data with parentId
-                updated_at: new Date().toISOString()
-              })
+              .update(updateData)
               .eq('id', extractionField.id)
 
             if (updateError) {
               console.error(`Error updating field ${extractionField.field_name}:`, updateError)
             } else {
-              console.log(`✅ Successfully updated stored data for: ${extractionField.field_name}`)
+              console.log(`✅ Successfully updated stored data for: ${freshField.name}`)
+              if (nameChanged) {
+                console.log(`✅ Field name synchronized: "${extractionField.field_name}" → "${freshField.name}"`)
+              }
               console.log(`🗂️ Stored parentId: ${completeFieldData.parentId}`)
             }
           } else {
@@ -116,7 +133,7 @@ export default class CustomFieldsLoader {
 
       // Wait for all updates to complete
       await Promise.all(updatePromises)
-      console.log('✅ Finished updating stored field data with parentId preservation')
+      console.log('✅ Finished updating stored field data with name synchronization')
 
     } catch (error) {
       console.error('Error updating stored field data:', error)
@@ -155,15 +172,15 @@ export default class CustomFieldsLoader {
       },
       {
         id: "mock-service-field",
-        name: "Service Type",
+        name: "Services Requested",
         model: "contact",
-        fieldKey: "contact.service_type",
+        fieldKey: "contact.services_requested",
         placeholder: "",
         dataType: "SINGLE_OPTIONS",
         position: 150,
         standard: false,
-        picklistOptions: ["Consultation", "Installation", "Maintenance", "Repair"],
-        parentId: "mock-folder-id" // Mock folder to test folder preservation
+        picklistOptions: ["Window Tint", "Paint Protection Film", "Haircut"],
+        parentId: "mock-folder-id"
       },
       {
         id: "mock-date-field",
@@ -186,7 +203,7 @@ export default class CustomFieldsLoader {
         position: 250,
         standard: false,
         picklistOptions: ["Low", "Medium", "High", "Urgent"],
-        parentId: "mock-folder-id" // Mock folder to test folder preservation
+        parentId: "mock-folder-id"
       }
     ]
   }

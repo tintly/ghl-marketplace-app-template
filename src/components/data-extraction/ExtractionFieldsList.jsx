@@ -17,9 +17,9 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
       // Field is active in GHL - use LIVE data from GHL
       return {
         isActive: true,
-        name: customField.name,
+        name: customField.name, // CRITICAL: Always use the current name from GHL
         dataType: customField.dataType,
-        picklistOptions: customField.picklistOptions || [], // Use live options from GHL
+        picklistOptions: customField.picklistOptions || [],
         source: 'ghl_live'
       }
     } else if (field.original_ghl_field_data && Object.keys(field.original_ghl_field_data).length > 0) {
@@ -52,7 +52,8 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
   }
 
   const handleDelete = (field) => {
-    if (window.confirm(`Are you sure you want to delete the extraction configuration for "${field.field_name}"?`)) {
+    const displayData = getFieldDisplayData(field)
+    if (window.confirm(`Are you sure you want to delete the extraction configuration for "${displayData.name}"?`)) {
       onDelete(field.id)
     }
   }
@@ -117,6 +118,9 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
             const isRecreatingThis = recreating
             const optionsToDisplay = getOptionsToDisplay(field, displayData)
             
+            // CRITICAL FIX: Show name mismatch warning if field name in DB differs from GHL
+            const nameOutOfSync = displayData.isActive && field.field_name !== displayData.name
+            
             return (
               <div
                 key={field.id}
@@ -130,7 +134,10 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
                       <span className="text-lg">
                         {getFieldTypeIcon(displayData.dataType)}
                       </span>
-                      <h4 className="font-medium text-gray-900">{field.field_name}</h4>
+                      <h4 className="font-medium text-gray-900">
+                        {/* CRITICAL FIX: Always show the current name from GHL */}
+                        {displayData.name}
+                      </h4>
                       
                       {/* Status badges */}
                       {displayData.isActive ? (
@@ -155,6 +162,13 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
                           Live Sync
                         </span>
                       )}
+
+                      {/* CRITICAL FIX: Show warning if name is out of sync */}
+                      {nameOutOfSync && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                          Name Updated
+                        </span>
+                      )}
                     </div>
                     
                     <div className="text-sm text-gray-600 space-y-1">
@@ -165,6 +179,14 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
                         <p><span className="font-medium">GHL Field:</span> {displayData.name}</p>
                       ) : (
                         <p><span className="font-medium">Original Field:</span> {displayData.name} <span className="text-red-600">(deleted from GHL)</span></p>
+                      )}
+
+                      {/* CRITICAL FIX: Show name sync info if out of sync */}
+                      {nameOutOfSync && (
+                        <p className="text-yellow-700 text-xs">
+                          <span className="font-medium">Note:</span> Field was renamed in GHL from "{field.field_name}" to "{displayData.name}". 
+                          The name will be updated automatically on next refresh.
+                        </p>
                       )}
                       
                       {field.placeholder && (
