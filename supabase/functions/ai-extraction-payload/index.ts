@@ -20,6 +20,12 @@ interface FieldToExtract {
   options?: string[]
 }
 
+interface ConversationMetadata {
+  total_messages: number
+  location_id: string
+  message?: string
+}
+
 interface AIExtractionPayload {
   conversation_id: string
   location_id: string
@@ -29,6 +35,7 @@ interface AIExtractionPayload {
   }
   fields_to_extract: FieldToExtract[]
   conversation_history: ConversationMessage[]
+  conversation_metadata: ConversationMetadata
   instructions: string
   response_format: {
     type: string
@@ -137,6 +144,17 @@ Deno.serve(async (req: Request) => {
       description: promptData.metadata.businessDescription || "GoHighLevel location"
     }
 
+    // Extract conversation metadata (excluding messages which are handled separately)
+    const conversationMetadata: ConversationMetadata = {
+      total_messages: conversationData.total_messages,
+      location_id: conversationData.location_id
+    }
+
+    // Include optional message if present
+    if (conversationData.message) {
+      conversationMetadata.message = conversationData.message
+    }
+
     // Convert fields from prompt metadata to extraction format
     const fieldsToExtract: FieldToExtract[] = promptData.metadata.fields.map((field: any) => {
       let instructions = `Extract data for ${field.name} field`
@@ -194,6 +212,7 @@ Deno.serve(async (req: Request) => {
       business_context: businessContext,
       fields_to_extract: fieldsToExtract,
       conversation_history: conversationData.messages,
+      conversation_metadata: conversationMetadata,
       instructions: instructions,
       response_format: {
         type: "json",
@@ -212,6 +231,7 @@ Deno.serve(async (req: Request) => {
     console.log(`- Business: ${payload.business_context.name}`)
     console.log(`- Fields to extract: ${payload.fields_to_extract.length}`)
     console.log(`- Conversation messages: ${payload.conversation_history.length}`)
+    console.log(`- Conversation metadata: ${JSON.stringify(payload.conversation_metadata)}`)
 
     // Log field summary
     console.log('Fields to extract:')
