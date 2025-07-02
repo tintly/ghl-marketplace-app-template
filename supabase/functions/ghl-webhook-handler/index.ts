@@ -16,7 +16,7 @@ interface GHLWebhookPayload {
   conversationId: string
   dateAdded: string
   direction: 'inbound' | 'outbound'
-  messageType: 'SMS' | 'CALL' | 'Email' | string
+  messageType: 'SMS' | 'CALL' | 'Email' | 'GMB' | 'FB' | 'IG' | 'Live Chat' | string
   status?: string
   conversationProviderId?: string
   messageId?: string
@@ -36,6 +36,9 @@ interface GHLWebhookPayload {
   subject?: string
   provider?: string
 }
+
+// Message types that should trigger AI extraction
+const EXTRACTION_MESSAGE_TYPES = ['SMS', 'GMB', 'FB', 'IG', 'Live Chat'];
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -178,9 +181,108 @@ Deno.serve(async (req: Request) => {
       conversationId: insertedRecord.conversation_id
     })
 
-    // TODO: Trigger data extraction processing here
-    // This is where you would queue the message for AI processing
-    console.log('📝 Message queued for future data extraction processing')
+    // Check if this message type should trigger AI extraction
+    const shouldExtract = EXTRACTION_MESSAGE_TYPES.includes(webhookData.messageType);
+    
+    if (shouldExtract) {
+      console.log(`📝 Message type ${webhookData.messageType} qualifies for AI extraction, triggering process...`)
+      
+      try {
+        // Call the ai-extraction-payload function
+        const extractionResponse = await fetch(`${supabaseUrl}/functions/v1/ai-extraction-payload`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`
+          },
+          body: JSON.stringify({ 
+            conversation_id: webhookData.conversationId,
+            auto_extract: true // Enable automatic extraction
+          })
+        })
+        
+        if (!extractionResponse.ok) {
+          const errorText = await extractionResponse.text()
+          console.error('AI extraction failed:', errorText)
+          
+          // Update the conversation record to mark as processed with error
+          await supabase
+            .from('ghl_conversations')
+            .update({
+              processed: true,
+              processing_error: `AI extraction failed: ${extractionResponse.status} - ${errorText}`,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', insertedRecord.id)
+            
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: "Webhook processed but extraction failed",
+              recordId: insertedRecord.id,
+              messageId: insertedRecord.message_id,
+              conversationId: insertedRecord.conversation_id,
+              extractionError: errorText
+            }),
+            {
+              status: 200,
+              headers: {
+                "Content-Type": "application/json",
+                ...corsHeaders,
+              },
+            }
+          )
+        }
+        
+        const extractionResult = await extractionResponse.json()
+        console.log('✅ AI extraction completed successfully')
+        
+        // Update the conversation record to mark as processed
+        await supabase
+          .from('ghl_conversations')
+          .update({
+            processed: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', insertedRecord.id)
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Webhook processed and extraction completed",
+            recordId: insertedRecord.id,
+            messageId: insertedRecord.message_id,
+            conversationId: insertedRecord.conversation_id,
+            extractionResult: {
+              success: extractionResult.success,
+              extracted_fields: Object.keys(extractionResult.extraction_result?.extracted_data || {}).length
+            }
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              ...corsHeaders,
+            },
+          }
+        )
+        
+      } catch (extractionError) {
+        console.error('Error triggering extraction:', extractionError)
+        
+        // Update the conversation record to mark as processed with error
+        await supabase
+          .from('ghl_conversations')
+          .update({
+            processed: true,
+            processing_error: `Error triggering extraction: ${extractionError.message}`,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', insertedRecord.id)
+      }
+    } else {
+      console.log(`📝 Message type ${webhookData.messageType} does not qualify for AI extraction, skipping`)
+    }
 
     return new Response(
       JSON.stringify({
@@ -188,7 +290,8 @@ Deno.serve(async (req: Request) => {
         message: "Webhook processed successfully",
         recordId: insertedRecord.id,
         messageId: insertedRecord.message_id,
-        conversationId: insertedRecord.conversation_id
+        conversationId: insertedRecord.conversation_id,
+        extractionTriggered: shouldExtract
       }),
       {
         status: 200,
