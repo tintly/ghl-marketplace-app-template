@@ -26,6 +26,27 @@ interface ConversationMetadata {
   message?: string
 }
 
+interface PromptMetadata {
+  businessName: string
+  configId: string
+  extractionFieldsCount: number
+  standardFieldsCount: number
+  customFieldsCount: number
+  contextualRulesCount: number
+  stopTriggersCount: number
+  promptLength: number
+  generatedAt: string
+  fields: Array<{
+    id: string
+    name: string
+    type: string
+    ghlKey: string
+    fieldKey: string
+    required: boolean
+    isStandard: boolean
+  }>
+}
+
 interface AIExtractionPayload {
   conversation_id: string
   location_id: string
@@ -36,6 +57,7 @@ interface AIExtractionPayload {
   fields_to_extract: FieldToExtract[]
   conversation_history: ConversationMessage[]
   conversation_metadata: ConversationMetadata
+  metadata: PromptMetadata
   instructions: string
   response_format: {
     type: string
@@ -213,6 +235,7 @@ Deno.serve(async (req: Request) => {
       fields_to_extract: fieldsToExtract,
       conversation_history: conversationData.messages,
       conversation_metadata: conversationMetadata,
+      metadata: promptData.metadata, // Include the full metadata from the prompt response
       instructions: instructions,
       response_format: {
         type: "json",
@@ -232,6 +255,7 @@ Deno.serve(async (req: Request) => {
     console.log(`- Fields to extract: ${payload.fields_to_extract.length}`)
     console.log(`- Conversation messages: ${payload.conversation_history.length}`)
     console.log(`- Conversation metadata: ${JSON.stringify(payload.conversation_metadata)}`)
+    console.log(`- Prompt metadata included: ${Object.keys(payload.metadata).join(', ')}`)
 
     // Log field summary
     console.log('Fields to extract:')
