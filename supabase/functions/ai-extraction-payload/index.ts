@@ -23,7 +23,7 @@ interface FieldToExtract {
 interface ConversationMetadata {
   total_messages: number
   location_id: string
-  contact_id?: string // Added contact_id to metadata
+  contact_id?: string
   message?: string
 }
 
@@ -51,7 +51,7 @@ interface PromptMetadata {
 interface AIExtractionPayload {
   conversation_id: string
   location_id: string
-  contact_id?: string // Added contact_id to main payload
+  contact_id?: string
   business_context: {
     name: string
     description: string
@@ -160,6 +160,11 @@ Deno.serve(async (req: Request) => {
 
     const promptData = await promptResponse.json()
     console.log(`✅ Generated extraction prompt for ${promptData.metadata.extractionFieldsCount} fields`)
+    
+    // Log the full prompt
+    console.log('=== FULL EXTRACTION PROMPT ===')
+    console.log(promptData.prompt)
+    console.log('=== END FULL EXTRACTION PROMPT ===')
 
     // Step 3: Build the structured payload
     console.log('Step 3: Building structured payload...')
@@ -174,7 +179,7 @@ Deno.serve(async (req: Request) => {
     const conversationMetadata: ConversationMetadata = {
       total_messages: conversationData.total_messages,
       location_id: conversationData.location_id,
-      contact_id: conversationData.contact_id // Include contact_id from conversation data
+      contact_id: conversationData.contact_id
     }
 
     // Include optional message if present
@@ -236,12 +241,12 @@ Deno.serve(async (req: Request) => {
     const payload: AIExtractionPayload = {
       conversation_id: conversationId,
       location_id: conversationData.location_id,
-      contact_id: conversationData.contact_id, // Include contact_id in main payload
+      contact_id: conversationData.contact_id,
       business_context: businessContext,
       fields_to_extract: fieldsToExtract,
       conversation_history: conversationData.messages,
       conversation_metadata: conversationMetadata,
-      metadata: promptData.metadata, // Include the full metadata from the prompt response
+      metadata: promptData.metadata,
       instructions: instructions,
       response_format: {
         type: "json",
@@ -267,6 +272,28 @@ Deno.serve(async (req: Request) => {
       console.log('Step 4: Auto-invoking OpenAI extraction...')
       
       try {
+        // Log the system prompt that will be sent to OpenAI
+        console.log('=== SYSTEM PROMPT FOR OPENAI ===')
+        const systemPrompt = `You are a data extraction AI analyzing a conversation between a customer and ${payload.business_context.name}. Extract structured data from the conversation and return it as valid JSON.\n\nEXTRACTION FIELDS:\n`
+        
+        // Add each field to extract with its instructions
+        let fullSystemPrompt = systemPrompt
+        payload.fields_to_extract.forEach((field, index) => {
+          fullSystemPrompt += `${index + 1}. "${field.ghl_key}": ${field.instructions}\n`
+          if (field.type) {
+            fullSystemPrompt += `   Type: ${field.type}\n`
+          }
+        })
+        
+        // Add instructions and format rules
+        fullSystemPrompt += `\nINSTRUCTIONS:\n- ${payload.instructions}\n`
+        payload.response_format.rules.forEach(rule => {
+          fullSystemPrompt += `- ${rule}\n`
+        })
+        
+        console.log(fullSystemPrompt)
+        console.log('=== END SYSTEM PROMPT FOR OPENAI ===')
+        
         const extractionResponse = await fetch(`${supabaseUrl}/functions/v1/openai-extraction`, {
           method: 'POST',
           headers: {
