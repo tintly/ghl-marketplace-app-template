@@ -12,24 +12,18 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
     placeholder: '',
     is_required: false,
     sort_order: 0,
-    overwrite_policy: 'ask', // New field for overwrite policy
+    overwrite_policy: 'always', // Default to always overwrite
     original_ghl_field_data: {}
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  // Overwrite policy options
+  // Simplified overwrite policy options (removed 'ask')
   const overwritePolicyOptions = [
-    {
-      value: 'ask',
-      label: 'Ask for confirmation',
-      description: 'Prompt user when field has existing data',
-      icon: '❓'
-    },
     {
       value: 'always',
       label: 'Always overwrite',
-      description: 'Replace existing data without asking',
+      description: 'Replace existing data with new extracted values',
       icon: '✏️'
     },
     {
@@ -59,35 +53,26 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
         placeholder: editingField.placeholder || '',
         is_required: editingField.is_required,
         sort_order: editingField.sort_order,
-        overwrite_policy: editingField.overwrite_policy || 'ask', // Load existing policy
+        overwrite_policy: editingField.overwrite_policy || 'always', // Default to always
         original_ghl_field_data: editingField.original_ghl_field_data || {}
       })
     } else if (customField) {
       if (customField.key && isStandardField(customField.key)) {
-        // CRITICAL FIX: Use the correct field type mapping for standard fields
         const mappedType = mapStandardFieldType(customField.dataType)
-        
-        console.log('Setting up standard field:', {
-          name: customField.name,
-          key: customField.key,
-          originalDataType: customField.dataType,
-          mappedType: mappedType
-        })
         
         setFormData({
           field_name: customField.name,
           description: customField.description || `Extract data for ${customField.name} field`,
           target_ghl_key: customField.key,
-          field_type: mappedType, // Use the correctly mapped type
+          field_type: mappedType,
           picklist_options: [],
           placeholder: '',
           is_required: false,
           sort_order: 0,
-          overwrite_policy: 'ask', // Default policy for new fields
+          overwrite_policy: 'always', // Default for new fields
           original_ghl_field_data: customField
         })
       } else {
-        // This is a GoHighLevel custom field
         const mappedType = mapGHLFieldType(customField.dataType)
         const options = customField.picklistOptions || []
         
@@ -112,7 +97,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
           placeholder: customField.placeholder || '',
           is_required: false,
           sort_order: 0,
-          overwrite_policy: 'ask', // Default policy for new fields
+          overwrite_policy: 'always', // Default for new fields
           original_ghl_field_data: customField
         })
       }
@@ -125,11 +110,6 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
     if (liveCustomField && liveCustomField.picklistOptions) {
       const liveOptions = liveCustomField.picklistOptions
       const storedOptions = extractionField.picklist_options || []
-      
-      console.log('Merging live GHL options with stored descriptions:', {
-        liveOptions,
-        storedOptions
-      })
       
       return liveOptions.map(liveOption => {
         const liveValue = typeof liveOption === 'string' ? liveOption : (liveOption.label || liveOption.value || liveOption)
@@ -169,20 +149,11 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
     setError(null)
 
     try {
-      // CRITICAL FIX: Validate field type before submission
       const validFieldTypes = ['TEXT', 'NUMERICAL', 'SINGLE_OPTIONS', 'MULTIPLE_OPTIONS', 'DATE', 'EMAIL', 'PHONE']
       
       if (!validFieldTypes.includes(formData.field_type)) {
         throw new Error(`Invalid field type: ${formData.field_type}. Must be one of: ${validFieldTypes.join(', ')}`)
       }
-
-      console.log('Submitting extraction field with validated data:', {
-        field_name: formData.field_name,
-        field_type: formData.field_type,
-        target_ghl_key: formData.target_ghl_key,
-        overwrite_policy: formData.overwrite_policy,
-        is_standard: isStandardField(formData.target_ghl_key)
-      })
 
       await onSubmit(formData)
     } catch (error) {
@@ -323,18 +294,18 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
               </div>
             )}
 
-            {/* NEW: Overwrite Policy Section */}
+            {/* Simplified Overwrite Policy Section */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Data Overwrite Policy *
               </label>
               <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
                 <p className="text-sm text-blue-800">
-                  <strong>💡 Policy Tip:</strong> Choose how to handle existing data in this field when AI extracts new information.
+                  <strong>💡 Policy:</strong> Choose how to handle existing data when AI extracts new information.
                 </p>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {overwritePolicyOptions.map((option) => (
                   <label
                     key={option.value}

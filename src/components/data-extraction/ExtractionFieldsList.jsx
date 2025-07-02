@@ -14,16 +14,14 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
     const customField = getCustomFieldInfo(field.target_ghl_key)
     
     if (customField) {
-      // Field is active in GHL - use LIVE data from GHL
       return {
         isActive: true,
-        name: customField.name, // CRITICAL: Always use the current name from GHL
+        name: customField.name,
         dataType: customField.dataType,
         picklistOptions: customField.picklistOptions || [],
         source: 'ghl_live'
       }
     } else if (field.original_ghl_field_data && Object.keys(field.original_ghl_field_data).length > 0) {
-      // Field is inactive, use stored data
       return {
         isActive: false,
         name: field.original_ghl_field_data.name || field.field_name,
@@ -32,7 +30,6 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
         source: 'stored'
       }
     } else {
-      // Fallback to extraction field data
       return {
         isActive: false,
         name: field.field_name,
@@ -66,17 +63,14 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
   }
 
   const getOptionsToDisplay = (field, displayData) => {
-    // For active fields, always show the live options from GHL
     if (displayData.isActive && displayData.picklistOptions && displayData.picklistOptions.length > 0) {
       return displayData.picklistOptions
     }
     
-    // For inactive fields, show stored options
     if (!displayData.isActive && displayData.picklistOptions && displayData.picklistOptions.length > 0) {
       return displayData.picklistOptions
     }
     
-    // Fallback to extraction field options (legacy)
     if (field.picklist_options && field.picklist_options.length > 0) {
       return field.picklist_options
     }
@@ -96,12 +90,11 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
   // Helper function to get overwrite policy display info
   const getOverwritePolicyDisplay = (policy) => {
     const policies = {
-      'always': { label: 'Always overwrite', icon: '✏️', color: 'bg-red-100 text-red-800' },
+      'always': { label: 'Always overwrite', icon: '✏️', color: 'bg-blue-100 text-blue-800' },
       'never': { label: 'Never overwrite', icon: '🔒', color: 'bg-gray-100 text-gray-800' },
-      'only_empty': { label: 'Only empty fields', icon: '📝', color: 'bg-yellow-100 text-yellow-800' },
-      'ask': { label: 'Ask for confirmation', icon: '❓', color: 'bg-blue-100 text-blue-800' }
+      'only_empty': { label: 'Only empty fields', icon: '📝', color: 'bg-yellow-100 text-yellow-800' }
     }
-    return policies[policy] || policies['ask']
+    return policies[policy] || policies['always']
   }
 
   return (
@@ -128,9 +121,8 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
             const canRecreate = canRecreateField(field)
             const isRecreatingThis = recreating
             const optionsToDisplay = getOptionsToDisplay(field, displayData)
-            const overwritePolicy = getOverwritePolicyDisplay(field.overwrite_policy || 'ask')
+            const overwritePolicy = getOverwritePolicyDisplay(field.overwrite_policy || 'always')
             
-            // CRITICAL FIX: Show name mismatch warning if field name in DB differs from GHL
             const nameOutOfSync = displayData.isActive && field.field_name !== displayData.name
             
             return (
@@ -147,7 +139,6 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
                         {getFieldTypeIcon(displayData.dataType)}
                       </span>
                       <h4 className="font-medium text-gray-900">
-                        {/* CRITICAL FIX: Always show the current name from GHL */}
                         {displayData.name}
                       </h4>
                       
@@ -168,21 +159,19 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
                         </span>
                       )}
 
-                      {/* Show sync status for active fields */}
                       {displayData.isActive && displayData.source === 'ghl_live' && (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                           Live Sync
                         </span>
                       )}
 
-                      {/* CRITICAL FIX: Show warning if name is out of sync */}
                       {nameOutOfSync && (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                           Name Updated
                         </span>
                       )}
 
-                      {/* NEW: Overwrite Policy Badge */}
+                      {/* Overwrite Policy Badge */}
                       <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${overwritePolicy.color}`}>
                         <span className="mr-1">{overwritePolicy.icon}</span>
                         {overwritePolicy.label}
@@ -199,7 +188,6 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
                         <p><span className="font-medium">Original Field:</span> {displayData.name} <span className="text-red-600">(deleted from GHL)</span></p>
                       )}
 
-                      {/* CRITICAL FIX: Show name sync info if out of sync */}
                       {nameOutOfSync && (
                         <p className="text-yellow-700 text-xs">
                           <span className="font-medium">Note:</span> Field was renamed in GHL from "{field.field_name}" to "{displayData.name}". 
@@ -211,7 +199,7 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
                         <p><span className="font-medium">Placeholder:</span> {field.placeholder}</p>
                       )}
 
-                      {/* NEW: Overwrite Policy Description */}
+                      {/* Overwrite Policy Description */}
                       <p>
                         <span className="font-medium">Overwrite Policy:</span> 
                         <span className="ml-1">{overwritePolicy.icon} {overwritePolicy.label}</span>

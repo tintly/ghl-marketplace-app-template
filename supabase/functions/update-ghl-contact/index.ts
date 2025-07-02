@@ -6,17 +6,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 }
 
-interface OverwritePolicy {
-  fieldKey: string
-  policy: 'always' | 'never' | 'only_empty' | 'ask'
-}
-
 interface UpdateRequest {
   ghl_contact_id: string
   location_id: string
   extracted_data: Record<string, any>
-  overwrite_policies?: OverwritePolicy[]
-  force_overwrite?: string[] // Fields to force overwrite (for 'ask' policy confirmations)
 }
 
 Deno.serve(async (req: Request) => {
@@ -57,12 +50,7 @@ Deno.serve(async (req: Request) => {
               "contact.firstName": "John",
               "contact.email": "john.doe@example.com",
               "custom_field_id": "Some value"
-            },
-            overwrite_policies: [
-              { fieldKey: "contact.firstName", policy: "always" },
-              { fieldKey: "contact.email", policy: "only_empty" }
-            ],
-            force_overwrite: ["contact.firstName"] // For 'ask' policy confirmations
+            }
           }
         }),
         {
@@ -78,9 +66,7 @@ Deno.serve(async (req: Request) => {
     console.log('Processing update for contact:', {
       ghl_contact_id: requestBody.ghl_contact_id,
       location_id: requestBody.location_id,
-      extracted_data_keys: Object.keys(requestBody.extracted_data),
-      has_overwrite_policies: !!requestBody.overwrite_policies,
-      force_overwrite_count: requestBody.force_overwrite?.length || 0
+      extracted_data_keys: Object.keys(requestBody.extracted_data)
     })
 
     // Initialize Supabase client
@@ -163,31 +149,8 @@ Deno.serve(async (req: Request) => {
     const updateResult = applyOverwritePolicies(
       existingContact,
       requestBody.extracted_data,
-      extractionFields,
-      requestBody.overwrite_policies || [],
-      requestBody.force_overwrite || []
+      extractionFields
     )
-
-    if (!updateResult.canUpdate) {
-      // Return conflicts that need user confirmation
-      return new Response(
-        JSON.stringify({
-          success: false,
-          requires_confirmation: true,
-          conflicts: updateResult.conflicts,
-          message: "Some fields have existing data and require confirmation to overwrite",
-          contact_id: requestBody.ghl_contact_id,
-          location_id: requestBody.location_id
-        }),
-        {
-          status: 409, // Conflict status
-          headers: {
-            "Content-Type": "application/json",
-            ...corsHeaders,
-          },
-        }
-      )
-    }
 
     if (Object.keys(updateResult.updatePayload).length === 0) {
       return new Response(
@@ -418,25 +381,12 @@ async function getGHLContact(accessToken: string, contactId: string) {
 function applyOverwritePolicies(
   existingContact: any,
   extractedData: Record<string, any>,
-  extractionFields: any[],
-  overwritePolicies: OverwritePolicy[],
-  forceOverwrite: string[]
+  extractionFields: any[]
 ) {
   const updatePayload: any = {}
   const updatedFields: string[] = []
   const skippedFields: string[] = []
-  const conflicts: Array<{
-    fieldKey: string
-    fieldName: string
-    currentValue: any
-    newValue: any
-    policy: string
-    reason: string
-  }> = []
 
-  // Create policy map for quick lookup
-  const policyMap = new Map(overwritePolicies.map(p => [p.fieldKey, p.policy]))
-  
   // Create extraction fields map for metadata
   const fieldsMap = new Map(extractionFields.map(f => [f.target_ghl_key, f]))
 
@@ -452,7 +402,7 @@ function applyOverwritePolicies(
   for (const [fieldKey, newValue] of Object.entries(extractedData)) {
     const field = fieldsMap.get(fieldKey)
     const fieldName = field?.field_name || fieldKey
-    const policy = policyMap.get(fieldKey) || field?.overwrite_policy || 'ask'
+    const policy = field?.overwrite_policy || 'always'
     
     // Get current value
     let currentValue: any = null
@@ -478,8 +428,7 @@ function applyOverwritePolicies(
       policy,
       hasExistingValue,
       currentValue,
-      newValue,
-      isForced: forceOverwrite.includes(fieldKey)
+      newValue
     })
 
     // Apply overwrite policy
@@ -503,25 +452,9 @@ function applyOverwritePolicies(
         }
         break
         
-      case 'ask':
       default:
-        if (forceOverwrite.includes(fieldKey)) {
-          shouldUpdate = true
-        } else if (hasExistingValue) {
-          // Add to conflicts for user confirmation
-          conflicts.push({
-            fieldKey,
-            fieldName,
-            currentValue,
-            newValue,
-            policy,
-            reason: 'Field has existing value and requires confirmation'
-          })
-          shouldUpdate = false
-          skipReason = 'Requires user confirmation'
-        } else {
-          shouldUpdate = true
-        }
+        // Default to always overwrite
+        shouldUpdate = true
         break
     }
 
@@ -571,11 +504,9 @@ function applyOverwritePolicies(
   }
 
   return {
-    canUpdate: conflicts.length === 0,
     updatePayload,
     updatedFields,
-    skippedFields,
-    conflicts
+    skippedFields
   }
 }
 
