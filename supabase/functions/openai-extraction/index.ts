@@ -231,17 +231,17 @@ Deno.serve(async (req: Request) => {
           })
         })
 
-        if (contactUpdateResponse.ok) {
-          contactUpdateResult = await contactUpdateResponse.json()
-          console.log('✅ Contact updated successfully in GHL')
-          console.log('Updated fields:', contactUpdateResult.updated_fields)
-        } else {
+        if (!contactUpdateResponse.ok) {
           const errorText = await contactUpdateResponse.text()
           console.error('Contact update failed:', errorText)
           contactUpdateResult = {
             success: false,
             error: `Contact update failed: ${contactUpdateResponse.status} - ${errorText}`
           }
+        } else {
+          contactUpdateResult = await contactUpdateResponse.json()
+          console.log('✅ Contact updated successfully in GHL')
+          console.log('Updated fields:', contactUpdateResult.updated_fields)
         }
       } catch (contactUpdateError) {
         console.error('Error calling update-ghl-contact:', contactUpdateError)
@@ -277,7 +277,7 @@ Deno.serve(async (req: Request) => {
           response_time_ms: responseTime
         },
         usage_log_id: usageLogId,
-        contact_update: contactUpdateResult, // Include contact update result
+        contact_update: contactUpdateResult,
         timestamp: new Date().toISOString()
       }),
       {

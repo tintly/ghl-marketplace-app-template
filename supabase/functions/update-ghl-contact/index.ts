@@ -126,7 +126,7 @@ Deno.serve(async (req: Request) => {
     console.log('Step 3: Fetching extraction fields configuration...')
     const extractionFields = await getExtractionFields(supabase, ghlConfig.id)
 
-    // Step 4: Get existing contact data from GoHighLevel
+    // Step 4: Get existing contact from GoHighLevel
     console.log('Step 4: Fetching existing contact from GHL...')
     const existingContact = await getGHLContact(ghlConfig.access_token, requestBody.ghl_contact_id)
     
@@ -146,8 +146,8 @@ Deno.serve(async (req: Request) => {
     }
 
     // Step 5: Apply overwrite policies and prepare update payload
-    console.log('Step 5: Applying overwrite policies...')
-    const updateResult = applyOverwritePolicies(
+    console.log('Step 5: Preparing update payload...')
+    const updateResult = prepareUpdatePayload(
       existingContact,
       requestBody.extracted_data,
       extractionFields
@@ -386,7 +386,7 @@ async function getGHLContact(accessToken: string, contactId: string) {
   return responseData.contact || responseData
 }
 
-function applyOverwritePolicies(
+function prepareUpdatePayload(
   existingContact: any, 
   extractedData: Record<string, any>,
   extractionFields: any[]
@@ -396,11 +396,23 @@ function applyOverwritePolicies(
   const skippedFields: string[] = []
 
   // Create extraction fields map for metadata
-  const fieldsMap = new Map(extractionFields.map(f => {
-    // For standard fields, use the target_ghl_key directly (e.g., contact.firstName)
-    // For custom fields, use the target_ghl_key (which is the GHL field ID)
-    return [f.target_ghl_key, f]
-  }))
+  const fieldsMap = new Map()
+  
+  // Map both standard fields and custom fields
+  extractionFields.forEach(f => {
+    if (f.target_ghl_key.includes('.')) {
+      // Standard field (e.g., contact.firstName)
+      fieldsMap.set(f.target_ghl_key, f)
+    } else {
+      // Custom field - map both the GHL ID and the fieldKey if available
+      fieldsMap.set(f.target_ghl_key, f)
+      
+      // If we have original field data with a fieldKey, map that too
+      if (f.original_ghl_field_data?.fieldKey) {
+        fieldsMap.set(f.original_ghl_field_data.fieldKey, f)
+      }
+    }
+  })
 
   // Create custom fields map for quick lookup
   const customFieldsMap = new Map()
@@ -421,21 +433,40 @@ function applyOverwritePolicies(
 
     // Get field configuration if available
     const field = fieldsMap.get(fieldKey)
+    
+    // If no field configuration found, try to determine if it's a standard field
+    const isStandardField = fieldKey.includes('.')
+    
+    if (!field && !isStandardField) {
+      console.log(`No field configuration found for ${fieldKey}, skipping`)
+      skippedFields.push(fieldKey)
+      continue
+    }
+    
     const fieldName = field?.field_name || fieldKey
     const policy = field?.overwrite_policy || 'always'
     
     // Get current value
     let currentValue: any = null
-    let isStandardField = false
+    let targetFieldId: string = field?.target_ghl_key || fieldKey
     
-    if (fieldKey.includes('.')) {
+    if (isStandardField) {
       // Standard field (e.g., contact.firstName)
-      isStandardField = true
       const standardFieldKey = fieldKey.split('.')[1]
       currentValue = existingContact[standardFieldKey]
+      
+      console.log(`Standard field ${fieldKey} -> ${standardFieldKey}:`, {
+        currentValue,
+        newValue
+      })
     } else {
-      // Custom field (GHL field ID)
-      currentValue = customFieldsMap.get(fieldKey)
+      // Custom field - use the GHL field ID from target_ghl_key
+      currentValue = customFieldsMap.get(targetFieldId)
+      
+      console.log(`Custom field ${fieldKey} -> ${targetFieldId}:`, {
+        currentValue,
+        newValue
+      })
     }
 
     // Check if field has existing value
@@ -443,13 +474,6 @@ function applyOverwritePolicies(
                             currentValue !== undefined && 
                             currentValue !== '' &&
                             !(Array.isArray(currentValue) && currentValue.length === 0)
-
-    console.log(`Processing field ${fieldKey}:`, {
-      policy,
-      hasExistingValue,
-      currentValue,
-      newValue
-    })
 
     // Apply overwrite policy
     let shouldUpdate = false
@@ -497,26 +521,26 @@ function applyOverwritePolicies(
             break
         }
       } else {
-        // Handle custom fields
+        // Handle custom fields - CRITICAL FIX: Use the target_ghl_key (GHL field ID)
         if (!updatePayload.customFields) {
           updatePayload.customFields = [...(existingContact.customFields || [])]
         }
         
         // Find existing custom field or add new one
-        const existingFieldIndex = updatePayload.customFields.findIndex((cf: any) => cf.id === fieldKey)
+        const existingFieldIndex = updatePayload.customFields.findIndex((cf: any) => cf.id === targetFieldId)
         
         if (existingFieldIndex >= 0) {
           updatePayload.customFields[existingFieldIndex].value = newValue
         } else {
           updatePayload.customFields.push({
-            id: fieldKey,
+            id: targetFieldId,
             value: newValue
           })
         }
       }
       
       updatedFields.push(fieldKey)
-      console.log(`✅ Will update ${fieldKey}: ${currentValue} → ${newValue}`)
+      console.log(`✅ Will update ${fieldKey} (${targetFieldId}): ${currentValue} → ${newValue}`)
     } else {
       skippedFields.push(fieldKey)
       console.log(`⏭️ Skipping ${fieldKey}: ${skipReason}`)
