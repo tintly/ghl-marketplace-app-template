@@ -144,18 +144,18 @@ function ConfigurationDebugger({ user, authService, onConfigurationFound }) {
   }
 
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+    <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
       <h3 className="text-lg font-medium text-gray-900 mb-4">Configuration Diagnostics</h3>
       
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded p-3 mb-4">
+        <div className="error-card">
           <p className="text-red-600 text-sm font-medium">{error}</p>
         </div>
       )}
 
       {/* RLS Test Results */}
       {rlsTest && (
-        <div className="bg-white border rounded p-3 mb-4">
+        <div className="bg-white border rounded-lg p-4 mb-4 shadow-sm">
           <h4 className="font-semibold text-gray-800 mb-2">Database Access Test</h4>
           {rlsTest.error ? (
             <div className="text-sm text-red-600">
@@ -174,7 +174,7 @@ function ConfigurationDebugger({ user, authService, onConfigurationFound }) {
       {debugData && (
         <div className="space-y-4">
           {/* Target Information */}
-          <div className="bg-white border rounded p-3">
+          <div className="bg-white border rounded-lg p-4 shadow-sm">
             <h4 className="font-semibold text-gray-800 mb-2">Target Information</h4>
             <div className="text-sm text-gray-600 space-y-1">
               <p><strong>User ID:</strong> {debugData.targetUserId}</p>
@@ -185,7 +185,7 @@ function ConfigurationDebugger({ user, authService, onConfigurationFound }) {
           </div>
 
           {/* Lookup Results */}
-          <div className="bg-white border rounded p-3">
+          <div className="bg-white border rounded-lg p-4 shadow-sm">
             <h4 className="font-semibold text-gray-800 mb-2">Lookup Results</h4>
             <div className="text-sm text-gray-600 space-y-1">
               <p><strong>Found:</strong> {debugData.lookupResult.found ? '✅ Yes' : '❌ No'}</p>
@@ -200,7 +200,7 @@ function ConfigurationDebugger({ user, authService, onConfigurationFound }) {
           </div>
 
           {/* Database Statistics */}
-          <div className="bg-white border rounded p-3">
+          <div className="bg-white border rounded-lg p-4 shadow-sm">
             <h4 className="font-semibold text-gray-800 mb-2">Database Statistics</h4>
             <div className="text-sm text-gray-600 space-y-1">
               <p><strong>Total Configurations:</strong> {debugData.totalConfigs}</p>
@@ -214,11 +214,11 @@ function ConfigurationDebugger({ user, authService, onConfigurationFound }) {
 
           {/* Available Configurations */}
           {allConfigs.length > 0 && (
-            <div className="bg-white border rounded p-3">
+            <div className="bg-white border rounded-lg p-4 shadow-sm">
               <h4 className="font-semibold text-gray-800 mb-2">Available Configurations</h4>
               <div className="space-y-2 max-h-40 overflow-y-auto">
                 {allConfigs.map(config => (
-                  <div key={config.id} className="text-xs bg-gray-50 p-2 rounded">
+                  <div key={config.id} className="text-xs bg-gray-50 p-3 rounded">
                     <div className="flex justify-between items-start">
                       <div>
                         <p><strong>ID:</strong> {config.id.substring(0, 8)}...</p>
@@ -243,12 +243,12 @@ function ConfigurationDebugger({ user, authService, onConfigurationFound }) {
           )}
 
           {/* Actions */}
-          <div className="bg-white border rounded p-3">
+          <div className="bg-white border rounded-lg p-4 shadow-sm">
             <h4 className="font-semibold text-gray-800 mb-2">Actions</h4>
             <div className="space-y-2">
               <button
                 onClick={runDiagnostics}
-                className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm mr-2"
+                className="btn-secondary text-sm mr-2"
                 disabled={loading}
               >
                 Re-run Diagnostics
@@ -257,7 +257,7 @@ function ConfigurationDebugger({ user, authService, onConfigurationFound }) {
               {!debugData.lookupResult.found && (
                 <button
                   onClick={createTestConfiguration}
-                  className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm"
+                  className="btn-success text-sm"
                   disabled={loading}
                 >
                   Create Test Configuration

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getFieldTypeLabel, mapGHLFieldType, mapStandardFieldType } from '../../utils/customFieldUtils'
+import { getFieldTypeIcon, getFieldTypeLabel } from '../../utils/customFieldUtils'
 import { isStandardField } from '../../utils/standardContactFields'
 
 function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) {
@@ -28,7 +28,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
     },
     {
       value: 'only_empty',
-      label: 'Only fill empty fields',
+      label: 'Only empty fields',
       description: 'Only update if field is currently empty',
       icon: '📝'
     },
@@ -195,10 +195,10 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
   const isStandardFieldForm = customField && customField.key && isStandardField(customField.key)
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+    <div className="modal-backdrop">
+      <div className="modal-content max-w-4xl">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 flex-shrink-0">
+        <div className="modal-header">
           <h3 className="text-lg font-medium text-gray-900">
             {editingField ? 'Edit Extraction Field' : 'Configure Data Extraction'}
           </h3>
@@ -206,7 +206,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
             <p className="text-sm text-gray-600 mt-1">
               Setting up extraction for: <span className="font-medium">{customField.name}</span>
               {isStandardFieldForm && (
-                <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                <span className="ml-2 field-badge bg-blue-100 text-blue-800">
                   Standard Field
                 </span>
               )}
@@ -216,37 +216,37 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
 
         {/* Error Alert */}
         {error && (
-          <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-md p-3 flex-shrink-0">
+          <div className="mx-6 mt-4 error-card">
             <p className="text-sm text-red-600">{error}</p>
           </div>
         )}
 
         {/* Scrollable Form Content */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="modal-body">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="form-label">
                 Field Name *
               </label>
               <input
                 type="text"
                 value={formData.field_name}
                 onChange={(e) => handleChange('field_name', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="form-input"
                 required
                 disabled={loading}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="form-label">
                 AI Extraction Instructions *
               </label>
               <textarea
                 value={formData.description}
                 onChange={(e) => handleChange('description', e.target.value)}
                 rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="form-textarea"
                 placeholder="Describe what data should be extracted and how the AI should identify it in conversations..."
                 required
                 disabled={loading}
@@ -259,13 +259,13 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
             {/* Show field type for standard fields (read-only) */}
             {isStandardFieldForm ? (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="form-label">
                   Field Type
                 </label>
                 <input
                   type="text"
                   value={getFieldTypeLabel(formData.field_type)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600"
+                  className="form-input bg-gray-50 text-gray-600"
                   disabled
                 />
                 <p className="text-xs text-gray-500 mt-1">
@@ -274,13 +274,13 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
               </div>
             ) : (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="form-label">
                   Field Type
                 </label>
                 <select
                   value={formData.field_type}
                   onChange={(e) => handleChange('field_type', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="form-select"
                   disabled={loading}
                 >
                   <option value="TEXT">Text</option>
@@ -296,10 +296,10 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
 
             {/* Simplified Overwrite Policy Section */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="form-label">
                 Data Overwrite Policy *
               </label>
-              <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+              <div className="info-card">
                 <p className="text-sm text-blue-800">
                   <strong>💡 Policy:</strong> Choose how to handle existing data when AI extracts new information.
                 </p>
@@ -338,10 +338,10 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
 
             {needsPicklistOptions && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="form-label">
                   Choice Options & AI Descriptions *
                 </label>
-                <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+                <div className="info-card">
                   <p className="text-sm text-blue-800">
                     <strong>💡 AI Tip:</strong> Add descriptions to help the AI understand when to select each option. 
                     Be specific about the criteria or context that should trigger each choice.
@@ -361,7 +361,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
                         <button
                           type="button"
                           onClick={() => removePicklistOption(index)}
-                          className="text-red-600 hover:text-red-700 p-1 disabled:opacity-50"
+                          className="text-red-600 hover:text-red-700 p-1 hover:bg-red-50 rounded disabled:opacity-50"
                           disabled={loading || formData.picklist_options.length <= 1}
                           title="Remove option"
                         >
@@ -380,7 +380,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
                             type="text"
                             value={option.value || ''}
                             onChange={(e) => handleOptionChange(index, 'value', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            className="form-input text-sm"
                             placeholder={`Option ${index + 1}`}
                             disabled={loading}
                             required
@@ -395,7 +395,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
                             value={option.description || ''}
                             onChange={(e) => handleOptionChange(index, 'description', e.target.value)}
                             rows={2}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            className="form-textarea text-sm"
                             placeholder="Describe when the AI should select this option..."
                             disabled={loading}
                           />
@@ -424,14 +424,14 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="form-label">
                 Placeholder Text
               </label>
               <input
                 type="text"
                 value={formData.placeholder}
                 onChange={(e) => handleChange('placeholder', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="form-input"
                 placeholder="Optional placeholder text for the AI..."
                 disabled={loading}
               />
@@ -443,7 +443,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
                 id="is_required"
                 checked={formData.is_required}
                 onChange={(e) => handleChange('is_required', e.target.checked)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="form-checkbox"
                 disabled={loading}
               />
               <label htmlFor="is_required" className="ml-2 block text-sm text-gray-700">
@@ -454,11 +454,11 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3 flex-shrink-0">
+        <div className="modal-footer">
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors disabled:opacity-50"
+            className="btn-secondary"
             disabled={loading}
           >
             Cancel
@@ -467,7 +467,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
             type="submit"
             onClick={handleSubmit}
             disabled={loading}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-md transition-colors"
+            className="btn-primary"
           >
             {loading ? 'Saving...' : (editingField ? 'Update Field' : 'Create Field')}
           </button>

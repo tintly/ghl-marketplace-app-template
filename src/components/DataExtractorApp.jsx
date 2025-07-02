@@ -46,11 +46,11 @@ function DataExtractorApp({ user, authService }) {
             <h1 className="text-2xl font-bold text-gray-900">Data Extractor</h1>
             <div className="flex items-center space-x-4">
               <span className="text-sm font-medium text-gray-700">{user.userName}</span>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+              <span className="field-badge bg-blue-100 text-blue-800">
                 {getLocationDisplay()}
               </span>
               {getUserModeDisplay() && (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                <span className="field-badge bg-green-100 text-green-800">
                   {getUserModeDisplay()}
                 </span>
               )}
@@ -124,7 +124,7 @@ function DashboardHome({ user, authService, needsOAuth }) {
           Extract valuable insights from your GoHighLevel conversations automatically.
         </p>
         {user.standaloneMode && (
-          <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="mt-4 success-card">
             <p className="text-sm text-green-800">
               <strong>Standalone Mode:</strong> You're using this app as a standalone installation. 
               This installation was completed via OAuth and has proper access tokens.
@@ -138,41 +138,32 @@ function DashboardHome({ user, authService, needsOAuth }) {
       
       <div className="bg-white rounded-lg shadow">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">Available Features</h3>
+          <h3 className="section-title">Available Features</h3>
         </div>
         <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="text-center p-6 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="text-center p-6 border border-gray-200 rounded-lg card-hover">
               <div className="text-4xl mb-4">🔧</div>
               <h4 className="text-lg font-semibold text-gray-900 mb-2">Custom Fields</h4>
               <p className="text-gray-600 mb-4">Create and configure custom fields for data extraction</p>
               <a
                 href="/data-extraction"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors inline-block"
+                className="btn-primary inline-block"
               >
                 Configure
               </a>
             </div>
             
-            <div className="text-center p-6 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
+            <div className="text-center p-6 border border-gray-200 rounded-lg card-hover">
               <div className="text-4xl mb-4">👤</div>
               <h4 className="text-lg font-semibold text-gray-900 mb-2">Standard Fields</h4>
               <p className="text-gray-600 mb-4">Configure extraction for built-in contact fields</p>
               <a
                 href="/standard-fields"
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md transition-colors inline-block"
+                className="btn-success inline-block"
               >
                 Configure
               </a>
-            </div>
-            
-            <div className="text-center p-6 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
-              <div className="text-4xl mb-4">📊</div>
-              <h4 className="text-lg font-semibold text-gray-900 mb-2">Analytics</h4>
-              <p className="text-gray-600 mb-4">View extraction performance and insights</p>
-              <button className="bg-gray-400 text-white px-4 py-2 rounded-md cursor-not-allowed">
-                Coming Soon
-              </button>
             </div>
           </div>
         </div>

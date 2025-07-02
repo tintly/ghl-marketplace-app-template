@@ -74,10 +74,8 @@ function DataExtractionInterface({ config, user, authService }) {
       throw new Error('Failed to load extraction fields')
     }
 
-    // CRITICAL FIX: Filter out standard fields from custom fields extraction list
-    // Only show extraction fields that correspond to actual custom fields (not standard fields)
+    // Filter out standard fields from custom fields extraction list
     const customFieldExtractions = (data || []).filter(field => {
-      // Exclude standard fields - they should only appear in the Standard Fields tab
       const isStandard = isStandardField(field.target_ghl_key)
       if (isStandard) {
         console.log(`Filtering out standard field from custom fields list: ${field.field_name} (${field.target_ghl_key})`)
@@ -128,7 +126,6 @@ function DataExtractionInterface({ config, user, authService }) {
       console.error('❌ Field update failed:', error)
       setError(`Failed to update custom field: ${error.message}`)
     } finally {
-      // CRITICAL FIX: Always reset updating state
       setUpdating(false)
     }
   }
@@ -165,12 +162,10 @@ function DataExtractionInterface({ config, user, authService }) {
       console.error('❌ Field deletion failed:', error)
       setError(`Failed to delete custom field: ${error.message}`)
     } finally {
-      // CRITICAL FIX: Always reset updating state
       setUpdating(false)
     }
   }
 
-  // NEW: Function to clean up extraction configurations when a field is deleted
   const cleanupExtractionConfigurations = async (deletedFieldId) => {
     try {
       const supabase = authService?.getSupabaseClient() || (await import('../../services/supabase')).supabase
@@ -213,7 +208,6 @@ function DataExtractionInterface({ config, user, authService }) {
 
     } catch (error) {
       console.error('Error in cleanup process:', error)
-      // Don't throw here - we want the field deletion to succeed even if cleanup fails
       console.warn('⚠️ Field was deleted but extraction cleanup may have failed')
     }
   }
@@ -510,19 +504,19 @@ function DataExtractionInterface({ config, user, authService }) {
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+      <div className="error-card">
         <h3 className="text-red-800 font-medium">Interface Error</h3>
         <p className="text-red-600 text-sm mt-1">{error}</p>
         <div className="mt-3 space-x-2">
           <button
             onClick={loadData}
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
+            className="btn-danger text-sm"
           >
             Retry
           </button>
           <button
             onClick={() => setError(null)}
-            className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm transition-colors"
+            className="btn-secondary text-sm"
           >
             Dismiss
           </button>
@@ -542,7 +536,7 @@ function DataExtractionInterface({ config, user, authService }) {
 
       {/* Loading Indicators */}
       {creating && (
-        <div className="mx-6 mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
+        <div className="mx-6 mt-4 success-card">
           <div className="flex items-center">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600 mr-2"></div>
             <span className="text-green-800">Creating new custom field in GoHighLevel...</span>
@@ -554,7 +548,7 @@ function DataExtractionInterface({ config, user, authService }) {
       )}
 
       {updating && (
-        <div className="mx-6 mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="mx-6 mt-4 info-card">
           <div className="flex items-center">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
             <span className="text-blue-800">
@@ -568,7 +562,7 @@ function DataExtractionInterface({ config, user, authService }) {
       )}
 
       {recreating && (
-        <div className="mx-6 mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="mx-6 mt-4 info-card">
           <div className="flex items-center">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
             <span className="text-blue-800">Recreating field in GoHighLevel...</span>
@@ -580,7 +574,7 @@ function DataExtractionInterface({ config, user, authService }) {
       )}
 
       {refreshing && (
-        <div className="mx-6 mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <div className="mx-6 mt-4 warning-card">
           <div className="flex items-center">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600 mr-2"></div>
             <span className="text-yellow-800">Refreshing and updating field data...</span>

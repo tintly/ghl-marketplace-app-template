@@ -150,12 +150,12 @@ function StandardFieldsExtractionModule({ user, authService }) {
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+      <div className="error-card">
         <h3 className="text-red-800 font-medium">Error Loading Standard Fields</h3>
         <p className="text-red-600 text-sm mt-1">{error}</p>
         <button
           onClick={loadData}
-          className="mt-3 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
+          className="mt-3 btn-danger text-sm"
         >
           Retry
         </button>
@@ -165,7 +165,7 @@ function StandardFieldsExtractionModule({ user, authService }) {
 
   if (!ghlConfig) {
     return (
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+      <div className="warning-card">
         <h3 className="text-yellow-800 font-medium">Configuration Required</h3>
         <p className="text-yellow-600 text-sm mt-1">
           Please set up your GoHighLevel integration first before configuring standard field extraction.

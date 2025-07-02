@@ -118,10 +118,10 @@ function CustomFieldEditForm({ customField, onSubmit, onCancel, onDelete }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+    <div className="modal-backdrop">
+      <div className="modal-content max-w-2xl">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 flex-shrink-0">
+        <div className="modal-header">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-medium text-gray-900">Edit Custom Field</h3>
@@ -144,13 +144,13 @@ function CustomFieldEditForm({ customField, onSubmit, onCancel, onDelete }) {
 
         {/* Error Alert */}
         {error && (
-          <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-md p-3 flex-shrink-0">
+          <div className="mx-6 mt-4 error-card">
             <p className="text-sm text-red-600">{error}</p>
           </div>
         )}
 
         {/* Field Info */}
-        <div className="mx-6 mt-4 bg-blue-50 border border-blue-200 rounded-md p-3 flex-shrink-0">
+        <div className="mx-6 mt-4 info-card">
           <div className="flex items-center space-x-2">
             <span className="text-lg">{getFieldTypeIcon(customField.dataType)}</span>
             <div>
@@ -165,18 +165,18 @@ function CustomFieldEditForm({ customField, onSubmit, onCancel, onDelete }) {
         </div>
 
         {/* Scrollable Form Content */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="modal-body">
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Field Name */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="form-label">
                 Field Name *
               </label>
               <input
                 type="text"
                 value={formData.name}
                 onChange={(e) => handleChange('name', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="form-input"
                 required
                 disabled={loading || deleting}
               />
@@ -184,28 +184,28 @@ function CustomFieldEditForm({ customField, onSubmit, onCancel, onDelete }) {
 
             {/* Placeholder Text */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="form-label">
                 Placeholder Text
               </label>
               <input
                 type="text"
                 value={formData.placeholder}
                 onChange={(e) => handleChange('placeholder', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="form-input"
                 disabled={loading || deleting}
               />
             </div>
 
             {/* Position */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="form-label">
                 Position
               </label>
               <input
                 type="number"
                 value={formData.position}
                 onChange={(e) => handleChange('position', parseInt(e.target.value) || 0)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="form-input"
                 min="0"
                 step="50"
                 disabled={loading || deleting}
@@ -218,7 +218,7 @@ function CustomFieldEditForm({ customField, onSubmit, onCancel, onDelete }) {
             {/* Options for Choice Fields */}
             {needsPicklistOptions && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="form-label">
                   Options *
                 </label>
                 <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-3">
@@ -229,14 +229,14 @@ function CustomFieldEditForm({ customField, onSubmit, onCancel, onDelete }) {
                         type="text"
                         value={option}
                         onChange={(e) => handlePicklistChange(index, e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="form-input"
                         placeholder={`Option ${index + 1}`}
                         disabled={loading || deleting}
                       />
                       <button
                         type="button"
                         onClick={() => removePicklistOption(index)}
-                        className="text-red-600 hover:text-red-700 p-1 disabled:opacity-50"
+                        className="text-red-600 hover:text-red-700 p-1 hover:bg-red-50 rounded disabled:opacity-50"
                         disabled={loading || deleting || formData.picklistOptions.length <= 1}
                         title="Remove option"
                       >
@@ -264,11 +264,11 @@ function CustomFieldEditForm({ customField, onSubmit, onCancel, onDelete }) {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3 flex-shrink-0">
+        <div className="modal-footer">
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors disabled:opacity-50"
+            className="btn-secondary"
             disabled={loading || deleting}
           >
             Cancel
@@ -277,7 +277,7 @@ function CustomFieldEditForm({ customField, onSubmit, onCancel, onDelete }) {
             type="submit"
             onClick={handleSubmit}
             disabled={loading || deleting || !formData.name.trim()}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-md transition-colors"
+            className="btn-primary"
           >
             {loading ? (
               <div className="flex items-center">
@@ -300,7 +300,7 @@ function CustomFieldEditForm({ customField, onSubmit, onCancel, onDelete }) {
             </div>
             
             <div className="px-6 py-4">
-              <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
+              <div className="error-card mb-4">
                 <h4 className="text-sm font-medium text-red-800 mb-2">This action is irreversible!</h4>
                 <ul className="text-sm text-red-700 space-y-1">
                   <li>• The custom field will be permanently deleted from GoHighLevel</li>
@@ -320,14 +320,14 @@ function CustomFieldEditForm({ customField, onSubmit, onCancel, onDelete }) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="form-label">
                   Type "DELETE" to confirm:
                 </label>
                 <input
                   type="text"
                   value={deleteConfirmText}
                   onChange={(e) => setDeleteConfirmText(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="form-input"
                   placeholder="Type DELETE here"
                   disabled={deleting}
                 />
@@ -342,7 +342,7 @@ function CustomFieldEditForm({ customField, onSubmit, onCancel, onDelete }) {
                   setDeleteConfirmText('')
                   setError(null)
                 }}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors disabled:opacity-50"
+                className="btn-secondary"
                 disabled={deleting}
               >
                 Cancel
@@ -351,7 +351,7 @@ function CustomFieldEditForm({ customField, onSubmit, onCancel, onDelete }) {
                 type="button"
                 onClick={handleDelete}
                 disabled={deleting || deleteConfirmText !== 'DELETE'}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-red-400 rounded-md transition-colors"
+                className="btn-danger"
               >
                 {deleting ? (
                   <div className="flex items-center">

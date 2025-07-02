@@ -72,7 +72,7 @@ function UserLinking({ user, authService, onLinkingComplete }) {
   }
 
   return (
-    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
       <h3 className="text-lg font-semibold text-blue-900 mb-2">
         Link Your Installation
       </h3>
@@ -81,14 +81,14 @@ function UserLinking({ user, authService, onLinkingComplete }) {
       </p>
       
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
+        <div className="error-card">
           <p className="text-sm text-red-600">{error}</p>
         </div>
       )}
 
       <div className="space-y-3">
         {unlinkedConfigs.map((config) => (
-          <div key={config.id} className="bg-white border border-blue-200 rounded-md p-3">
+          <div key={config.id} className="bg-white border border-blue-200 rounded-md p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-gray-900">{config.business_name}</p>
@@ -99,7 +99,7 @@ function UserLinking({ user, authService, onLinkingComplete }) {
               <button
                 onClick={() => linkConfiguration(config.id)}
                 disabled={loading}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-md transition-colors"
+                className="btn-primary"
               >
                 {loading ? 'Linking...' : 'Link to My Account'}
               </button>

@@ -24,7 +24,7 @@ function StandardFieldsList({ extractionFields, onCreateExtraction }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-medium text-gray-900">Standard Contact Fields</h3>
+        <h3 className="section-title">Standard Contact Fields</h3>
         <span className="text-sm text-gray-500">
           Built-in GoHighLevel contact fields
         </span>
@@ -32,7 +32,7 @@ function StandardFieldsList({ extractionFields, onCreateExtraction }) {
 
       <div className="space-y-6">
         {Object.entries(STANDARD_FIELDS_BY_CATEGORY).map(([category, fields]) => (
-          <div key={category} className="border border-gray-200 rounded-lg p-4">
+          <div key={category} className="border border-gray-200 rounded-lg p-4 bg-white">
             <h4 className="font-medium text-gray-900 mb-3">{category}</h4>
             <div className="space-y-3">
               {fields.map((field) => {
@@ -41,14 +41,14 @@ function StandardFieldsList({ extractionFields, onCreateExtraction }) {
                 return (
                   <div
                     key={field.key}
-                    className="border border-gray-200 rounded-lg p-3 hover:shadow-sm transition-shadow"
+                    className="field-card bg-gray-50"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-2">
                           <span className="text-lg">{getStandardFieldIcon(field.dataType)}</span>
                           <h5 className="font-medium text-gray-900">{field.name}</h5>
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${status.className}`}>
+                          <span className={`field-badge ${status.className}`}>
                             {status.label}
                           </span>
                         </div>
@@ -64,7 +64,7 @@ function StandardFieldsList({ extractionFields, onCreateExtraction }) {
                         {!isFieldConfigured(field.key) ? (
                           <button
                             onClick={() => onCreateExtraction(field)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm transition-colors"
+                            className="btn-primary text-sm"
                           >
                             Configure
                           </button>

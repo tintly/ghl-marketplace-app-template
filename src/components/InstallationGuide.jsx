@@ -19,14 +19,14 @@ function InstallationGuide({ user, onInstallationComplete }) {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <div className="max-w-4xl mx-auto">
       <div className="bg-white rounded-lg shadow-md p-8">
         <h2 className="text-2xl font-bold text-gray-900 mb-6">
           GoHighLevel Integration Setup Required
         </h2>
         
         <div className="space-y-6">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="info-card">
             <h3 className="text-lg font-semibold text-blue-900 mb-2">
               Install the App via OAuth
             </h3>
@@ -44,7 +44,7 @@ function InstallationGuide({ user, onInstallationComplete }) {
             </button>
           </div>
 
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="warning-card">
             <h3 className="text-lg font-semibold text-yellow-900 mb-2">
               Why OAuth Installation is Required
             </h3>
@@ -56,7 +56,7 @@ function InstallationGuide({ user, onInstallationComplete }) {
             </div>
           </div>
 
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="success-card">
             <h3 className="text-lg font-semibold text-green-900 mb-2">
               What Happens Next?
             </h3>

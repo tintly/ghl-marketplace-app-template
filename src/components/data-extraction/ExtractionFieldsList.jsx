@@ -100,22 +100,22 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-medium text-gray-900">Configured Extractions</h3>
+        <h3 className="section-title">Configured Extractions</h3>
         <span className="text-sm text-gray-500">
           {extractionFields.length} field{extractionFields.length !== 1 ? 's' : ''} configured
         </span>
       </div>
 
       {extractionFields.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
+        <div className="text-center py-8 bg-white rounded-lg border border-gray-200 shadow-sm">
           <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
           </svg>
-          <p>No extraction fields configured</p>
-          <p className="text-sm mt-1">Configure custom fields to start extracting data automatically.</p>
+          <p className="text-gray-600 font-medium">No extraction fields configured</p>
+          <p className="text-sm text-gray-500 mt-1">Configure custom fields to start extracting data automatically.</p>
         </div>
       ) : (
-        <div className="space-y-3 max-h-96 overflow-y-auto">
+        <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto pr-2">
           {extractionFields.map((field) => {
             const displayData = getFieldDisplayData(field)
             const canRecreate = canRecreateField(field)
@@ -128,8 +128,8 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
             return (
               <div
                 key={field.id}
-                className={`border rounded-lg p-4 hover:shadow-sm transition-shadow ${
-                  displayData.isActive ? 'border-gray-200' : 'border-red-200 bg-red-50'
+                className={`field-card ${
+                  displayData.isActive ? 'bg-white' : 'bg-red-50 border-red-200'
                 }`}
               >
                 <div className="flex items-start justify-between">
@@ -144,35 +144,35 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
                       
                       {/* Status badges */}
                       {displayData.isActive ? (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <span className="field-badge bg-green-100 text-green-800">
                           Active
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        <span className="field-badge bg-red-100 text-red-800">
                           No longer active
                         </span>
                       )}
                       
                       {field.is_required && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                        <span className="field-badge bg-orange-100 text-orange-800">
                           Required
                         </span>
                       )}
 
                       {displayData.isActive && displayData.source === 'ghl_live' && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        <span className="field-badge bg-blue-100 text-blue-800">
                           Live Sync
                         </span>
                       )}
 
                       {nameOutOfSync && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                        <span className="field-badge bg-yellow-100 text-yellow-800">
                           Name Updated
                         </span>
                       )}
 
                       {/* Overwrite Policy Badge */}
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${overwritePolicy.color}`}>
+                      <span className={`field-badge ${overwritePolicy.color}`}>
                         <span className="mr-1">{overwritePolicy.icon}</span>
                         {overwritePolicy.label}
                       </span>
@@ -215,7 +215,7 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
                             {optionsToDisplay.slice(0, 5).map((option, index) => (
                               <span
                                 key={index}
-                                className="inline-flex items-center px-2 py-1 rounded-md text-xs bg-blue-100 text-blue-800"
+                                className="field-badge bg-blue-100 text-blue-800"
                               >
                                 {formatOptionForDisplay(option)}
                               </span>
@@ -249,7 +249,7 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
                     {/* Edit button */}
                     <button
                       onClick={() => onEdit(field)}
-                      className="text-blue-600 hover:text-blue-700 p-1 disabled:opacity-50"
+                      className="text-blue-600 hover:text-blue-700 p-1 hover:bg-blue-50 rounded disabled:opacity-50"
                       title="Edit extraction configuration"
                       disabled={isRecreatingThis}
                     >
@@ -262,7 +262,7 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
                     {!displayData.isActive && canRecreate && onRecreate && (
                       <button
                         onClick={() => handleRecreate(field)}
-                        className="text-green-600 hover:text-green-700 p-1 disabled:opacity-50"
+                        className="text-green-600 hover:text-green-700 p-1 hover:bg-green-50 rounded disabled:opacity-50"
                         title="Recreate field in GoHighLevel"
                         disabled={isRecreatingThis}
                       >
@@ -279,7 +279,7 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
                     {/* Delete button */}
                     <button
                       onClick={() => handleDelete(field)}
-                      className="text-red-600 hover:text-red-700 p-1 disabled:opacity-50"
+                      className="text-red-600 hover:text-red-700 p-1 hover:bg-red-50 rounded disabled:opacity-50"
                       title="Delete extraction configuration"
                       disabled={isRecreatingThis}
                     >

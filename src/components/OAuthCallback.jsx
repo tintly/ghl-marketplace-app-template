@@ -129,7 +129,7 @@ function OAuthCallback() {
         <p className="text-gray-600 mb-4">{message}</p>
         
         {installationData && status === 'success' && (
-          <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-4">
+          <div className="success-card mb-4">
             <div className="text-sm text-green-800">
               <p><strong>Type:</strong> {installationData.userType}</p>
               {installationData.userId && (
@@ -149,7 +149,7 @@ function OAuthCallback() {
         )}
         
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
+          <div className="error-card mb-4">
             <p className="text-sm text-red-600">{error}</p>
           </div>
         )}
@@ -163,7 +163,7 @@ function OAuthCallback() {
         {status === 'error' && (
           <button
             onClick={() => window.location.href = '/'}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors"
+            className="btn-primary"
           >
             Return to App
           </button>

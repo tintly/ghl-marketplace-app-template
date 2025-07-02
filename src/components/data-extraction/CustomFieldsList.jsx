@@ -43,7 +43,7 @@ function CustomFieldsList({
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-medium text-gray-900">Available Custom Fields</h3>
+        <h3 className="section-title">Available Custom Fields</h3>
         <div className="flex items-center space-x-2">
           <button
             onClick={onCreateNewField}
@@ -73,15 +73,15 @@ function CustomFieldsList({
       </div>
 
       {customFields.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
+        <div className="text-center py-8 bg-white rounded-lg border border-gray-200 shadow-sm">
           <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          <p>No custom fields found</p>
-          <p className="text-sm mt-1 mb-4">Create custom fields in your GoHighLevel location or create them directly here.</p>
+          <p className="text-gray-600 font-medium">No custom fields found</p>
+          <p className="text-sm text-gray-500 mt-1 mb-4">Create custom fields in your GoHighLevel location or create them directly here.</p>
           <button
             onClick={onCreateNewField}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm transition-colors inline-flex items-center"
+            className="btn-primary inline-flex items-center"
           >
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -90,21 +90,21 @@ function CustomFieldsList({
           </button>
         </div>
       ) : (
-        <div className="space-y-3 max-h-96 overflow-y-auto">
+        <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto pr-2">
           {sortedFields.map((field) => {
             const status = getFieldStatus(field)
             
             return (
               <div
                 key={field.id}
-                className="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow"
+                className="field-card bg-white"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center space-x-2 mb-2">
                       <span className="text-lg">{getFieldTypeIcon(field.dataType)}</span>
                       <h4 className="font-medium text-gray-900">{field.name}</h4>
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${status.className}`}>
+                      <span className={`field-badge ${status.className}`}>
                         {status.label}
                       </span>
                     </div>
@@ -122,7 +122,7 @@ function CustomFieldsList({
                             {field.picklistOptions.slice(0, 3).map((option, index) => (
                               <span
                                 key={index}
-                                className="inline-flex items-center px-2 py-1 rounded-md text-xs bg-blue-100 text-blue-800"
+                                className="field-badge bg-blue-100 text-blue-800"
                               >
                                 {typeof option === 'string' ? option : option.label}
                               </span>
@@ -142,7 +142,7 @@ function CustomFieldsList({
                     {/* Edit Field Button */}
                     <button
                       onClick={() => onEditField(field)}
-                      className="text-gray-600 hover:text-gray-700 p-1"
+                      className="text-gray-600 hover:text-gray-700 p-1 hover:bg-gray-100 rounded"
                       title="Edit field"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -154,12 +154,12 @@ function CustomFieldsList({
                     {!isFieldConfigured(field.id) ? (
                       <button
                         onClick={() => onCreateExtraction(field)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm transition-colors"
+                        className="btn-primary text-sm"
                       >
                         Configure
                       </button>
                     ) : (
-                      <div className="flex items-center text-green-600">
+                      <div className="flex items-center text-green-600 bg-green-50 px-2 py-1 rounded">
                         <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                         </svg>
