@@ -139,12 +139,12 @@ function TestExtractionButton({ user, authService }) {
                       {result.contact_update.success ? (
                         <div className="bg-green-50 border border-green-200 rounded-md p-3">
                           <p className="text-sm text-green-800">Contact updated successfully</p>
-                          {result.contact_update.updated_fields && result.contact_update.updated_fields.length > 0 && (
+                          {result.contact_update.updated_fields && (
                             <p className="text-xs text-green-700 mt-1">
                               Updated fields: {result.contact_update.updated_fields.join(', ')}
                             </p>
                           )}
-                          {result.contact_update.skipped_fields && result.contact_update.skipped_fields.length > 0 && (
+                          {result.contact_update.skipped_fields && (
                             <p className="text-xs text-green-700 mt-1">
                               Skipped fields: {result.contact_update.skipped_fields.join(', ')}
                             </p>
