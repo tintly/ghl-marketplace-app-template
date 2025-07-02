@@ -1,0 +1,363 @@
+import { createClient } from 'npm:@supabase/supabase-js@2'
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+}
+
+interface OpenAIMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+interface OpenAIResponse {
+  id: string
+  object: string
+  created: number
+  model: string
+  choices: Array<{
+    index: number
+    message: {
+      role: string
+      content: string
+    }
+    finish_reason: string
+  }>
+  usage: {
+    prompt_tokens: number
+    completion_tokens: number
+    total_tokens: number
+  }
+}
+
+interface ExtractionPayload {
+  conversation_id: string
+  location_id: string
+  business_context: {
+    name: string
+    description: string
+  }
+  fields_to_extract: Array<{
+    name: string
+    ghl_key: string
+    instructions: string
+    type: string
+  }>
+  conversation_history: Array<{
+    role: 'user' | 'assistant'
+    content: string
+    timestamp: string
+    message_type?: string
+    message_id?: string
+  }>
+  instructions: string
+  response_format: {
+    type: string
+    rules: string[]
+  }
+}
+
+// OpenAI model pricing (per 1K tokens) - Update these as needed
+const MODEL_PRICING = {
+  'gpt-4': { input: 0.03, output: 0.06 },
+  'gpt-4-turbo': { input: 0.01, output: 0.03 },
+  'gpt-3.5-turbo': { input: 0.0015, output: 0.002 },
+  'gpt-3.5-turbo-16k': { input: 0.003, output: 0.004 }
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      status: 200,
+      headers: corsHeaders,
+    })
+  }
+
+  if (req.method !== "POST") {
+    return new Response(
+      JSON.stringify({ error: "Method not allowed. Use POST." }),
+      {
+        status: 405,
+        headers: {
+          "Content-Type": "application/json",
+          ...corsHeaders,
+        },
+      }
+    )
+  }
+
+  const startTime = Date.now()
+  let usageLogId: string | null = null
+
+  try {
+    console.log('=== OPENAI EXTRACTION REQUEST ===')
+    
+    const payload: ExtractionPayload = await req.json()
+    
+    // Validate required fields
+    if (!payload.conversation_id || !payload.location_id) {
+      throw new Error('conversation_id and location_id are required')
+    }
+
+    console.log('Processing extraction for:', {
+      conversation_id: payload.conversation_id,
+      location_id: payload.location_id,
+      business: payload.business_context?.name,
+      fields_count: payload.fields_to_extract?.length || 0,
+      messages_count: payload.conversation_history?.length || 0
+    })
+
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+    // Get OpenAI API key from environment
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY')
+    if (!openaiApiKey) {
+      throw new Error('OPENAI_API_KEY environment variable is not set')
+    }
+
+    // Build the system prompt
+    const systemPrompt = buildSystemPrompt(payload)
+    console.log('System prompt length:', systemPrompt.length, 'characters')
+
+    // Build conversation context
+    const conversationContext = buildConversationContext(payload.conversation_history)
+    console.log('Conversation context length:', conversationContext.length, 'characters')
+
+    // Prepare OpenAI messages
+    const messages: OpenAIMessage[] = [
+      {
+        role: 'system',
+        content: systemPrompt
+      },
+      {
+        role: 'user',
+        content: `Please analyze this conversation and extract the requested data:\n\n${conversationContext}\n\nReturn only valid JSON with the extracted data using the exact field keys specified.`
+      }
+    ]
+
+    // Choose model (can be made configurable later)
+    const model = 'gpt-3.5-turbo'
+    
+    console.log('Calling OpenAI API with model:', model)
+
+    // Call OpenAI API
+    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: messages,
+        temperature: 0.1, // Low temperature for consistent extraction
+        max_tokens: 1000, // Reasonable limit for extraction responses
+        response_format: { type: "json_object" } // Ensure JSON response
+      })
+    })
+
+    if (!openaiResponse.ok) {
+      const errorText = await openaiResponse.text()
+      throw new Error(`OpenAI API error: ${openaiResponse.status} - ${errorText}`)
+    }
+
+    const openaiData: OpenAIResponse = await openaiResponse.json()
+    console.log('OpenAI response received:', {
+      model: openaiData.model,
+      usage: openaiData.usage,
+      finish_reason: openaiData.choices[0]?.finish_reason
+    })
+
+    // Calculate response time
+    const responseTime = Date.now() - startTime
+
+    // Calculate cost estimate
+    const costEstimate = calculateCost(model, openaiData.usage)
+
+    // Log usage to database
+    usageLogId = await logUsage(supabase, {
+      location_id: payload.location_id,
+      model: openaiData.model,
+      input_tokens: openaiData.usage.prompt_tokens,
+      output_tokens: openaiData.usage.completion_tokens,
+      total_tokens: openaiData.usage.total_tokens,
+      cost_estimate: costEstimate,
+      conversation_id: payload.conversation_id,
+      extraction_type: 'data_extraction',
+      success: true,
+      response_time_ms: responseTime
+    })
+
+    // Parse the extracted data
+    let extractedData
+    try {
+      extractedData = JSON.parse(openaiData.choices[0].message.content)
+    } catch (parseError) {
+      console.error('Failed to parse OpenAI response as JSON:', parseError)
+      throw new Error('OpenAI returned invalid JSON response')
+    }
+
+    console.log('✅ Extraction completed successfully')
+    console.log('Extracted fields:', Object.keys(extractedData))
+    console.log('Usage logged with ID:', usageLogId)
+
+    // Return the extraction result
+    return new Response(
+      JSON.stringify({
+        success: true,
+        conversation_id: payload.conversation_id,
+        location_id: payload.location_id,
+        extracted_data: extractedData,
+        usage: {
+          model: openaiData.model,
+          input_tokens: openaiData.usage.prompt_tokens,
+          output_tokens: openaiData.usage.completion_tokens,
+          total_tokens: openaiData.usage.total_tokens,
+          cost_estimate: costEstimate,
+          response_time_ms: responseTime
+        },
+        usage_log_id: usageLogId,
+        timestamp: new Date().toISOString()
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...corsHeaders,
+        },
+      }
+    )
+
+  } catch (error) {
+    console.error("=== OPENAI EXTRACTION ERROR ===")
+    console.error("Error message:", error.message)
+    console.error("Stack trace:", error.stack)
+
+    const responseTime = Date.now() - startTime
+
+    // Log failed usage if we have the required info
+    if (usageLogId === null) {
+      try {
+        const payload = await req.json().catch(() => ({}))
+        if (payload.location_id) {
+          const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+          const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+          const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+          await logUsage(supabase, {
+            location_id: payload.location_id,
+            model: 'unknown',
+            input_tokens: 0,
+            output_tokens: 0,
+            total_tokens: 0,
+            cost_estimate: 0,
+            conversation_id: payload.conversation_id || null,
+            extraction_type: 'data_extraction',
+            success: false,
+            error_message: error.message,
+            response_time_ms: responseTime
+          })
+        }
+      } catch (logError) {
+        console.error('Failed to log error usage:', logError)
+      }
+    }
+    
+    return new Response(
+      JSON.stringify({ 
+        error: `OpenAI extraction failed: ${error.message}`,
+        details: error.toString(),
+        timestamp: new Date().toISOString()
+      }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+          ...corsHeaders,
+        },
+      }
+    )
+  }
+})
+
+function buildSystemPrompt(payload: ExtractionPayload): string {
+  let prompt = `You are a data extraction AI analyzing a conversation between a customer and ${payload.business_context.name}. `
+  prompt += `Extract structured data from the conversation and return it as valid JSON.\n\n`
+  
+  prompt += `EXTRACTION FIELDS:\n`
+  payload.fields_to_extract.forEach((field, index) => {
+    prompt += `${index + 1}. "${field.ghl_key}": ${field.instructions}\n`
+    if (field.type) {
+      prompt += `   Type: ${field.type}\n`
+    }
+  })
+  
+  prompt += `\nINSTRUCTIONS:\n`
+  prompt += `- ${payload.instructions}\n`
+  prompt += `- Only include fields that have extractable values\n`
+  prompt += `- Use exact field keys as JSON property names\n`
+  prompt += `- Format dates as YYYY-MM-DD\n`
+  prompt += `- Ensure email and phone formats are valid\n`
+  prompt += `- Return only valid JSON, no explanations\n`
+  
+  if (payload.response_format?.rules) {
+    prompt += `\nFORMAT RULES:\n`
+    payload.response_format.rules.forEach(rule => {
+      prompt += `- ${rule}\n`
+    })
+  }
+  
+  return prompt
+}
+
+function buildConversationContext(messages: any[]): string {
+  if (!messages || messages.length === 0) {
+    return "No conversation messages available."
+  }
+  
+  let context = "CONVERSATION:\n"
+  messages.forEach((msg, index) => {
+    const speaker = msg.role === 'user' ? 'Customer' : 'Business'
+    context += `${index + 1}. [${speaker}] ${msg.content}\n`
+  })
+  
+  return context
+}
+
+function calculateCost(model: string, usage: any): number {
+  const pricing = MODEL_PRICING[model as keyof typeof MODEL_PRICING]
+  if (!pricing) {
+    console.warn(`No pricing info for model: ${model}`)
+    return 0
+  }
+  
+  const inputCost = (usage.prompt_tokens / 1000) * pricing.input
+  const outputCost = (usage.completion_tokens / 1000) * pricing.output
+  
+  return Math.round((inputCost + outputCost) * 1000000) / 1000000 // Round to 6 decimal places
+}
+
+async function logUsage(supabase: any, usageData: any): Promise<string> {
+  try {
+    const { data, error } = await supabase
+      .from('ai_usage_logs')
+      .insert(usageData)
+      .select('id')
+      .single()
+
+    if (error) {
+      console.error('Failed to log usage:', error)
+      throw error
+    }
+
+    console.log('Usage logged successfully:', data.id)
+    return data.id
+  } catch (error) {
+    console.error('Error logging usage:', error)
+    throw error
+  }
+}
