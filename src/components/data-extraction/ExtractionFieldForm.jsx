@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getFieldTypeIcon, getFieldTypeLabel } from '../../utils/customFieldUtils'
+import { getFieldTypeIcon, getFieldTypeLabel, mapGHLFieldType, mapStandardFieldType } from '../../utils/customFieldUtils'
 import { isStandardField } from '../../utils/standardContactFields'
 
 function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) {
@@ -58,13 +58,14 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
       })
     } else if (customField) {
       if (customField.key && isStandardField(customField.key)) {
-        const mappedType = mapStandardFieldType(customField.dataType)
+        // For standard fields, use the field type as is or default to TEXT
+        const fieldType = customField.dataType || 'TEXT'
         
         setFormData({
           field_name: customField.name,
           description: customField.description || `Extract data for ${customField.name} field`,
           target_ghl_key: customField.key,
-          field_type: mappedType,
+          field_type: fieldType,
           picklist_options: [],
           placeholder: '',
           is_required: false,
@@ -73,7 +74,16 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
           original_ghl_field_data: customField
         })
       } else {
-        const mappedType = mapGHLFieldType(customField.dataType)
+        // For custom fields, map the GHL field type to our field type
+        // Default to TEXT if we can't determine the type
+        const fieldType = customField.dataType ? 
+          (customField.dataType === 'SINGLE_OPTIONS' ? 'SINGLE_OPTIONS' : 
+           customField.dataType === 'MULTIPLE_OPTIONS' ? 'MULTIPLE_OPTIONS' :
+           customField.dataType === 'DATE' ? 'DATE' :
+           customField.dataType === 'NUMERICAL' ? 'NUMERICAL' :
+           customField.dataType === 'EMAIL' ? 'EMAIL' :
+           customField.dataType === 'PHONE' ? 'PHONE' : 'TEXT') : 'TEXT'
+        
         const options = customField.picklistOptions || []
         
         const enhancedOptions = Array.isArray(options) ? options.map(opt => {
@@ -92,7 +102,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
           field_name: customField.name,
           description: `Extract data for ${customField.name} field`,
           target_ghl_key: customField.id,
-          field_type: mappedType,
+          field_type: fieldType,
           picklist_options: enhancedOptions,
           placeholder: customField.placeholder || '',
           is_required: false,

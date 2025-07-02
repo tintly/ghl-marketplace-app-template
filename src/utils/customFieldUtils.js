@@ -57,7 +57,7 @@ export function mapGHLFieldType(ghlDataType) {
   return GHL_FIELD_TYPE_MAPPING[ghlDataType] || 'TEXT'
 }
 
-// CRITICAL FIX: Map standard field data types correctly
+// Map standard field data types correctly
 export function mapStandardFieldType(standardFieldDataType) {
   const mapping = {
     'TEXT': 'TEXT',
