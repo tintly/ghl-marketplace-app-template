@@ -14,6 +14,7 @@ interface TokenValidationResult {
 }
 
 Deno.serve(async (req: Request) => {
+  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 200,
@@ -21,9 +22,14 @@ Deno.serve(async (req: Request) => {
     })
   }
 
+  // Only allow POST requests
   if (req.method !== "POST") {
     return new Response(
-      JSON.stringify({ error: "Method not allowed. Use POST." }),
+      JSON.stringify({ 
+        error: "Method not allowed. Use POST.",
+        method_received: req.method,
+        expected: "POST"
+      }),
       {
         status: 405,
         headers: {
@@ -36,14 +42,19 @@ Deno.serve(async (req: Request) => {
 
   try {
     console.log('=== GHL TOKEN DEBUG REQUEST ===')
+    console.log('Request method:', req.method)
+    console.log('Request URL:', req.url)
     
     const requestBody = await req.json()
+    console.log('Request body:', requestBody)
+    
     const locationId = requestBody.locationId || requestBody.location_id
     
     if (!locationId) {
       return new Response(
         JSON.stringify({ 
           error: "locationId is required",
+          received_body: requestBody,
           example: { locationId: "3lkoUn4O7jExzrkx3shg" }
         }),
         {
@@ -61,6 +72,11 @@ Deno.serve(async (req: Request) => {
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Missing Supabase environment variables')
+    }
+    
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     // Step 1: Get configuration from database
@@ -78,7 +94,11 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({
           error: "Configuration not found for location",
           locationId,
-          details: configError?.message
+          details: configError?.message,
+          debug_info: {
+            supabase_url: supabaseUrl ? 'present' : 'missing',
+            service_key: supabaseServiceKey ? 'present' : 'missing'
+          }
         }),
         {
           status: 404,
@@ -125,7 +145,9 @@ Deno.serve(async (req: Request) => {
 
     // Compile debug report
     const debugReport = {
+      success: true,
       locationId,
+      timestamp: new Date().toISOString(),
       configuration: {
         found: true,
         id: config.id,
@@ -139,6 +161,8 @@ Deno.serve(async (req: Request) => {
       refresh_attempt: refreshResult,
       recommendations: generateRecommendations(tokenValidation, apiValidation, expiryCheck, refreshResult)
     }
+
+    console.log('✅ Debug report generated successfully')
 
     return new Response(
       JSON.stringify(debugReport, null, 2),
@@ -154,11 +178,14 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("=== TOKEN DEBUG ERROR ===")
     console.error("Error message:", error.message)
+    console.error("Stack trace:", error.stack)
     
     return new Response(
       JSON.stringify({ 
         error: `Token debug failed: ${error.message}`,
-        details: error.toString()
+        details: error.toString(),
+        stack: error.stack,
+        timestamp: new Date().toISOString()
       }),
       {
         status: 500,
@@ -210,6 +237,8 @@ async function testTokenWithGHLAPI(accessToken: string, locationId: string): Pro
   try {
     const apiDomain = Deno.env.get('GHL_API_DOMAIN') || 'https://services.leadconnectorhq.com'
     
+    console.log(`Testing token with ${apiDomain}/locations/${locationId}`)
+    
     // Test with a simple API call to get location info
     const response = await fetch(`${apiDomain}/locations/${locationId}`, {
       method: 'GET',
@@ -221,6 +250,7 @@ async function testTokenWithGHLAPI(accessToken: string, locationId: string): Pro
     })
 
     const responseText = await response.text()
+    console.log(`GHL API response: ${response.status} - ${responseText.substring(0, 200)}`)
     
     if (response.ok) {
       let locationData
@@ -246,6 +276,7 @@ async function testTokenWithGHLAPI(accessToken: string, locationId: string): Pro
       }
     }
   } catch (error) {
+    console.error('GHL API test error:', error)
     return {
       isValid: false,
       error: error.message,
@@ -285,7 +316,7 @@ async function attemptTokenRefresh(config: any, supabase: any) {
     if (!clientId || !clientSecret) {
       return {
         success: false,
-        error: 'Missing GHL client credentials'
+        error: 'Missing GHL client credentials in environment variables'
       }
     }
 
@@ -296,6 +327,8 @@ async function attemptTokenRefresh(config: any, supabase: any) {
       refresh_token: config.refresh_token
     })
 
+    console.log(`Attempting token refresh with ${apiDomain}/oauth/token`)
+
     const response = await fetch(`${apiDomain}/oauth/token`, {
       method: 'POST',
       headers: {
@@ -305,8 +338,11 @@ async function attemptTokenRefresh(config: any, supabase: any) {
       body: params.toString()
     })
 
+    const responseText = await response.text()
+    console.log(`Token refresh response: ${response.status} - ${responseText.substring(0, 200)}`)
+
     if (response.ok) {
-      const tokenData = await response.json()
+      const tokenData = JSON.parse(responseText)
       
       // Update the database with new tokens
       const expiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString()
@@ -336,14 +372,14 @@ async function attemptTokenRefresh(config: any, supabase: any) {
         updated_database: true
       }
     } else {
-      const errorText = await response.text()
       return {
         success: false,
-        error: `HTTP ${response.status}: ${errorText}`,
+        error: `HTTP ${response.status}: ${responseText}`,
         http_status: response.status
       }
     }
   } catch (error) {
+    console.error('Token refresh error:', error)
     return {
       success: false,
       error: error.message
