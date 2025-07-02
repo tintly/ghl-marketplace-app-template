@@ -36,6 +36,16 @@ function StandardExtractionFieldsList({ extractionFields, onEdit, onDelete }) {
     }
   }
 
+  // Helper function to get overwrite policy display info
+  const getOverwritePolicyDisplay = (policy) => {
+    const policies = {
+      'always': { label: 'Always overwrite', icon: '✏️', color: 'bg-blue-100 text-blue-800' },
+      'never': { label: 'Never overwrite', icon: '🔒', color: 'bg-gray-100 text-gray-800' },
+      'only_empty': { label: 'Only empty fields', icon: '📝', color: 'bg-yellow-100 text-yellow-800' }
+    }
+    return policies[policy] || policies['always']
+  }
+
   // Group fields by category for better organization
   const fieldsByCategory = extractionFields.reduce((acc, field) => {
     const displayData = getFieldDisplayData(field)
@@ -71,67 +81,83 @@ function StandardExtractionFieldsList({ extractionFields, onEdit, onDelete }) {
             <div key={category} className="border border-gray-200 rounded-lg p-4">
               <h4 className="font-medium text-gray-900 mb-3">{category}</h4>
               <div className="space-y-3">
-                {fields.map((field) => (
-                  <div
-                    key={field.id}
-                    className="border border-gray-200 rounded-lg p-3 hover:shadow-sm transition-shadow"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <span className="text-lg">
-                            {getStandardFieldIcon(field.displayData.dataType)}
-                          </span>
-                          <h5 className="font-medium text-gray-900">{field.field_name}</h5>
-                          
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            Standard Field
-                          </span>
-                          
-                          {field.is_required && (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                              Required
+                {fields.map((field) => {
+                  const overwritePolicy = getOverwritePolicyDisplay(field.overwrite_policy || 'always')
+                  
+                  return (
+                    <div
+                      key={field.id}
+                      className="border border-gray-200 rounded-lg p-3 hover:shadow-sm transition-shadow"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <span className="text-lg">
+                              {getStandardFieldIcon(field.displayData.dataType)}
                             </span>
-                          )}
-                        </div>
-                        
-                        <div className="text-sm text-gray-600 space-y-1">
-                          <p><span className="font-medium">Description:</span> {field.description}</p>
-                          <p><span className="font-medium">Field Key:</span> {field.displayData.fieldKey}</p>
-                          <p><span className="font-medium">Type:</span> {field.displayData.dataType}</p>
+                            <h5 className="font-medium text-gray-900">{field.field_name}</h5>
+                            
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              Standard Field
+                            </span>
+                            
+                            {field.is_required && (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                Required
+                              </span>
+                            )}
+
+                            {/* Overwrite Policy Badge */}
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${overwritePolicy.color}`}>
+                              <span className="mr-1">{overwritePolicy.icon}</span>
+                              {overwritePolicy.label}
+                            </span>
+                          </div>
                           
-                          {field.placeholder && (
-                            <p><span className="font-medium">Placeholder:</span> {field.placeholder}</p>
-                          )}
+                          <div className="text-sm text-gray-600 space-y-1">
+                            <p><span className="font-medium">Description:</span> {field.description}</p>
+                            <p><span className="font-medium">Field Key:</span> {field.displayData.fieldKey}</p>
+                            <p><span className="font-medium">Type:</span> {field.displayData.dataType}</p>
+                            
+                            {field.placeholder && (
+                              <p><span className="font-medium">Placeholder:</span> {field.placeholder}</p>
+                            )}
+
+                            {/* Overwrite Policy Description */}
+                            <p>
+                              <span className="font-medium">Overwrite Policy:</span> 
+                              <span className="ml-1">{overwritePolicy.icon} {overwritePolicy.label}</span>
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                      
-                      <div className="ml-4 flex space-x-2">
-                        {/* Edit button */}
-                        <button
-                          onClick={() => onEdit(field)}
-                          className="text-blue-600 hover:text-blue-700 p-1"
-                          title="Edit extraction configuration"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
                         
-                        {/* Delete button */}
-                        <button
-                          onClick={() => handleDelete(field)}
-                          className="text-red-600 hover:text-red-700 p-1"
-                          title="Delete extraction configuration"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        <div className="ml-4 flex space-x-2">
+                          {/* Edit button */}
+                          <button
+                            onClick={() => onEdit(field)}
+                            className="text-blue-600 hover:text-blue-700 p-1"
+                            title="Edit extraction configuration"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          
+                          {/* Delete button */}
+                          <button
+                            onClick={() => handleDelete(field)}
+                            className="text-red-600 hover:text-red-700 p-1"
+                            title="Delete extraction configuration"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           ))}
