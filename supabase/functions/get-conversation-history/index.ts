@@ -30,6 +30,7 @@ interface ConversationHistoryResponse {
   messages: FormattedMessage[]
   total_messages: number
   location_id: string
+  contact_id?: string // Added contact_id to response
 }
 
 Deno.serve(async (req: Request) => {
@@ -116,6 +117,7 @@ Deno.serve(async (req: Request) => {
           messages: [],
           total_messages: 0,
           location_id: null,
+          contact_id: null,
           message: "No messages found for this conversation"
         }),
         {
@@ -149,20 +151,23 @@ Deno.serve(async (req: Request) => {
       }
     })
 
-    // Get location_id from the first message
+    // Get location_id and contact_id from the first message
     const locationId = messages[0]?.location_id || null
+    const contactId = messages[0]?.contact_id || null
 
     const response: ConversationHistoryResponse = {
       conversation_id: conversationId,
       messages: formattedMessages,
       total_messages: formattedMessages.length,
-      location_id: locationId
+      location_id: locationId,
+      contact_id: contactId // Include contact_id in response
     }
 
     console.log('✅ Conversation history built successfully')
     console.log(`- Conversation ID: ${conversationId}`)
     console.log(`- Total messages: ${formattedMessages.length}`)
     console.log(`- Location ID: ${locationId}`)
+    console.log(`- Contact ID: ${contactId || 'Not available'}`)
     console.log(`- Message types: ${[...new Set(formattedMessages.map(m => m.message_type))].join(', ')}`)
 
     // Log a sample of the conversation for debugging

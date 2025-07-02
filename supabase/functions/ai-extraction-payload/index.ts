@@ -23,6 +23,7 @@ interface FieldToExtract {
 interface ConversationMetadata {
   total_messages: number
   location_id: string
+  contact_id?: string // Added contact_id to metadata
   message?: string
 }
 
@@ -50,6 +51,7 @@ interface PromptMetadata {
 interface AIExtractionPayload {
   conversation_id: string
   location_id: string
+  contact_id?: string // Added contact_id to main payload
   business_context: {
     name: string
     description: string
@@ -168,10 +170,11 @@ Deno.serve(async (req: Request) => {
       description: promptData.metadata.businessDescription || "GoHighLevel location"
     }
 
-    // Extract conversation metadata (excluding messages which are handled separately)
+    // Extract conversation metadata (including contact_id)
     const conversationMetadata: ConversationMetadata = {
       total_messages: conversationData.total_messages,
-      location_id: conversationData.location_id
+      location_id: conversationData.location_id,
+      contact_id: conversationData.contact_id // Include contact_id from conversation data
     }
 
     // Include optional message if present
@@ -233,6 +236,7 @@ Deno.serve(async (req: Request) => {
     const payload: AIExtractionPayload = {
       conversation_id: conversationId,
       location_id: conversationData.location_id,
+      contact_id: conversationData.contact_id, // Include contact_id in main payload
       business_context: businessContext,
       fields_to_extract: fieldsToExtract,
       conversation_history: conversationData.messages,
@@ -253,6 +257,7 @@ Deno.serve(async (req: Request) => {
     console.log('✅ AI extraction payload built successfully')
     console.log(`- Conversation ID: ${payload.conversation_id}`)
     console.log(`- Location ID: ${payload.location_id}`)
+    console.log(`- Contact ID: ${payload.contact_id || 'Not available'}`)
     console.log(`- Business: ${payload.business_context.name}`)
     console.log(`- Fields to extract: ${payload.fields_to_extract.length}`)
     console.log(`- Conversation messages: ${payload.conversation_history.length}`)

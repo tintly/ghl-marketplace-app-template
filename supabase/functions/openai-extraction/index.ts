@@ -34,6 +34,7 @@ interface OpenAIResponse {
 interface ExtractionPayload {
   conversation_id: string
   location_id: string
+  contact_id?: string // Added contact_id to payload interface
   business_context: {
     name: string
     description: string
@@ -105,6 +106,7 @@ Deno.serve(async (req: Request) => {
     console.log('Processing extraction for:', {
       conversation_id: payload.conversation_id,
       location_id: payload.location_id,
+      contact_id: payload.contact_id || 'Not available',
       business: payload.business_context?.name,
       fields_count: payload.fields_to_extract?.length || 0,
       messages_count: payload.conversation_history?.length || 0
@@ -209,12 +211,61 @@ Deno.serve(async (req: Request) => {
     console.log('Usage logged with ID:', usageLogId)
     console.log('Cost estimate:', `$${costEstimate}`)
 
-    // Return the extraction result
+    // Step 5: Automatically call update-ghl-contact if we have contact_id and extracted data
+    let contactUpdateResult = null
+    if (payload.contact_id && Object.keys(extractedData).length > 0) {
+      console.log('Step 5: Auto-calling update-ghl-contact...')
+      
+      try {
+        const contactUpdateResponse = await fetch(`${supabaseUrl}/functions/v1/update-ghl-contact`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`
+          },
+          body: JSON.stringify({
+            ghl_contact_id: payload.contact_id,
+            location_id: payload.location_id,
+            extracted_data: extractedData
+          })
+        })
+
+        if (contactUpdateResponse.ok) {
+          contactUpdateResult = await contactUpdateResponse.json()
+          console.log('✅ Contact updated successfully in GHL')
+          console.log('Updated fields:', contactUpdateResult.updatedFields)
+        } else {
+          const errorText = await contactUpdateResponse.text()
+          console.error('Contact update failed:', errorText)
+          contactUpdateResult = {
+            success: false,
+            error: `Contact update failed: ${contactUpdateResponse.status} - ${errorText}`
+          }
+        }
+      } catch (contactUpdateError) {
+        console.error('Error calling update-ghl-contact:', contactUpdateError)
+        contactUpdateResult = {
+          success: false,
+          error: `Contact update error: ${contactUpdateError.message}`
+        }
+      }
+    } else {
+      console.log('Skipping contact update - missing contact_id or no extracted data')
+      if (!payload.contact_id) {
+        console.log('- No contact_id provided in payload')
+      }
+      if (Object.keys(extractedData).length === 0) {
+        console.log('- No data was extracted')
+      }
+    }
+
+    // Return the extraction result with contact update info
     return new Response(
       JSON.stringify({
         success: true,
         conversation_id: payload.conversation_id,
         location_id: payload.location_id,
+        contact_id: payload.contact_id,
         extracted_data: extractedData,
         usage: {
           model: openaiData.model,
@@ -225,6 +276,7 @@ Deno.serve(async (req: Request) => {
           response_time_ms: responseTime
         },
         usage_log_id: usageLogId,
+        contact_update: contactUpdateResult, // Include contact update result
         timestamp: new Date().toISOString()
       }),
       {
