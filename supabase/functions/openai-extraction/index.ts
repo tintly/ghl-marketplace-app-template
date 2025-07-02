@@ -58,8 +58,10 @@ interface ExtractionPayload {
   }
 }
 
-// OpenAI model pricing (per 1K tokens) - Update these as needed
+// OpenAI model pricing (per 1K tokens) - Updated with gpt-4o-mini pricing
 const MODEL_PRICING = {
+  'gpt-4o-mini': { input: 0.00015, output: 0.0006 }, // Current gpt-4o-mini pricing
+  'gpt-4o': { input: 0.005, output: 0.015 },
   'gpt-4': { input: 0.03, output: 0.06 },
   'gpt-4-turbo': { input: 0.01, output: 0.03 },
   'gpt-3.5-turbo': { input: 0.0015, output: 0.002 },
@@ -139,8 +141,8 @@ Deno.serve(async (req: Request) => {
       }
     ]
 
-    // Choose model (can be made configurable later)
-    const model = 'gpt-3.5-turbo'
+    // Use gpt-4o-mini as the default model
+    const model = 'gpt-4o-mini'
     
     console.log('Calling OpenAI API with model:', model)
 
@@ -155,7 +157,7 @@ Deno.serve(async (req: Request) => {
         model: model,
         messages: messages,
         temperature: 0.1, // Low temperature for consistent extraction
-        max_tokens: 1000, // Reasonable limit for extraction responses
+        max_tokens: 1500, // Increased for better extraction coverage
         response_format: { type: "json_object" } // Ensure JSON response
       })
     })
@@ -198,12 +200,14 @@ Deno.serve(async (req: Request) => {
       extractedData = JSON.parse(openaiData.choices[0].message.content)
     } catch (parseError) {
       console.error('Failed to parse OpenAI response as JSON:', parseError)
+      console.error('Raw response:', openaiData.choices[0].message.content)
       throw new Error('OpenAI returned invalid JSON response')
     }
 
     console.log('✅ Extraction completed successfully')
     console.log('Extracted fields:', Object.keys(extractedData))
     console.log('Usage logged with ID:', usageLogId)
+    console.log('Cost estimate:', `$${costEstimate}`)
 
     // Return the extraction result
     return new Response(
@@ -250,7 +254,7 @@ Deno.serve(async (req: Request) => {
 
           await logUsage(supabase, {
             location_id: payload.location_id,
-            model: 'unknown',
+            model: 'gpt-4o-mini',
             input_tokens: 0,
             output_tokens: 0,
             total_tokens: 0,
@@ -303,6 +307,7 @@ function buildSystemPrompt(payload: ExtractionPayload): string {
   prompt += `- Format dates as YYYY-MM-DD\n`
   prompt += `- Ensure email and phone formats are valid\n`
   prompt += `- Return only valid JSON, no explanations\n`
+  prompt += `- Be thorough but only extract data that is clearly present\n`
   
   if (payload.response_format?.rules) {
     prompt += `\nFORMAT RULES:\n`
@@ -322,7 +327,8 @@ function buildConversationContext(messages: any[]): string {
   let context = "CONVERSATION:\n"
   messages.forEach((msg, index) => {
     const speaker = msg.role === 'user' ? 'Customer' : 'Business'
-    context += `${index + 1}. [${speaker}] ${msg.content}\n`
+    const timestamp = new Date(msg.timestamp).toLocaleString()
+    context += `${index + 1}. [${speaker}] (${timestamp}): ${msg.content}\n`
   })
   
   return context
@@ -331,8 +337,12 @@ function buildConversationContext(messages: any[]): string {
 function calculateCost(model: string, usage: any): number {
   const pricing = MODEL_PRICING[model as keyof typeof MODEL_PRICING]
   if (!pricing) {
-    console.warn(`No pricing info for model: ${model}`)
-    return 0
+    console.warn(`No pricing info for model: ${model}, using gpt-4o-mini pricing as fallback`)
+    // Use gpt-4o-mini pricing as fallback
+    const fallbackPricing = MODEL_PRICING['gpt-4o-mini']
+    const inputCost = (usage.prompt_tokens / 1000) * fallbackPricing.input
+    const outputCost = (usage.completion_tokens / 1000) * fallbackPricing.output
+    return Math.round((inputCost + outputCost) * 1000000) / 1000000
   }
   
   const inputCost = (usage.prompt_tokens / 1000) * pricing.input
