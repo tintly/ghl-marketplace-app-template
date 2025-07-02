@@ -4,6 +4,7 @@ import UserLinking from './UserLinking'
 import DataExtractionModule from './DataExtractionModule'
 import StandardFieldsExtractionModule from './StandardFieldsExtractionModule'
 import InstallationGuide from './InstallationGuide'
+import TestExtractionButton from './TestExtractionButton'
 import Navigation from './Navigation'
 
 function DataExtractorApp({ user, authService }) {
@@ -73,7 +74,7 @@ function DataExtractorApp({ user, authService }) {
         {!needsOAuthInstallation() && <Navigation />}
         
         <Routes>
-          <Route path="/" element={<DashboardHome user={user} needsOAuth={needsOAuthInstallation()} />} />
+          <Route path="/" element={<DashboardHome user={user} authService={authService} needsOAuth={needsOAuthInstallation()} />} />
           <Route path="/data-extraction" element={
             needsOAuthInstallation() ? (
               <div className="text-center py-8">
@@ -98,7 +99,7 @@ function DataExtractorApp({ user, authService }) {
   )
 }
 
-function DashboardHome({ user, needsOAuth }) {
+function DashboardHome({ user, authService, needsOAuth }) {
   if (needsOAuth) {
     return (
       <div className="space-y-8">
@@ -177,6 +178,9 @@ function DashboardHome({ user, needsOAuth }) {
           </div>
         </div>
       </div>
+
+      {/* Test Extraction Section */}
+      <TestExtractionButton user={user} authService={authService} />
     </div>
   )
 }
