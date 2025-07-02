@@ -10,6 +10,7 @@ interface UpdateRequest {
   ghl_contact_id: string
   location_id: string
   extracted_data: Record<string, any>
+  force_overwrite?: string[]
 }
 
 Deno.serve(async (req: Request) => {
@@ -121,12 +122,12 @@ Deno.serve(async (req: Request) => {
       ghlConfig.access_token = refreshResult.accessToken
     }
 
-    // Step 3: Get extraction fields configuration
+    // Step 3: Get extraction fields configuration for this location
     console.log('Step 3: Fetching extraction fields configuration...')
     const extractionFields = await getExtractionFields(supabase, ghlConfig.id)
 
     // Step 4: Get existing contact data from GoHighLevel
-    console.log('Step 4: Fetching existing contact data from GHL...')
+    console.log('Step 4: Fetching existing contact from GHL...')
     const existingContact = await getGHLContact(ghlConfig.access_token, requestBody.ghl_contact_id)
     
     if (!existingContact) {
@@ -175,6 +176,12 @@ Deno.serve(async (req: Request) => {
     // Step 6: Update the contact in GHL
     console.log('Step 6: Sending update to GHL...')
     console.log('Fields to update:', Object.keys(updateResult.updatePayload))
+    
+    if (updateResult.updatePayload.customFields) {
+      console.log('Custom fields to update:', updateResult.updatePayload.customFields.map((cf: any) => 
+        `${cf.id}: ${typeof cf.value === 'object' ? JSON.stringify(cf.value) : cf.value}`
+      ))
+    }
     
     const ghlUpdateResult = await updateGHLContact(
       ghlConfig.access_token, 
@@ -341,7 +348,8 @@ async function getExtractionFields(supabase: any, configId: string) {
       field_name,
       target_ghl_key,
       field_type,
-      overwrite_policy
+      overwrite_policy,
+      original_ghl_field_data
     `)
     .eq('config_id', configId)
 
@@ -379,7 +387,7 @@ async function getGHLContact(accessToken: string, contactId: string) {
 }
 
 function applyOverwritePolicies(
-  existingContact: any,
+  existingContact: any, 
   extractedData: Record<string, any>,
   extractionFields: any[]
 ) {
@@ -388,7 +396,11 @@ function applyOverwritePolicies(
   const skippedFields: string[] = []
 
   // Create extraction fields map for metadata
-  const fieldsMap = new Map(extractionFields.map(f => [f.target_ghl_key, f]))
+  const fieldsMap = new Map(extractionFields.map(f => {
+    // For standard fields, use the target_ghl_key directly (e.g., contact.firstName)
+    // For custom fields, use the target_ghl_key (which is the GHL field ID)
+    return [f.target_ghl_key, f]
+  }))
 
   // Create custom fields map for quick lookup
   const customFieldsMap = new Map()
@@ -400,6 +412,14 @@ function applyOverwritePolicies(
 
   // Process each extracted field
   for (const [fieldKey, newValue] of Object.entries(extractedData)) {
+    // Skip empty values
+    if (newValue === null || newValue === undefined || newValue === '') {
+      console.log(`Skipping empty value for field ${fieldKey}`)
+      skippedFields.push(fieldKey)
+      continue
+    }
+
+    // Get field configuration if available
     const field = fieldsMap.get(fieldKey)
     const fieldName = field?.field_name || fieldKey
     const policy = field?.overwrite_policy || 'always'
@@ -529,6 +549,9 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
       customFieldsCount: cleanPayload.customFields?.length || 0
     })
 
+    // Log the exact payload being sent
+    console.log('Update payload:', JSON.stringify(cleanPayload, null, 2))
+
     const response = await fetch(url, {
       method: 'PUT',
       headers: {
@@ -540,7 +563,12 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
       body: JSON.stringify(cleanPayload)
     })
 
-    const responseData = await response.json()
+    let responseData
+    try {
+      responseData = await response.json()
+    } catch (e) {
+      responseData = { error: 'Failed to parse response' }
+    }
 
     if (!response.ok) {
       console.error('GHL API error:', {
@@ -550,7 +578,10 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
       
       return {
         success: false,
-        error: `GHL API error: ${response.status} - ${response.statusText}`,
+        error: `GHL API error: ${JSON.stringify({
+          status: response.status,
+          response: responseData
+        })}`,
         ghlResponse: responseData
       }
     }
