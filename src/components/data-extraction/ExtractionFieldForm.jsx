@@ -12,10 +12,39 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
     placeholder: '',
     is_required: false,
     sort_order: 0,
+    overwrite_policy: 'ask', // New field for overwrite policy
     original_ghl_field_data: {}
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+
+  // Overwrite policy options
+  const overwritePolicyOptions = [
+    {
+      value: 'ask',
+      label: 'Ask for confirmation',
+      description: 'Prompt user when field has existing data',
+      icon: '❓'
+    },
+    {
+      value: 'always',
+      label: 'Always overwrite',
+      description: 'Replace existing data without asking',
+      icon: '✏️'
+    },
+    {
+      value: 'only_empty',
+      label: 'Only fill empty fields',
+      description: 'Only update if field is currently empty',
+      icon: '📝'
+    },
+    {
+      value: 'never',
+      label: 'Never overwrite',
+      description: 'Skip this field if it has any data',
+      icon: '🔒'
+    }
+  ]
 
   useEffect(() => {
     if (editingField) {
@@ -30,6 +59,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
         placeholder: editingField.placeholder || '',
         is_required: editingField.is_required,
         sort_order: editingField.sort_order,
+        overwrite_policy: editingField.overwrite_policy || 'ask', // Load existing policy
         original_ghl_field_data: editingField.original_ghl_field_data || {}
       })
     } else if (customField) {
@@ -53,6 +83,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
           placeholder: '',
           is_required: false,
           sort_order: 0,
+          overwrite_policy: 'ask', // Default policy for new fields
           original_ghl_field_data: customField
         })
       } else {
@@ -81,6 +112,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
           placeholder: customField.placeholder || '',
           is_required: false,
           sort_order: 0,
+          overwrite_policy: 'ask', // Default policy for new fields
           original_ghl_field_data: customField
         })
       }
@@ -148,6 +180,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
         field_name: formData.field_name,
         field_type: formData.field_type,
         target_ghl_key: formData.target_ghl_key,
+        overwrite_policy: formData.overwrite_policy,
         is_standard: isStandardField(formData.target_ghl_key)
       })
 
@@ -192,7 +225,7 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 flex-shrink-0">
           <h3 className="text-lg font-medium text-gray-900">
@@ -289,6 +322,48 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
                 </select>
               </div>
             )}
+
+            {/* NEW: Overwrite Policy Section */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Data Overwrite Policy *
+              </label>
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+                <p className="text-sm text-blue-800">
+                  <strong>💡 Policy Tip:</strong> Choose how to handle existing data in this field when AI extracts new information.
+                </p>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {overwritePolicyOptions.map((option) => (
+                  <label
+                    key={option.value}
+                    className={`relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors ${
+                      formData.overwrite_policy === option.value
+                        ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
+                        : 'border-gray-200'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="overwrite_policy"
+                      value={option.value}
+                      checked={formData.overwrite_policy === option.value}
+                      onChange={(e) => handleChange('overwrite_policy', e.target.value)}
+                      className="sr-only"
+                      disabled={loading}
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center mb-1">
+                        <span className="text-lg mr-2">{option.icon}</span>
+                        <span className="text-sm font-medium text-gray-900">{option.label}</span>
+                      </div>
+                      <p className="text-xs text-gray-600">{option.description}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
 
             {needsPicklistOptions && (
               <div>

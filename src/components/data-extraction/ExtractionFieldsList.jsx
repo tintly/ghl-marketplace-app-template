@@ -93,6 +93,17 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
     return String(option)
   }
 
+  // Helper function to get overwrite policy display info
+  const getOverwritePolicyDisplay = (policy) => {
+    const policies = {
+      'always': { label: 'Always overwrite', icon: '✏️', color: 'bg-red-100 text-red-800' },
+      'never': { label: 'Never overwrite', icon: '🔒', color: 'bg-gray-100 text-gray-800' },
+      'only_empty': { label: 'Only empty fields', icon: '📝', color: 'bg-yellow-100 text-yellow-800' },
+      'ask': { label: 'Ask for confirmation', icon: '❓', color: 'bg-blue-100 text-blue-800' }
+    }
+    return policies[policy] || policies['ask']
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -117,6 +128,7 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
             const canRecreate = canRecreateField(field)
             const isRecreatingThis = recreating
             const optionsToDisplay = getOptionsToDisplay(field, displayData)
+            const overwritePolicy = getOverwritePolicyDisplay(field.overwrite_policy || 'ask')
             
             // CRITICAL FIX: Show name mismatch warning if field name in DB differs from GHL
             const nameOutOfSync = displayData.isActive && field.field_name !== displayData.name
@@ -169,6 +181,12 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
                           Name Updated
                         </span>
                       )}
+
+                      {/* NEW: Overwrite Policy Badge */}
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${overwritePolicy.color}`}>
+                        <span className="mr-1">{overwritePolicy.icon}</span>
+                        {overwritePolicy.label}
+                      </span>
                     </div>
                     
                     <div className="text-sm text-gray-600 space-y-1">
@@ -192,6 +210,12 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
                       {field.placeholder && (
                         <p><span className="font-medium">Placeholder:</span> {field.placeholder}</p>
                       )}
+
+                      {/* NEW: Overwrite Policy Description */}
+                      <p>
+                        <span className="font-medium">Overwrite Policy:</span> 
+                        <span className="ml-1">{overwritePolicy.icon} {overwritePolicy.label}</span>
+                      </p>
                       
                       {optionsToDisplay && optionsToDisplay.length > 0 && (
                         <div>

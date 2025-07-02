@@ -16,6 +16,7 @@ interface ExtractionField {
   placeholder: string
   is_required: boolean
   sort_order: number
+  overwrite_policy: string // NEW: Include overwrite policy
   original_ghl_field_data: any
 }
 
@@ -154,7 +155,7 @@ Deno.serve(async (req: Request) => {
       extractionFields.forEach((field, index) => {
         const fieldKey = getProperFieldKey(field)
         const fieldType = isStandardField(field) ? 'STANDARD' : 'CUSTOM'
-        console.log(`  ${index + 1}. [${fieldType}] ${field.field_name} (${field.field_type}) -> ${fieldKey} [GHL ID: ${field.target_ghl_key}]`)
+        console.log(`  ${index + 1}. [${fieldType}] ${field.field_name} (${field.field_type}) -> ${fieldKey} [GHL ID: ${field.target_ghl_key}] [Policy: ${field.overwrite_policy || 'ask'}]`)
       })
     }
 
@@ -180,7 +181,8 @@ Deno.serve(async (req: Request) => {
             ghlKey: f.target_ghl_key,
             fieldKey: getProperFieldKey(f),
             required: f.is_required,
-            isStandard: isStandardField(f)
+            isStandard: isStandardField(f),
+            overwritePolicy: f.overwrite_policy || 'ask' // NEW: Include overwrite policy in metadata
           }))
         }
       }),
@@ -330,6 +332,7 @@ async function getExtractionFields(supabase: any, configId: string): Promise<Ext
       placeholder,
       is_required,
       sort_order,
+      overwrite_policy,
       original_ghl_field_data
     `)
     .eq('config_id', configId)
@@ -361,7 +364,7 @@ async function getExtractionFields(supabase: any, configId: string): Promise<Ext
     fields.forEach((field, index) => {
       const fieldKey = getProperFieldKey(field)
       const fieldType = isStandardField(field) ? 'STANDARD' : 'CUSTOM'
-      console.log(`  ${index + 1}. [${fieldType}] ${field.field_name} (${field.field_type}) -> ${fieldKey} [GHL ID: ${field.target_ghl_key}]`)
+      console.log(`  ${index + 1}. [${fieldType}] ${field.field_name} (${field.field_type}) -> ${fieldKey} [GHL ID: ${field.target_ghl_key}] [Policy: ${field.overwrite_policy || 'ask'}]`)
       if (field.is_required) {
         console.log(`     ⚠️ REQUIRED`)
       }
