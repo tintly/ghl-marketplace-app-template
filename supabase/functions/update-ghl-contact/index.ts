@@ -615,6 +615,8 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
     delete cleanPayload.dateAdded
     delete cleanPayload.dateUpdated
     delete cleanPayload.lastActivity
+    // Remove any fields that GHL API doesn't accept
+    delete cleanPayload.services_mentioned
 
     console.log('Sending update to GHL:', {
       contactId,
@@ -628,6 +630,21 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
     // Log the fields being updated
     console.log('Standard fields:', Object.keys(cleanPayload).filter(k => k !== 'customFields'))
     console.log('Custom fields:', cleanPayload.customFields?.length || 0)
+
+    // Final validation to ensure we're not sending any invalid fields
+    const validStandardFields = [
+      'firstName', 'lastName', 'name', 'email', 'phone', 
+      'companyName', 'address1', 'city', 'state', 'country', 
+      'postalCode', 'website', 'dateOfBirth', 'tags'
+    ]
+    
+    // Remove any standard fields that aren't in the valid list
+    Object.keys(cleanPayload).forEach(key => {
+      if (!validStandardFields.includes(key) && key !== 'customFields') {
+        console.log(`⚠️ Removing invalid standard field: ${key}`)
+        delete cleanPayload[key]
+      }
+    })
 
     const response = await fetch(url, {
       method: 'PUT',
