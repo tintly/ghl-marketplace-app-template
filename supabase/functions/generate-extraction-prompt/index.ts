@@ -419,18 +419,6 @@ function generatePromptWithSeparatedFields({ ghlConfig, extractionFields, contex
           prompt += ` Select one or more from: ${options}. Use comma separation for multiple selections.`;
         }
       }
-      
-      // Add special handling for vehicle type field to make instructions more explicit
-      if (field.field_name === 'Vehicle Type' || field.target_ghl_key.includes('vehicle_type')) {
-        prompt += `\\n\\n   EXAMPLES for Vehicle Type field:\\n`;
-        prompt += `   - Input: "I have a 18 Tundra" → Output: "2018 Toyota Tundra"\\n`;
-        prompt += `   - Input: "My car is a 22 Camry" → Output: "2022 Toyota Camry"\\n`;
-        prompt += `   - Input: "I drive a 19 F150" → Output: "2019 Ford F150"\\n`;
-        prompt += `   - Input: "It's a 2015 Honda Accord" → Output: "2015 Honda Accord"\\n`;
-        prompt += `   - Input: "I have a Tundra" → DO NOT RETURN (missing year)\\n`;
-        prompt += `   - Input: "I have a 2020 truck" → DO NOT RETURN (missing make/model)`;
-      }
-      
       // Add field-specific formatting instructions for custom fields
       switch(field.field_type){
         case 'DATE':
@@ -473,8 +461,6 @@ function generatePromptWithSeparatedFields({ ghlConfig, extractionFields, contex
   prompt += `- Only extract information that is clearly stated or strongly implied.\\n`;
   prompt += `- For each field, use the exact field key shown above in your JSON response.\\n`;
   prompt += `- Standard fields update built-in contact properties, custom fields update business-specific data.\\n`;
-  prompt += `- For Vehicle Type, ALWAYS expand 2-digit years (e.g., '18 Tundra' → '2018 Toyota Tundra') and include full make/model.\\n`;
-  prompt += `- For Service Requested, look for mentions of window tinting, PPF, or haircuts and select the appropriate option.\\n`;
   prompt += `- Ensure the response is VALID JSON ONLY, with no explanations or markdown.`;
   return prompt;
 }
