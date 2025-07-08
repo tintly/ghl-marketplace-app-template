@@ -392,6 +392,42 @@ function prepareUpdatePayload(
   const updatedFields: string[] = []
   const skippedFields: string[] = []
 
+  // Helper function to convert snake_case field keys to GHL's camelCase format
+  function getGHLStandardFieldName(inputKey: string): string {
+    // Remove 'contact.' prefix if present
+    let key = inputKey.includes('.') ? inputKey.split('.')[1] : inputKey
+    
+    // Map specific fields to their GHL API equivalents
+    switch (key) {
+      case 'date_of_birth':
+        return 'dateOfBirth'
+      case 'first_name':
+        return 'firstName'
+      case 'last_name':
+        return 'lastName'
+      case 'postal_code':
+        return 'postalCode'
+      case 'phone_raw':
+        return 'phone'
+      case 'full_address':
+        return 'address'
+      case 'address1':
+        return 'address1'
+      case 'company_name':
+        return 'companyName'
+      // For fields that don't need conversion
+      case 'name':
+      case 'email':
+      case 'city':
+      case 'state':
+      case 'country':
+      case 'website':
+        return key
+      default:
+        return key
+    }
+  }
+
   // Create extraction fields map for metadata
   const fieldsMap = new Map()
   
@@ -434,8 +470,8 @@ function prepareUpdatePayload(
     // Get field configuration if available
     const field = fieldsMap.get(fieldKey)
     
-    // If no field configuration found, try to determine if it's a standard field
-    const isStandardField = fieldKey.includes('.')
+    // Determine if this is a standard field
+    const isStandardField = fieldKey.includes('.') && fieldKey.startsWith('contact.')
     
     if (!field && !isStandardField) {
       console.log(`No field configuration found for ${fieldKey}, skipping`)
@@ -452,8 +488,8 @@ function prepareUpdatePayload(
     
     if (isStandardField) {
       // Standard field (e.g., contact.firstName)
-      const standardFieldKey = fieldKey.split('.')[1]
-      currentValue = existingContact[standardFieldKey]
+      const ghlStandardKey = getGHLStandardFieldName(fieldKey)
+      currentValue = existingContact[ghlStandardKey]
       
       console.log(`Standard field ${fieldKey} -> ${standardFieldKey}:`, {
         currentValue,
@@ -505,10 +541,10 @@ function prepareUpdatePayload(
     if (shouldUpdate) {
       if (isStandardField) {
         // For standard fields, we need to use the field name without the "contact." prefix
-        const standardFieldKey = fieldKey.split('.')[1]
+        const ghlStandardKey = getGHLStandardFieldName(fieldKey)
         
         // Special handling for specific field types
-        switch (standardFieldKey) {
+        switch (ghlStandardKey) {
           case 'tags':
             // Merge tags to avoid duplicates
             const existingTags = existingContact.tags || []
@@ -518,11 +554,11 @@ function prepareUpdatePayload(
             
           default:
             // For standard fields, just add them directly to the update payload
-            updatePayload[standardFieldKey] = newValue
+            updatePayload[ghlStandardKey] = newValue
             break
         }
         
-        console.log(`✅ Will update standard field ${standardFieldKey}: ${currentValue} → ${newValue}`)
+        console.log(`✅ Will update standard field ${ghlStandardKey}: ${currentValue} → ${newValue}`)
       } else {
         // For custom fields, add to the customFields array with the correct format
         updatePayload.customFields.push({
