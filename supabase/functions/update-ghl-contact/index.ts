@@ -392,24 +392,53 @@ function prepareUpdatePayload(
   const updatedFields: string[] = []
   const skippedFields: string[] = []
 
-  // Create extraction fields map for metadata
-  const fieldsMap = new Map()
-  
-  // Map both standard fields and custom fields
-  extractionFields.forEach(f => {
-    if (f.target_ghl_key.includes('.')) {
-      // Standard field (e.g., contact.firstName)
-      fieldsMap.set(f.target_ghl_key, f)
-    } else {
-      // Custom field - map both the GHL ID and the fieldKey if available
-      fieldsMap.set(f.target_ghl_key, f)
-      
-      // If we have original field data with a fieldKey, map that too
-      if (f.original_ghl_field_data?.fieldKey) {
-        fieldsMap.set(f.original_ghl_field_data.fieldKey, f)
-      }
+  // Helper function to convert snake_case to camelCase for GHL standard fields
+  function snakeToCamelCase(str: string): string {
+    return str.replace(/_([a-z])/g, (match, letter) => letter.toUpperCase());
+  }
+
+  // Helper function to get the correct GHL standard field name
+  function getGHLStandardFieldName(inputKey: string): string {
+    // Remove 'contact.' prefix if present
+    let key = inputKey.startsWith('contact.') ? inputKey.split('.')[1] : inputKey;
+    
+    // Special case mappings
+    switch (key) {
+      case 'date_of_birth':
+        return 'dateOfBirth';
+      case 'phone_raw':
+        return 'phone';
+      case 'full_address':
+        return 'address';
+      case 'postal_code':
+        return 'postalCode';
+      default:
+        // Convert other snake_case fields to camelCase
+        return snakeToCamelCase(key);
     }
-  })
+  }
+
+  // Create maps for field lookups
+  const fieldsMap = new Map();
+  
+  // Map fields by various keys for flexible lookup
+  extractionFields.forEach(f => {
+    // Map by target GHL key (primary identifier)
+    fieldsMap.set(f.target_ghl_key, f);
+    
+    // Map by field name for convenience
+    fieldsMap.set(f.field_name, f);
+    
+    // If we have original field data with a fieldKey, map that too
+    if (f.original_ghl_field_data?.fieldKey) {
+      fieldsMap.set(f.original_ghl_field_data.fieldKey, f);
+    }
+    
+    // For standard fields, also map without the 'contact.' prefix
+    if (f.target_ghl_key.includes('.')) {
+      fieldsMap.set(f.target_ghl_key.split('.')[1], f);
+    }
+  });
 
   // Create custom fields map for quick lookup
   const customFieldsMap = new Map()
@@ -434,10 +463,7 @@ function prepareUpdatePayload(
     // Get field configuration if available
     const field = fieldsMap.get(fieldKey)
     
-    // If no field configuration found, try to determine if it's a standard field
-    const isStandardField = fieldKey.includes('.')
-    
-    if (!field && !isStandardField) {
+    if (!field) {
       console.log(`No field configuration found for ${fieldKey}, skipping`)
       skippedFields.push(fieldKey)
       continue
@@ -446,13 +472,16 @@ function prepareUpdatePayload(
     const fieldName = field?.field_name || fieldKey
     const policy = field?.overwrite_policy || 'always'
     
+    // Determine if this is a standard field by checking if target_ghl_key contains a dot
+    const isStandardField = field.target_ghl_key.includes('.')
+    
     // Get current value
     let currentValue: any = null
     let targetFieldId: string = field?.target_ghl_key || fieldKey
     
     if (isStandardField) {
-      // Standard field (e.g., contact.firstName)
-      const standardFieldKey = fieldKey.split('.')[1]
+      // Standard field (e.g., contact.first_name)
+      const standardFieldKey = getGHLStandardFieldName(field.target_ghl_key)
       currentValue = existingContact[standardFieldKey]
       
       console.log(`Standard field ${fieldKey} -> ${standardFieldKey}:`, {
@@ -505,7 +534,7 @@ function prepareUpdatePayload(
     if (shouldUpdate) {
       if (isStandardField) {
         // For standard fields, we need to use the field name without the "contact." prefix
-        const standardFieldKey = fieldKey.split('.')[1]
+        const standardFieldKey = getGHLStandardFieldName(field.target_ghl_key)
         
         // Special handling for specific field types
         switch (standardFieldKey) {
@@ -544,6 +573,9 @@ function prepareUpdatePayload(
   if (updatePayload.customFields.length === 0) {
     delete updatePayload.customFields
   }
+
+  // Log the final update payload for debugging
+  console.log('Final update payload:', JSON.stringify(updatePayload, null, 2))
 
   return {
     updatePayload,

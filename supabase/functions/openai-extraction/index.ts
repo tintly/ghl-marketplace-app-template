@@ -345,6 +345,10 @@ function buildSystemPrompt(payload: ExtractionPayload): string {
   let prompt = `You are a data extraction AI analyzing a conversation between a customer and ${payload.business_context.name}. `
   prompt += `Extract structured data from the conversation and return it as valid JSON.\n\n`
   
+  prompt += `CRITICAL INSTRUCTIONS: You MUST follow ALL formatting rules EXACTLY as specified for each field.\n`
+  prompt += `For vehicle information, ALWAYS convert 2-digit years to 4-digit years (e.g., '18 Tundra' → '2018 Toyota Tundra').\n`
+  prompt += `For dropdown fields, ONLY select from the provided options.\n\n`
+  
   prompt += `EXTRACTION FIELDS:\n`
   payload.fields_to_extract.forEach((field, index) => {
     prompt += `${index + 1}. "${field.ghl_key}": ${field.instructions}\n`
@@ -359,6 +363,8 @@ function buildSystemPrompt(payload: ExtractionPayload): string {
   prompt += `- Use exact field keys as JSON property names\n`
   prompt += `- Format dates as YYYY-MM-DD\n`
   prompt += `- Ensure email and phone formats are valid\n`
+  prompt += `- NEVER return incomplete or improperly formatted data\n`
+  prompt += `- ALWAYS expand abbreviated information (e.g., '18 Tundra' → '2018 Toyota Tundra')\n`
   prompt += `- Return only valid JSON, no explanations\n`
   prompt += `- Be thorough but only extract data that is clearly present\n`
   
