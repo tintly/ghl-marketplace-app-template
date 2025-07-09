@@ -257,6 +257,9 @@ Deno.serve(async (req: Request) => {
     // Calculate cost estimate
     const costEstimate = calculateCost(model, openaiData.usage)
 
+    // Calculate customer cost based on subscription plan
+    const customerCostEstimate = await calculateCustomerCost(supabase, payload.location_id)
+
     // Increment message usage
     console.log('Incrementing message usage for location:', payload.location_id)
     await incrementMessageUsage(
@@ -271,9 +274,11 @@ Deno.serve(async (req: Request) => {
       location_id: payload.location_id,
       model: openaiData.model,
       input_tokens: openaiData.usage.prompt_tokens,
-      output_tokens: openaiData.usage.completion_tokens,
+      output_tokens: openaiData.usage.completion_tokens, 
       total_tokens: openaiData.usage.total_tokens,
-      cost_estimate: costEstimate,
+      platform_cost_estimate: costEstimate,
+      customer_cost_estimate: customerCostEstimate,
+      customer_cost_calculated: true,
       conversation_id: payload.conversation_id,
       extraction_type: 'data_extraction',
       success: true,
@@ -294,7 +299,8 @@ Deno.serve(async (req: Request) => {
     console.log('✅ Extraction completed successfully')
     console.log('Extracted fields:', Object.keys(extractedData))
     console.log('Usage logged with ID:', usageLogId)
-    console.log('Cost estimate:', `$${costEstimate}`) 
+    console.log('Platform cost estimate:', `$${costEstimate}`)
+    console.log('Customer cost estimate:', `$${customerCostEstimate}`)
 
     // Step 5: Automatically call update-ghl-contact if we have contact_id and extracted data
     let contactUpdateResult = null
@@ -356,8 +362,9 @@ Deno.serve(async (req: Request) => {
           model: openaiData.model,
           input_tokens: openaiData.usage.prompt_tokens,
           output_tokens: openaiData.usage.completion_tokens, 
-          total_tokens: openaiData.usage.total_tokens,
-          cost_estimate: costEstimate,
+          total_tokens: openaiData.usage.total_tokens, 
+          platform_cost_estimate: costEstimate,
+          customer_cost_estimate: customerCostEstimate,
           response_time_ms: responseTime
         },
         usage_log_id: usageLogId,
@@ -394,8 +401,9 @@ Deno.serve(async (req: Request) => {
             model: 'gpt-4o-mini',
             input_tokens: 0, 
             output_tokens: 0,
-            total_tokens: 0,
-            cost_estimate: 0,
+            total_tokens: 0, 
+            platform_cost_estimate: 0,
+            customer_cost_estimate: 0,
             conversation_id: payload.conversation_id || null,
             extraction_type: 'data_extraction',
             success: false,
@@ -486,6 +494,32 @@ function calculateCost(model: string, usage: any): number {
   const outputCost = (usage.completion_tokens / 1000) * pricing.output
   
   return Math.round((inputCost + outputCost) * 1000000) / 1000000 // Round to 6 decimal places
+}
+
+// Calculate customer cost based on subscription plan
+async function calculateCustomerCost(supabase: any, locationId: string): Promise<number> {
+  try {
+    // Get location's subscription plan
+    const { data, error } = await supabase
+      .rpc('get_location_subscription_plan', {
+        p_location_id: locationId
+      })
+    
+    if (error) {
+      console.error('Error getting subscription plan:', error)
+      return 0
+    }
+    
+    // Get overage price from plan
+    const overagePrice = data?.overage_price || 0.08 // Default to $0.08 if not found
+    
+    // For simplicity, we'll use 1 message = 1 API call
+    // In a real implementation, you might have a more complex formula
+    return overagePrice
+  } catch (error) {
+    console.error('Error calculating customer cost:', error)
+    return 0
+  }
 }
 
 async function logUsage(supabase: any, usageData: any): Promise<string> {

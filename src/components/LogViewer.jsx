@@ -110,7 +110,7 @@ function LogViewer() {
 
   const formatCost = (cost) => {
     if (cost === null || cost === undefined) return 'N/A'
-    return `$${parseFloat(cost).toFixed(6)}`
+    return `$${parseFloat(cost).toFixed(2)}`
   }
 
   return (
@@ -302,7 +302,7 @@ function LogViewer() {
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tokens</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Message Cost</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                       </tr>
                     </thead>
@@ -322,8 +322,8 @@ function LogViewer() {
                             <div>Output: {log.output_tokens}</div>
                             <div className="font-medium">Total: {log.total_tokens}</div>
                           </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-xs">
-                            {formatCost(log.cost_estimate)}
+                          <td className="px-3 py-2 whitespace-nowrap text-xs font-medium">
+                            {formatCost(log.customer_cost_estimate || log.cost_estimate)}
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap text-xs">
                             {log.success ? (

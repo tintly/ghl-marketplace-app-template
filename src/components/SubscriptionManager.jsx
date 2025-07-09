@@ -190,7 +190,7 @@ function SubscriptionManager({ user, authService }) {
                   <div>
                     <p className="text-sm text-gray-500">Estimated Cost</p>
                     <p className="text-2xl font-medium text-gray-900">
-                      ${(usageStats?.cost_estimate || 0).toFixed(2)}
+                      ${(usageStats?.customer_cost_estimate || usageStats?.cost_estimate || 0).toFixed(2)}
                     </p>
                   </div>
                 </div>
