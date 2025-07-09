@@ -19,7 +19,7 @@ export class AgencyBrandingService {
     }
 
     try {
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+      const supabase = this.authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
 
       const { data, error } = await supabase
         .rpc('get_agency_branding_for_location', {
@@ -64,7 +64,7 @@ export class AgencyBrandingService {
   async updateAgencyBranding(agencyId, brandingData) {
     try {
       console.log('Updating agency branding for agency ID:', agencyId);
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+      const supabase = this.authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
 
       // First check if a record exists
       const { data: existingData, error: checkError } = await supabase
@@ -130,7 +130,7 @@ export class AgencyBrandingService {
   // Get agency permissions
   async getAgencyPermissions(agencyId) {
     try {
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+      const supabase = this.authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
 
       const { data, error } = await supabase
         .rpc('get_agency_permissions', {
