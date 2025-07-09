@@ -35,20 +35,7 @@ export class AuthService {
         console.log('Encrypted user data received from GHL SSO')
       } catch (ssoError) {
         console.log('GHL SSO not available:', ssoError.message)
-        // Return user object with missing token status instead of throwing error
-        return {
-          userId: null,
-          email: null,
-          userName: 'Guest User',
-          role: 'guest',
-          type: 'unknown',
-          companyId: null,
-          locationId: null,
-          activeLocation: null,
-          tokenStatus: 'missing',
-          tokenValidation: 'GHL SSO authentication required. Please install the app from within GoHighLevel or use the OAuth installation guide.',
-          configValidated: false
-        }
+        throw new Error('GHL SSO authentication required')
       }
 
       // Use Supabase Edge Function for SSO authentication
@@ -86,27 +73,8 @@ export class AuthService {
       
       return result.user
     } catch (error) {
-      // Re-throw OAuth callback error as it should be handled differently
-      if (error.message === 'OAuth callback page - SSO not needed') {
-        throw error
-      }
-      
       console.error('Failed to fetch user data:', error)
-      
-      // Return user object with error status instead of throwing error
-      return {
-        userId: null,
-        email: null,
-        userName: 'Guest User',
-        role: 'guest',
-        type: 'unknown',
-        companyId: null,
-        locationId: null,
-        activeLocation: null,
-        tokenStatus: 'error',
-        tokenValidation: `Authentication error: ${error.message}`,
-        configValidated: false
-      }
+      throw error
     }
   }
 

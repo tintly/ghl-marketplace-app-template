@@ -36,25 +36,7 @@ function AppContent() {
       
     } catch (error) {
       console.error('Authentication error:', error)
-      // Only set error for OAuth callback page errors, not for missing SSO
-      if (error.message === 'OAuth callback page - SSO not needed') {
-        setError(`Authentication failed: ${error.message}`)
-      } else {
-        // For other errors, create a user object that will show the installation guide
-        setUser({
-          userId: null,
-          email: null,
-          userName: 'Guest User',
-          role: 'guest',
-          type: 'unknown',
-          companyId: null,
-          locationId: null,
-          activeLocation: null,
-          tokenStatus: 'error',
-          tokenValidation: `Authentication error: ${error.message}`,
-          configValidated: false
-        })
-      }
+      setError(`Authentication failed: ${error.message}`)
     } finally {
       setLoading(false)
     }
