@@ -21,7 +21,7 @@ export class AgencyBrandingService {
     }
 
     try {
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+      const supabase = this.authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
 
       // First try to get branding by location
       console.log('Fetching agency branding by location ID');
@@ -90,7 +90,7 @@ export class AgencyBrandingService {
     try {
       console.log('Updating agency branding for agency ID:', agencyId);
       console.log('Updating agency branding for agency ID:', agencyId);
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+      const supabase = this.authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
 
       // First check if a record exists
       const { data: existingData, error: checkError } = await supabase
@@ -157,7 +157,7 @@ export class AgencyBrandingService {
   // Get agency permissions
   async getAgencyPermissions(agencyId) {
     try {
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+      const supabase = this.authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
 
       // First check if a record exists
       const { data: existingData, error: checkError } = await supabase
