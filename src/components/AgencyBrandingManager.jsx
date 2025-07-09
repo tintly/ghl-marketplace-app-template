@@ -1,25 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { AgencyBrandingService } from '../services/AgencyBrandingService.js';
 
-const AgencyBrandingManager = ({ authService, agencyId, onBrandingUpdate }) => {
+const AgencyBrandingManager = ({ user, authService, onBrandingUpdate }) => {
   const [branding, setBranding] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [brandingService] = useState(() => new AgencyBrandingService(authService));
+  const brandingService = new AgencyBrandingService(authService);
+  const agencyId = user?.companyId;
 
   useEffect(() => {
     loadBranding();
   }, [agencyId]);
 
   const loadBranding = async () => {
-    if (!agencyId) return;
+    if (!agencyId) {
+      console.log('No agency ID provided to AgencyBrandingManager');
+      setLoading(false);
+      return;
+    }
     
     setLoading(true);
     setError(null);
     
     try {
+      console.log('Loading branding for agency ID:', agencyId);
       const brandingData = await brandingService.getAgencyBranding(agencyId);
+      console.log('Branding data loaded:', brandingData);
       setBranding(brandingData);
     } catch (err) {
       setError('Failed to load branding settings');

@@ -8,17 +8,11 @@ export class SubscriptionService {
   // Get current subscription for a location
   async getCurrentSubscription(locationId) {
     try {
+      console.log('Getting current subscription for location:', locationId)
       const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
 
-      // Try to use the RPC function first
-      const { data: subscriptionData, error: rpcError } = await supabase
-        .rpc('get_my_subscription_direct')
-
-      if (!rpcError && subscriptionData) {
-        return this.formatSubscriptionData(subscriptionData)
-      }
-
-      // Fallback to direct query if RPC fails
+      // Direct query for subscription data
+      console.log('Querying location_subscriptions table...')
       const { data: locationSub, error: subError } = await supabase
         .from('location_subscriptions')
         .select(`
@@ -45,11 +39,15 @@ export class SubscriptionService {
         .eq('is_active', true)
         .single()
 
-      if (subError && subError.code !== 'PGRST116') { // PGRST116 is "not found"
-        throw subError
+      if (subError) {
+        console.log('Subscription query error:', subError)
+        if (subError.code !== 'PGRST116') { // PGRST116 is "not found"
+          throw subError
+        }
       }
 
       if (locationSub) {
+        console.log('Found subscription:', locationSub)
         return {
           subscription_id: locationSub.id,
           location_id: locationSub.location_id,
@@ -71,29 +69,51 @@ export class SubscriptionService {
       }
 
       // If no subscription found, return free plan
+      console.log('No subscription found, getting free plan...')
       const { data: freePlan, error: freeError } = await supabase
         .from('subscription_plans')
         .select('*')
         .eq('code', 'free')
         .single()
 
-      if (freeError) {
+      if (freeError && freeError.code !== 'PGRST116') {
+        console.log('Free plan query error:', freeError)
         throw freeError
       }
 
+      if (freePlan) {
+        console.log('Using free plan:', freePlan)
+        return {
+          subscription_id: null,
+          location_id: locationId,
+          plan_id: freePlan.id,
+          plan_name: freePlan.name,
+          plan_code: freePlan.code,
+          price_monthly: freePlan.price_monthly,
+          price_annual: freePlan.price_annual,
+          max_users: freePlan.max_users,
+          messages_included: freePlan.messages_included,
+          overage_price: freePlan.overage_price,
+          can_use_own_openai_key: freePlan.can_use_own_openai_key,
+          can_white_label: freePlan.can_white_label,
+          is_active: true,
+          payment_status: 'free'
+        }
+      }
+      
+      // Fallback to hardcoded free plan if database query fails
+      console.log('Using hardcoded free plan')
       return {
         subscription_id: null,
         location_id: locationId,
-        plan_id: freePlan.id,
-        plan_name: freePlan.name,
-        plan_code: freePlan.code,
-        price_monthly: freePlan.price_monthly,
-        price_annual: freePlan.price_annual,
-        max_users: freePlan.max_users,
-        messages_included: freePlan.messages_included,
-        overage_price: freePlan.overage_price,
-        can_use_own_openai_key: freePlan.can_use_own_openai_key,
-        can_white_label: freePlan.can_white_label,
+        plan_name: 'Free',
+        plan_code: 'free',
+        price_monthly: 0,
+        max_users: 1,
+        messages_included: 100,
+        overage_price: 0.08,
+        can_use_own_openai_key: false,
+        can_white_label: false,
         is_active: true,
         payment_status: 'free'
       }
@@ -144,6 +164,7 @@ export class SubscriptionService {
   // Get available subscription plans
   async getAvailablePlans() {
     try {
+      console.log('Getting available subscription plans')
       const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
 
       const { data, error } = await supabase
@@ -153,9 +174,11 @@ export class SubscriptionService {
         .order('price_monthly', { ascending: true })
 
       if (error) {
+        console.log('Error fetching plans:', error)
         throw error
       }
 
+      console.log(`Found ${data?.length || 0} subscription plans`)
       return data || []
     } catch (error) {
       console.error('Error getting available plans:', error)
@@ -166,26 +189,11 @@ export class SubscriptionService {
   // Get usage statistics for a location
   async getUsageStats(locationId) {
     try {
+      console.log('Getting usage stats for location:', locationId)
       const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
       
-      // Try to use the RPC function first
-      const { data: usageData, error: rpcError } = await supabase
-        .rpc('get_my_usage_with_limits')
-
-      if (!rpcError && usageData) {
-        return {
-          messages_used: usageData.messages_used,
-          tokens_used: usageData.tokens_used,
-          cost_estimate: usageData.cost_estimate,
-          messages_included: usageData.messages_included,
-          messages_remaining: usageData.messages_remaining,
-          usage_percentage: usageData.usage_percentage,
-          limit_reached: usageData.limit_reached
-        }
-      }
-
-      // Fallback to direct query
       const currentMonth = new Date().toISOString().substring(0, 7) // YYYY-MM
+      console.log('Current month:', currentMonth)
       
       const { data: usage, error: usageError } = await supabase
         .from('usage_tracking')
@@ -194,12 +202,18 @@ export class SubscriptionService {
         .eq('month_year', currentMonth)
         .maybeSingle()
 
-      if (usageError && usageError.code !== 'PGRST116') {
+      if (usageError) {
+        console.log('Usage tracking query error:', usageError)
+        if (usageError.code !== 'PGRST116') { // PGRST116 is "not found"
         throw usageError
+        }
       }
 
+      console.log('Usage data:', usage)
+      
       // Get subscription for message limits
       const subscription = await this.getCurrentSubscription(locationId)
+      console.log('Subscription for usage limits:', subscription)
       
       const messagesUsed = usage?.messages_used || 0
       const messagesIncluded = subscription?.messages_included || 100
@@ -233,6 +247,7 @@ export class SubscriptionService {
   // Change subscription plan
   async changePlan(locationId, planId) {
     try {
+      console.log('Changing subscription plan:', { locationId, planId })
       const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
 
       // Get plan code from ID
@@ -243,37 +258,33 @@ export class SubscriptionService {
         .single()
 
       if (planError) {
+        console.log('Error getting plan code:', planError)
         throw planError
       }
 
-      // Try to use the RPC function first
-      const { data, error } = await supabase
-        .rpc('force_change_subscription_plan', {
-          p_location_id: locationId,
-          p_plan_code: plan.code
+      console.log('Updating subscription with plan code:', plan.code)
+      
+      // Direct update
+      const { error: updateError } = await supabase
+        .from('location_subscriptions')
+        .upsert({
+          location_id: locationId,
+          plan_id: planId,
+          start_date: new Date().toISOString(),
+          is_active: true,
+          payment_status: 'active',
+          updated_at: new Date().toISOString()
         })
 
-      if (error) {
-        // Fallback to direct update
-        const { error: updateError } = await supabase
-          .from('location_subscriptions')
-          .upsert({
-            location_id: locationId,
-            plan_id: planId,
-            start_date: new Date().toISOString(),
-            is_active: true,
-            payment_status: 'active',
-            updated_at: new Date().toISOString()
-          })
-
-        if (updateError) {
-          throw updateError
-        }
+      if (updateError) {
+        console.log('Error updating subscription:', updateError)
+        throw updateError
       }
 
       // Clear cache
       this.clearCacheForLocation(locationId)
 
+      console.log('Subscription updated successfully')
       return { success: true }
     } catch (error) {
       console.error('Error changing plan:', error)

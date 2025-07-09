@@ -21,7 +21,7 @@ export const WhiteLabelProvider = ({ children, authService, locationId }) => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null) 
   
-  const [brandingService] = useState(() => new AgencyBrandingService(authService))
+  const brandingService = new AgencyBrandingService(authService)
 
   useEffect(() => {
     const loadBranding = async () => {
@@ -38,7 +38,9 @@ export const WhiteLabelProvider = ({ children, authService, locationId }) => {
         setLoading(true)
         setError(null)
         
+        console.log('Loading branding for location:', locationId)
         const brandingData = await brandingService.getAgencyBranding(locationId)
+        console.log('Branding data loaded:', brandingData)
         setBranding(brandingData)
         
         // Apply branding to CSS variables
@@ -57,7 +59,7 @@ export const WhiteLabelProvider = ({ children, authService, locationId }) => {
     }
 
     loadBranding()
-  }, [locationId, brandingService])
+  }, [locationId])
 
   const updateBranding = async (agencyId, brandingData) => {
     try {

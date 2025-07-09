@@ -8,7 +8,7 @@ const SubscriptionManager = ({ user, authService }) => {
   const [usage, setUsage] = useState(null)
   const [error, setError] = useState(null)
 
-  const subscriptionService = new SubscriptionService(authService)
+  const [subscriptionService] = useState(() => new SubscriptionService(authService))
 
   useEffect(() => {
     loadSubscriptionData()
@@ -24,12 +24,20 @@ const SubscriptionManager = ({ user, authService }) => {
       }
       
       const locationId = user.activeLocation || user.locationId || user.companyId
+      console.log('Loading subscription data for location:', locationId)
 
-      const [subscriptionData, plansData, usageData] = await Promise.all([
-        subscriptionService.getCurrentSubscription(locationId),
-        subscriptionService.getAvailablePlans(),
-        subscriptionService.getUsageStats(locationId)
-      ])
+      // Load each piece of data separately to better identify issues
+      console.log('Getting current subscription...')
+      const subscriptionData = await subscriptionService.getCurrentSubscription(locationId)
+      console.log('Subscription data:', subscriptionData)
+      
+      console.log('Getting available plans...')
+      const plansData = await subscriptionService.getAvailablePlans()
+      console.log('Available plans:', plansData)
+      
+      console.log('Getting usage stats...')
+      const usageData = await subscriptionService.getUsageStats(locationId)
+      console.log('Usage stats:', usageData)
 
       setSubscription(subscriptionData)
       setPlans(plansData)
