@@ -102,7 +102,7 @@ app.post("/decrypt-sso", async (req: Request, res: Response) => {
 })
 
 // Serve static files from the UI build directory
-const uiDistPath = path.join(__dirname, '../ui/dist');
+const uiDistPath = path.join(__dirname, '../dist');
 app.use(express.static(uiDistPath));
 
 // Serve main HTML file for all other routes (SPA routing)
