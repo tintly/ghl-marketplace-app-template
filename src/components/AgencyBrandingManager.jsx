@@ -99,10 +99,11 @@ function AgencyBrandingManager({ user, authService }) {
   if (user.type === 'agency' && !permissions?.can_customize_branding) {
     console.log('Agency user detected but permissions show no branding access. Overriding permissions.')
     // Override permissions for agency users
-    permissions = {
+    const updatedPermissions = {
       ...permissions,
       can_customize_branding: true
     }
+    setPermissions(updatedPermissions)
   }
 
   // This check should never be true for agency users now, but keeping it for non-agency users
