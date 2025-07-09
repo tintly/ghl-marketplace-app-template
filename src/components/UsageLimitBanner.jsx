@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { SubscriptionService } from '../services/SubscriptionService'
+import { useWhiteLabel } from './WhiteLabelProvider'
 
 function UsageLimitBanner({ user, authService }) {
   const [usageData, setUsageData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const { getAppName } = useWhiteLabel()
 
   useEffect(() => {
     if (user?.locationId) {
@@ -31,7 +33,7 @@ function UsageLimitBanner({ user, authService }) {
   }
 
   // Don't show for unlimited plans
-  if (usageData.plan?.plan_code === 'agency') {
+  if (usageData.plan?.plan_code === 'agency' || usageData.plan?.is_agency_plan === true) {
     return null
   }
 
@@ -126,7 +128,7 @@ function UsageLimitBanner({ user, authService }) {
           <div className="mt-3">
             <a
               href="/subscription"
-              className={`text-sm font-medium ${
+              className={`text-sm font-medium inline-flex items-center ${
                 isOverLimit 
                   ? 'text-red-600 hover:text-red-500' 
                   : isNearLimit 
@@ -134,7 +136,10 @@ function UsageLimitBanner({ user, authService }) {
                     : 'text-blue-600 hover:text-blue-500'
               }`}
             >
-              View subscription details →
+              View subscription details
+              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
             </a>
           </div>
         </div>

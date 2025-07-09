@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react'
 import { SubscriptionService } from '../services/SubscriptionService'
+import { useWhiteLabel } from './WhiteLabelProvider'
 
 function SubscriptionManager({ user, authService }) {
   const [subscription, setSubscription] = useState(null)
   const [usageStats, setUsageStats] = useState(null)
   const [availablePlans, setAvailablePlans] = useState([])
   const [loading, setLoading] = useState(true)
+  const [upgrading, setUpgrading] = useState(false)
   const [error, setError] = useState(null)
+  const [success, setSuccess] = useState(null)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const { getAgencyName } = useWhiteLabel()
 
   const subscriptionService = new SubscriptionService(authService)
 
@@ -42,8 +46,9 @@ function SubscriptionManager({ user, authService }) {
 
   const handleUpgrade = async (planCode) => {
     try {
-      setLoading(true)
+      setUpgrading(true)
       setError(null)
+      setSuccess(null)
 
       const result = await subscriptionService.updateSubscription(user.locationId, planCode)
       
@@ -51,6 +56,7 @@ function SubscriptionManager({ user, authService }) {
         // Reload subscription data
         await loadSubscriptionData()
         setShowUpgradeModal(false)
+        setSuccess(`Successfully upgraded to ${planCode} plan!`)
       } else {
         throw new Error(result.error)
       }
@@ -58,7 +64,7 @@ function SubscriptionManager({ user, authService }) {
       console.error('Error upgrading subscription:', error)
       setError(error.message)
     } finally {
-      setLoading(false)
+      setUpgrading(false)
     }
   }
 
@@ -95,7 +101,13 @@ function SubscriptionManager({ user, authService }) {
       <div className="p-6">
         {error && (
           <div className="error-card mb-6">
-            <p className="text-sm text-red-600">{error}</p>
+            <p className="text-sm text-red-600 font-medium">{error}</p>
+          </div>
+        )}
+
+        {success && (
+          <div className="success-card mb-6">
+            <p className="text-sm text-green-600 font-medium">{success}</p>
           </div>
         )}
 
@@ -106,7 +118,7 @@ function SubscriptionManager({ user, authService }) {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-medium text-gray-900">Current Plan: {subscription.plan_name}</h3>
                 <span className={`field-badge ${subscription.payment_status === 'active' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                  {subscription.payment_status === 'active' ? 'Active' : subscription.payment_status}
+                  {subscription.payment_status === 'active' ? 'Active' : subscription.payment_status.charAt(0).toUpperCase() + subscription.payment_status.slice(1)}
                 </span>
               </div>
               
@@ -155,7 +167,7 @@ function SubscriptionManager({ user, authService }) {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
                     <p className="text-sm text-gray-500">Messages Used</p>
-                    <div className="flex items-end space-x-2">
+                    <div className="flex items-end space-x-2 mt-1">
                       <p className="text-2xl font-medium text-gray-900">
                         {usageStats?.messages_used || 0}
                       </p>
@@ -182,14 +194,14 @@ function SubscriptionManager({ user, authService }) {
                   
                   <div>
                     <p className="text-sm text-gray-500">Tokens Used</p>
-                    <p className="text-2xl font-medium text-gray-900">
+                    <p className="text-2xl font-medium text-gray-900 mt-1">
                       {(usageStats?.tokens_used || 0).toLocaleString()}
                     </p>
                   </div>
                   
                   <div>
                     <p className="text-sm text-gray-500">Estimated Cost</p>
-                    <p className="text-2xl font-medium text-gray-900">
+                    <p className="text-2xl font-medium text-gray-900 mt-1">
                       ${(usageStats?.customer_cost_estimate || usageStats?.cost_estimate || 0).toFixed(2)}
                     </p>
                   </div>
@@ -198,7 +210,7 @@ function SubscriptionManager({ user, authService }) {
                 {subscription.messages_included !== 999999 && (usageStats?.messages_used || 0) > subscription.messages_included * 0.9 && (
                   <div className="mt-4 warning-card">
                     <p className="text-sm text-yellow-800">
-                      <strong>Warning:</strong> You're approaching your monthly message limit. Consider upgrading your plan to avoid overage charges.
+                      <strong>Warning:</strong> You're approaching your monthly message limit of {subscription.messages_included} messages. Consider upgrading your plan to avoid overage charges.
                     </p>
                   </div>
                 )}
@@ -214,17 +226,18 @@ function SubscriptionManager({ user, authService }) {
           currentPlan={subscription}
           availablePlans={availablePlans}
           onUpgrade={handleUpgrade}
+          upgrading={upgrading}
           onCancel={() => setShowUpgradeModal(false)}
+          agencyName={getAgencyName()}
         />
       )}
     </div>
   )
 }
 
-function UpgradePlanModal({ currentPlan, availablePlans, onUpgrade, onCancel }) {
+function UpgradePlanModal({ currentPlan, availablePlans, onUpgrade, upgrading, onCancel, agencyName }) {
   const [selectedPlan, setSelectedPlan] = useState(null)
   const [billingCycle, setBillingCycle] = useState('monthly')
-  const [loading, setLoading] = useState(false)
 
   // Filter out plans that are lower than or equal to the current plan
   const upgradePlans = availablePlans.filter(plan => {
@@ -239,13 +252,7 @@ function UpgradePlanModal({ currentPlan, availablePlans, onUpgrade, onCancel }) 
 
   const handleUpgrade = async () => {
     if (!selectedPlan) return
-    
-    setLoading(true)
-    try {
-      await onUpgrade(selectedPlan.code)
-    } finally {
-      setLoading(false)
-    }
+    await onUpgrade(selectedPlan.code)
   }
 
   return (
@@ -253,6 +260,9 @@ function UpgradePlanModal({ currentPlan, availablePlans, onUpgrade, onCancel }) 
       <div className="modal-content max-w-4xl">
         <div className="modal-header">
           <h3 className="text-lg font-medium text-gray-900">Upgrade Your Plan</h3>
+          <p className="text-sm text-gray-600 mt-1">
+            Select a new plan for your {agencyName} account
+          </p>
         </div>
 
         <div className="modal-body">
@@ -372,18 +382,27 @@ function UpgradePlanModal({ currentPlan, availablePlans, onUpgrade, onCancel }) 
           <button
             type="button"
             onClick={onCancel}
-            className="btn-secondary"
-            disabled={loading}
+            className="btn-secondary flex items-center"
+            disabled={upgrading}
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleUpgrade}
-            disabled={loading || !selectedPlan}
-            className="btn-primary"
+            disabled={upgrading || !selectedPlan}
+            className="btn-primary flex items-center"
           >
-            {loading ? 'Upgrading...' : 'Upgrade Now'}
+            {upgrading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Upgrading...
+              </>
+            ) : (
+              <>
+                Upgrade Now
+              </>
+            )}
           </button>
         </div>
       </div>
