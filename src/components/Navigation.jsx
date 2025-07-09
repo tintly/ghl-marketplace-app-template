@@ -1,8 +1,10 @@
 import React from 'react'
 import { useLocation, Link } from 'react-router-dom'
+import { useWhiteLabel } from './WhiteLabelProvider'
 
 function Navigation() {
   const location = useLocation()
+  const { getAppName, shouldHideGHLBranding } = useWhiteLabel()
 
   const navItems = [
     {
@@ -33,6 +35,26 @@ function Navigation() {
       )
     },
     {
+      path: '/branding',
+      label: 'Branding',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM21 5a2 2 0 00-2-2h-4a2 2 0 00-2 2v12a4 4 0 004 4h4a2 2 0 002-2V5z" />
+        </svg>
+      ),
+      adminOnly: true
+    },
+    {
+      path: '/openai-keys',
+      label: 'OpenAI Keys',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+        </svg>
+      ),
+      adminOnly: true
+    },
+    {
       path: '/logs',
       label: 'Logs',
       icon: (
@@ -47,7 +69,7 @@ function Navigation() {
     <nav className="mb-8">
       <div className="bg-white rounded-lg shadow-sm mb-6">
         <div className="flex px-2">
-          {navItems.map((item) => {
+          {navItems.filter(item => !item.adminOnly || (item.adminOnly && user?.type === 'agency')).map((item) => {
             const isActive = location.pathname === item.path
             
             return (

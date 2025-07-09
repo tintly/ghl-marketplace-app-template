@@ -1,13 +1,26 @@
 import React from 'react'
 import { Routes, Route } from 'react-router-dom'
+import { WhiteLabelProvider, useWhiteLabel } from './WhiteLabelProvider'
 import UserLinking from './UserLinking'
 import DataExtractionModule from './DataExtractionModule'
 import StandardFieldsExtractionModule from './StandardFieldsExtractionModule'
+import AgencyBrandingManager from './AgencyBrandingManager'
+import AgencyOpenAIManager from './AgencyOpenAIManager'
 import InstallationGuide from './InstallationGuide'
 import Navigation from './Navigation'
 import LogViewer from './LogViewer'
 
 function DataExtractorApp({ user, authService }) {
+  return (
+    <WhiteLabelProvider user={user} authService={authService}>
+      <DataExtractorAppContent user={user} authService={authService} />
+    </WhiteLabelProvider>
+  )
+}
+
+function DataExtractorAppContent({ user, authService }) {
+  const { getAppName, getAgencyName, shouldHideGHLBranding, getWelcomeMessage } = useWhiteLabel()
+
   const getLocationDisplay = () => {
     if (user.activeLocation) {
       return `Location: ${user.activeLocation}`
@@ -44,7 +57,7 @@ function DataExtractorApp({ user, authService }) {
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <h1 className="text-2xl font-bold text-gray-900">Data Extractor</h1>
+            <h1 className="text-2xl font-bold text-gray-900">{getAppName()}</h1>
             <div className="flex items-center space-x-4">
               <span className="text-sm font-medium text-gray-700">{user.userName}</span>
               <span className="field-badge bg-blue-100 text-blue-800">
@@ -71,10 +84,10 @@ function DataExtractorApp({ user, authService }) {
           <UserLinking user={user} authService={authService} onLinkingComplete={handleLinkingComplete} />
         )}
         
-        {!needsOAuthInstallation() && <Navigation />}
+        {!needsOAuthInstallation() && <Navigation user={user} />}
         
         <Routes>
-          <Route path="/" element={<DashboardHome user={user} authService={authService} needsOAuth={needsOAuthInstallation()} />} />
+          <Route path="/" element={<DashboardHome user={user} authService={authService} needsOAuth={needsOAuthInstallation()} getWelcomeMessage={getWelcomeMessage} getAgencyName={getAgencyName} />} />
           <Route path="/data-extraction" element={
             needsOAuthInstallation() ? (
               <div className="text-center py-8">
@@ -102,13 +115,31 @@ function DataExtractorApp({ user, authService }) {
               <LogViewer />
             )
           } />
+          <Route path="/branding" element={
+            needsOAuthInstallation() ? (
+              <div className="text-center py-8">
+                <p className="text-gray-600">Please complete the OAuth installation first.</p>
+              </div>
+            ) : (
+              <AgencyBrandingManager user={user} authService={authService} />
+            )
+          } />
+          <Route path="/openai-keys" element={
+            needsOAuthInstallation() ? (
+              <div className="text-center py-8">
+                <p className="text-gray-600">Please complete the OAuth installation first.</p>
+              </div>
+            ) : (
+              <AgencyOpenAIManager user={user} authService={authService} />
+            )
+          } />
         </Routes>
       </main>
     </div>
   )
 }
 
-function DashboardHome({ user, authService, needsOAuth }) {
+function DashboardHome({ user, authService, needsOAuth, getWelcomeMessage, getAgencyName }) {
   if (needsOAuth) {
     return (
       <div className="space-y-8">
@@ -117,7 +148,7 @@ function DashboardHome({ user, authService, needsOAuth }) {
             Setup Required
           </h2>
           <p className="text-lg text-gray-600">
-            Complete the OAuth installation above to start extracting data from your GoHighLevel conversations.
+            Complete the OAuth installation above to start extracting data from your {getAgencyName()} conversations.
           </p>
         </div>
       </div>
@@ -128,10 +159,10 @@ function DashboardHome({ user, authService, needsOAuth }) {
     <div className="space-y-8">
       <div className="mb-8">
         <h2 className="text-3xl font-bold text-gray-900 mb-2">
-          Welcome to Your Conversation Data Extractor
+          {getWelcomeMessage()}
         </h2>
         <p className="text-lg text-gray-600">
-          Extract valuable insights from your GoHighLevel conversations automatically.
+          Extract valuable insights from your {getAgencyName()} conversations automatically.
         </p>
         {user.standaloneMode && (
           <div className="mt-4 success-card">
@@ -187,6 +218,34 @@ function DashboardHome({ user, authService, needsOAuth }) {
                 View Logs
               </a>
             </div>
+            
+            {user.type === 'agency' && (
+              <>
+                <div className="text-center p-6 border border-gray-200 rounded-lg card-hover">
+                  <div className="text-4xl mb-4">🎨</div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-2">Agency Branding</h4>
+                  <p className="text-gray-600 mb-4">Customize your white-label experience</p>
+                  <a
+                    href="/branding"
+                    className="btn-primary inline-block"
+                  >
+                    Manage Branding
+                  </a>
+                </div>
+                
+                <div className="text-center p-6 border border-gray-200 rounded-lg card-hover">
+                  <div className="text-4xl mb-4">🔑</div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-2">OpenAI Keys</h4>
+                  <p className="text-gray-600 mb-4">Manage your agency's AI API keys</p>
+                  <a
+                    href="/openai-keys"
+                    className="btn-success inline-block"
+                  >
+                    Manage Keys
+                  </a>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -194,7 +253,7 @@ function DashboardHome({ user, authService, needsOAuth }) {
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
         <p className="text-sm text-gray-600">
-          Send a message to your GoHighLevel contact to see the AI extraction in action. 
+          Send a message to your {getAgencyName()} contact to see the AI extraction in action. 
           The system will automatically process new messages and extract data based on your configuration.
         </p>
         
@@ -206,7 +265,7 @@ function DashboardHome({ user, authService, needsOAuth }) {
             I'm available next Tuesday afternoon. Thanks!"
           </div>
           <p className="text-xs text-blue-700 mt-2">
-            Send this message to a contact in your GoHighLevel account to test the extraction system.
+            Send this message to a contact in your {getAgencyName()} account to test the extraction system.
           </p>
         </div>
       </div>
