@@ -158,7 +158,7 @@ function DashboardHome({ user, authService, needsOAuth, getWelcomeMessage, getAg
             Setup Required
           </h2>
           <p className="text-lg text-gray-600">
-            Complete the OAuth installation above to start extracting data from your conversations.
+            Complete the connection above to start extracting data from your conversations.
           </p>
         </div>
       </div>
