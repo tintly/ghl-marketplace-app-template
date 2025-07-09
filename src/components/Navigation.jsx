@@ -2,7 +2,7 @@ import React from 'react'
 import { useLocation, Link } from 'react-router-dom'
 import { useWhiteLabel } from './WhiteLabelProvider'
 
-function Navigation() {
+function Navigation({ user }) {
   const location = useLocation()
   const { getAppName, shouldHideGHLBranding } = useWhiteLabel()
 
