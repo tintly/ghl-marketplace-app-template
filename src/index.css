@@ -66,23 +66,22 @@ body {
 
 .form-input {
   @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2;
-  focus:ring-color: var(--primary-color);
+  @apply focus:ring-[var(--primary-color)];
 }
 
 .form-select {
   @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2;
-  focus:ring-color: var(--primary-color);
+  @apply focus:ring-[var(--primary-color)];
 }
 
 .form-textarea {
   @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2;
-  focus:ring-color: var(--primary-color);
+  @apply focus:ring-[var(--primary-color)];
 }
 
 .form-checkbox {
   @apply h-4 w-4 border-gray-300 rounded;
-  color: var(--primary-color);
-  focus:ring-color: var(--primary-color);
+  @apply text-[var(--primary-color)] focus:ring-[var(--primary-color)];
 }
 
 .info-card {
