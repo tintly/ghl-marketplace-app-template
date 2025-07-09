@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react'
-import { SubscriptionService } from '../services/SubscriptionService'
 import { useWhiteLabel } from './WhiteLabelProvider'
 
 function SubscriptionManager({ user, authService }) {
@@ -13,8 +12,6 @@ function SubscriptionManager({ user, authService }) {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const { getAgencyName } = useWhiteLabel()
 
-  const subscriptionService = new SubscriptionService(authService)
-
   useEffect(() => {
     loadSubscriptionData()
   }, [user])
@@ -24,17 +21,41 @@ function SubscriptionManager({ user, authService }) {
       setLoading(true)
       setError(null)
 
-      // Load current subscription
-      const currentSubscription = await subscriptionService.getLocationSubscription(user.locationId)
-      setSubscription(currentSubscription)
+      // Get Supabase client
+      const supabase = authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
+
+      // Load current subscription using RPC function
+      const { data: subscriptionData, error: subscriptionError } = await supabase
+        .rpc('get_user_subscription_details')
+
+      if (subscriptionError) {
+        console.error('Error loading subscription:', subscriptionError)
+        throw new Error('Failed to load subscription details')
+      }
+
+      setSubscription(subscriptionData)
 
       // Load usage statistics
-      const usageData = await subscriptionService.getUsageStatistics(user.locationId, 'current_month')
-      setUsageStats(usageData[0] || { messages_used: 0, tokens_used: 0, cost_estimate: 0 })
+      const { data: usageData, error: usageError } = await supabase
+        .rpc('get_user_usage_with_limits')
+
+      if (usageError) {
+        console.error('Error loading usage:', usageError)
+        throw new Error('Failed to load usage statistics')
+      }
+
+      setUsageStats(usageData)
 
       // Load available plans
-      const plans = await subscriptionService.getAvailablePlans()
-      setAvailablePlans(plans)
+      const { data: plansData, error: plansError } = await supabase
+        .rpc('get_available_plans')
+
+      if (plansError) {
+        console.error('Error loading plans:', plansError)
+        throw new Error('Failed to load available plans')
+      }
+
+      setAvailablePlans(plansData || [])
 
     } catch (error) {
       console.error('Error loading subscription data:', error)
@@ -50,16 +71,25 @@ function SubscriptionManager({ user, authService }) {
       setError(null)
       setSuccess(null)
 
-      const result = await subscriptionService.updateSubscription(user.locationId, planCode)
-      
-      if (result.success) {
-        // Reload subscription data
-        await loadSubscriptionData()
-        setShowUpgradeModal(false)
-        setSuccess(`Successfully upgraded to ${planCode} plan!`)
-      } else {
-        throw new Error(result.error)
+      // Get Supabase client
+      const supabase = authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
+
+      // Call the RPC function to change subscription plan
+      const { data, error } = await supabase
+        .rpc('change_subscription_plan', {
+          p_location_id: user.locationId,
+          p_plan_code: planCode
+        })
+
+      if (error) {
+        console.error('Error upgrading subscription:', error)
+        throw new Error(`Failed to upgrade: ${error.message}`)
       }
+
+      // Reload subscription data
+      await loadSubscriptionData()
+      setShowUpgradeModal(false)
+      setSuccess(`Successfully changed to ${planCode} plan!`)
     } catch (error) {
       console.error('Error upgrading subscription:', error)
       setError(error.message)
@@ -87,7 +117,7 @@ function SubscriptionManager({ user, authService }) {
               Manage your subscription and usage
             </p>
           </div>
-          {subscription && subscription.plan_code !== 'agency' && (
+          {subscription && subscription.plan?.code !== 'agency' && (
             <button
               onClick={() => setShowUpgradeModal(true)}
               className="btn-primary"
@@ -116,9 +146,9 @@ function SubscriptionManager({ user, authService }) {
             {/* Current Plan */}
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Current Plan: {subscription.plan_name}</h3>
+                <h3 className="text-lg font-medium text-gray-900">Current Plan: {subscription.plan?.name || 'Free'}</h3>
                 <span className={`field-badge ${subscription.payment_status === 'active' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                  {subscription.payment_status === 'active' ? 'Active' : subscription.payment_status.charAt(0).toUpperCase() + subscription.payment_status.slice(1)}
+                  {subscription.payment_status === 'active' ? 'Active' : subscription.payment_status?.charAt(0).toUpperCase() + subscription.payment_status?.slice(1) || 'Free'}
                 </span>
               </div>
               
@@ -126,19 +156,19 @@ function SubscriptionManager({ user, authService }) {
                 <div>
                   <p className="text-sm text-gray-500">Users</p>
                   <p className="text-lg font-medium text-gray-900">
-                    {subscription.max_users === 999999 ? 'Unlimited' : subscription.max_users}
+                    {subscription.plan?.max_users === 999999 ? 'Unlimited' : subscription.plan?.max_users || 1}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Messages Included</p>
                   <p className="text-lg font-medium text-gray-900">
-                    {subscription.messages_included === 999999 ? 'Unlimited' : subscription.messages_included.toLocaleString()}
+                    {subscription.plan?.messages_included === 999999 ? 'Unlimited' : (subscription.plan?.messages_included || 100).toLocaleString()}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Overage Price</p>
                   <p className="text-lg font-medium text-gray-900">
-                    ${subscription.overage_price} per message
+                    ${subscription.plan?.overage_price || 0.08} per message
                   </p>
                 </div>
               </div>
@@ -147,13 +177,13 @@ function SubscriptionManager({ user, authService }) {
                 <div>
                   <p className="text-sm text-gray-500">Custom OpenAI Keys</p>
                   <p className="text-lg font-medium text-gray-900">
-                    {subscription.can_use_own_openai_key ? 'Included' : 'Not Available'}
+                    {subscription.plan?.can_use_own_openai_key ? 'Included' : 'Not Available'}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">White Labeling</p>
                   <p className="text-lg font-medium text-gray-900">
-                    {subscription.can_white_label ? 'Included' : 'Not Available'}
+                    {subscription.plan?.can_white_label ? 'Included' : 'Not Available'}
                   </p>
                 </div>
               </div>
@@ -172,21 +202,21 @@ function SubscriptionManager({ user, authService }) {
                         {usageStats?.messages_used || 0}
                       </p>
                       <p className="text-sm text-gray-500 mb-1">
-                        / {subscription.messages_included === 999999 ? '∞' : subscription.messages_included}
+                        / {usageStats?.messages_included === 999999 ? '∞' : usageStats?.messages_included || 100}
                       </p>
                     </div>
                     
-                    {subscription.messages_included !== 999999 && (
+                    {usageStats?.messages_included !== 999999 && (
                       <div className="mt-2 w-full bg-gray-200 rounded-full h-2.5">
                         <div 
                           className={`h-2.5 rounded-full ${
-                            (usageStats?.messages_used || 0) > subscription.messages_included * 0.9 
+                            (usageStats?.usage_percentage || 0) > 90 
                               ? 'bg-red-600' 
-                              : (usageStats?.messages_used || 0) > subscription.messages_included * 0.7 
+                              : (usageStats?.usage_percentage || 0) > 70 
                                 ? 'bg-yellow-500' 
                                 : 'bg-green-600'
                           }`}
-                          style={{ width: `${Math.min(100, ((usageStats?.messages_used || 0) / subscription.messages_included) * 100)}%` }}
+                          style={{ width: `${Math.min(100, usageStats?.usage_percentage || 0)}%` }}
                         ></div>
                       </div>
                     )}
@@ -202,15 +232,15 @@ function SubscriptionManager({ user, authService }) {
                   <div>
                     <p className="text-sm text-gray-500">Estimated Cost</p>
                     <p className="text-2xl font-medium text-gray-900 mt-1">
-                      ${(usageStats?.customer_cost_estimate || usageStats?.cost_estimate || 0).toFixed(2)}
+                      ${(usageStats?.cost_estimate || 0).toFixed(2)}
                     </p>
                   </div>
                 </div>
                 
-                {subscription.messages_included !== 999999 && (usageStats?.messages_used || 0) > subscription.messages_included * 0.9 && (
+                {usageStats?.messages_included !== 999999 && (usageStats?.usage_percentage || 0) > 90 && (
                   <div className="mt-4 warning-card">
                     <p className="text-sm text-yellow-800">
-                      <strong>Warning:</strong> You're approaching your monthly message limit of {subscription.messages_included} messages. Consider upgrading your plan to avoid overage charges.
+                      <strong>Warning:</strong> You're approaching your monthly message limit of {usageStats?.messages_included} messages. Consider upgrading your plan to avoid overage charges.
                     </p>
                   </div>
                 )}
@@ -223,7 +253,7 @@ function SubscriptionManager({ user, authService }) {
       {/* Upgrade Modal */}
       {showUpgradeModal && (
         <UpgradePlanModal
-          currentPlan={subscription}
+          currentPlan={subscription?.plan}
           availablePlans={availablePlans}
           onUpgrade={handleUpgrade}
           upgrading={upgrading}
@@ -242,12 +272,12 @@ function UpgradePlanModal({ currentPlan, availablePlans, onUpgrade, upgrading, o
   // Filter out plans that are lower than or equal to the current plan
   const upgradePlans = availablePlans.filter(plan => {
     // If current plan is free, show all paid plans
-    if (currentPlan.plan_code === 'free') {
+    if (currentPlan?.code === 'free') {
       return plan.code !== 'free'
     }
     
-    // Otherwise, only show plans with higher price
-    return plan.price_monthly > (currentPlan.price_monthly || 0)
+    // Otherwise, show all plans (including downgrades)
+    return true
   })
 
   const handleUpgrade = async () => {
@@ -259,7 +289,7 @@ function UpgradePlanModal({ currentPlan, availablePlans, onUpgrade, upgrading, o
     <div className="modal-backdrop">
       <div className="modal-content max-w-4xl">
         <div className="modal-header">
-          <h3 className="text-lg font-medium text-gray-900">Upgrade Your Plan</h3>
+          <h3 className="text-lg font-medium text-gray-900">Change Your Plan</h3>
           <p className="text-sm text-gray-600 mt-1">
             Select a new plan for your {agencyName} account
           </p>
@@ -396,11 +426,11 @@ function UpgradePlanModal({ currentPlan, availablePlans, onUpgrade, upgrading, o
             {upgrading ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Upgrading...
+                Processing...
               </>
             ) : (
               <>
-                Upgrade Now
+                Change Plan
               </>
             )}
           </button>
