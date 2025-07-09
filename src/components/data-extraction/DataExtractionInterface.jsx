@@ -55,6 +55,14 @@ function DataExtractionInterface({ config, user, authService }) {
   }
 
   const loadCustomFields = async () => {
+    if (!config || !config.access_token) {
+      console.log('No valid configuration or access token available, using mock data')
+      const mockLoader = new CustomFieldsLoader(authService)
+      const mockFields = mockLoader.getMockCustomFields()
+      setCustomFields(mockFields)
+      return
+    }
+    
     const loader = new CustomFieldsLoader(authService)
     const fields = await loader.loadFields(config)
     setCustomFields(fields)
@@ -62,6 +70,12 @@ function DataExtractionInterface({ config, user, authService }) {
 
   const loadExtractionFields = async () => {
     const supabase = authService?.getSupabaseClient() || (await import('../../services/supabase')).supabase
+      if (!config || !config.id) {
+        console.log('No valid configuration ID available, skipping extraction fields')
+        setExtractionFields([])
+        return
+      }
+      
 
     const { data, error } = await supabase
       .from('data_extraction_fields')
@@ -99,7 +113,11 @@ function DataExtractionInterface({ config, user, authService }) {
   const handleUpdateFieldSubmit = async (updateData) => {
     try {
       setUpdating(true)
-      setError(null)
+      setError(null) 
+      
+      if (!config || !config.access_token) {
+        throw new Error('No valid connection available. Please reconnect your account.')
+      }
 
       console.log('=== UPDATING CUSTOM FIELD ===')
       console.log('Field ID:', editingCustomField.id)
@@ -133,7 +151,11 @@ function DataExtractionInterface({ config, user, authService }) {
   const handleDeleteField = async (fieldId) => {
     try {
       setUpdating(true)
-      setError(null)
+      setError(null) 
+      
+      if (!config || !config.access_token) {
+        throw new Error('No valid connection available. Please reconnect your account.')
+      }
 
       console.log('=== DELETING CUSTOM FIELD ===')
       console.log('Field ID:', fieldId)
@@ -215,7 +237,11 @@ function DataExtractionInterface({ config, user, authService }) {
   const handleCreateFieldSubmit = async (fieldData) => {
     try {
       setCreating(true)
-      setError(null)
+      setError(null) 
+      
+      if (!config || !config.access_token) {
+        throw new Error('No valid connection available. Please reconnect your account.')
+      }
 
       console.log('=== CREATING NEW CUSTOM FIELD ===')
       console.log('Field data:', fieldData)
@@ -284,7 +310,11 @@ function DataExtractionInterface({ config, user, authService }) {
   const handleRecreateExtraction = async (extractionField) => {
     try {
       setRecreating(true)
-      setError(null)
+      setError(null) 
+      
+      if (!config || !config.access_token) {
+        throw new Error('No valid connection available. Please reconnect your account.')
+      }
 
       console.log('=== STARTING FIELD RECREATION ===')
       console.log('Extraction field:', extractionField)

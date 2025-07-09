@@ -57,7 +57,7 @@ export default class ConfigurationManager {
       return {
         isValid: false,
         status: 'missing_access_token',
-        message: 'Access token is missing. Please reinstall the app.',
+        message: 'Access token is missing. Please reconnect your account.',
         severity: 'error'
       }
     }
@@ -68,7 +68,7 @@ export default class ConfigurationManager {
       return {
         isValid: false,
         status: 'temporary_token',
-        message: 'Using temporary tokens. Please install via OAuth for real GHL access.',
+        message: 'Using temporary tokens. Connect your account for real data access.',
         severity: 'warning'
       }
     }
@@ -77,7 +77,7 @@ export default class ConfigurationManager {
       return {
         isValid: false,
         status: 'missing_refresh_token',
-        message: 'Refresh token is missing. Please reinstall the app.',
+        message: 'Refresh token is missing. Please reconnect your account.',
         severity: 'error'
       }
     }
@@ -91,7 +91,7 @@ export default class ConfigurationManager {
         return {
           isValid: false,
           status: 'expired',
-          message: 'Access token has expired. The system will attempt to refresh it automatically.',
+          message: 'Your connection has expired. The system will attempt to refresh it automatically.',
           severity: 'warning'
         }
       } else if (hoursUntilExpiry < 24) {
@@ -107,7 +107,7 @@ export default class ConfigurationManager {
     return {
       isValid: true,
       status: 'valid',
-      message: 'Access token is valid.',
+      message: 'Your connection is valid and active.',
       severity: 'success'
     }
   }
