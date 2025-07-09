@@ -57,6 +57,8 @@ interface ExtractionPayload {
     type: string
     rules: string[]
   }
+  agency_openai_key?: string
+  agency_openai_org_id?: string
 }
 
 // OpenAI model pricing (per 1K tokens) - Updated with gpt-4o-mini pricing
@@ -110,6 +112,7 @@ Deno.serve(async (req: Request) => {
       business: payload.business_context?.name,
       fields_count: payload.fields_to_extract?.length || 0,
       messages_count: payload.conversation_history?.length || 0
+     has_agency_key: !!payload.agency_openai_key
     })
 
     // Initialize Supabase client
@@ -118,9 +121,16 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     // Get OpenAI API key from environment
-    const openaiApiKey = Deno.env.get('OPENAI_API_KEY')
+    // Use agency key if provided, otherwise fall back to environment variable
+    let openaiApiKey = payload.agency_openai_key
+    let openaiOrgId = payload.agency_openai_org_id
+    
     if (!openaiApiKey) {
-      throw new Error('OPENAI_API_KEY environment variable is not set')
+      console.log('No agency key provided, using environment variable')
+      openaiApiKey = Deno.env.get('OPENAI_API_KEY')
+      if (!openaiApiKey) {
+        throw new Error('No OpenAI API key available - neither agency key nor environment variable')
+      }
     }
 
     // Build the system prompt
@@ -149,12 +159,21 @@ Deno.serve(async (req: Request) => {
     console.log('Calling OpenAI API with model:', model)
 
     // Call OpenAI API
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${openaiApiKey}`,
+      'Content-Type': 'application/json'
+    }
+    
+    // Add organization header if org ID is provided
+    if (openaiOrgId) {
+      headers['OpenAI-Organization'] = openaiOrgId
+    }
+    
+    console.log('Using OpenAI API with', openaiOrgId ? 'custom organization ID' : 'default organization')
+    
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
-        'Content-Type': 'application/json'
-      },
+      headers,
       body: JSON.stringify({
         model: model,
         messages: messages,

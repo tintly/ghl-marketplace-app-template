@@ -47,7 +47,7 @@ function Navigation() {
     <nav className="mb-8">
       <div className="bg-white rounded-lg shadow-sm mb-6">
         <div className="flex px-2">
-          {navItems.map((item) => {
+          {navItems.filter(item => !item.condition || item.condition()).map((item) => {
             const isActive = location.pathname === item.path
             
             return (

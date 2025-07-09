@@ -171,11 +171,59 @@ Deno.serve(async (req)=>{
     if (autoExtract) {
       console.log('Step 4: Auto-invoking OpenAI extraction...');
       try {
+        // Check if this location has a custom agency OpenAI key
+        console.log('Checking for agency OpenAI key...');
+        let agencyOpenAIKey = null;
+        let agencyOpenAIOrgId = null;
+        
+        try {
+          // Get the company ID from the configuration
+          const { data: configData } = await supabase
+            .from('ghl_configurations')
+            .select('ghl_company_id')
+            .eq('ghl_account_id', conversationData.location_id)
+            .maybeSingle();
+            
+          if (configData?.ghl_company_id) {
+            console.log('Found company ID:', configData.ghl_company_id);
+            
+            // Try to get the agency's OpenAI key
+            const agencyKeyResponse = await fetch(`${supabaseUrl}/functions/v1/get-agency-openai-key`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`
+              },
+              body: JSON.stringify({
+                agency_id: configData.ghl_company_id
+              })
+            });
+            
+            if (agencyKeyResponse.ok) {
+              const agencyKeyData = await agencyKeyResponse.json();
+              if (agencyKeyData.has_key) {
+                console.log('Using agency OpenAI key for extraction');
+                agencyOpenAIKey = agencyKeyData.openai_api_key;
+                agencyOpenAIOrgId = agencyKeyData.openai_org_id;
+              }
+            }
+          }
+        } catch (agencyKeyError) {
+          console.error('Error fetching agency OpenAI key:', agencyKeyError);
+          // Continue with default key if agency key fetch fails
+        }
+        
         // The system prompt to be sent to OpenAI is now directly from promptData.prompt
         console.log('=== SYSTEM PROMPT SENT TO OPENAI ===');
         console.log(payload.system_prompt);
         console.log('=== END SYSTEM PROMPT SENT TO OPENAI ===');
 
+        // Add agency key to payload if available
+        if (agencyOpenAIKey) {
+          payload.agency_openai_key = agencyOpenAIKey;
+          payload.agency_openai_org_id = agencyOpenAIOrgId;
+        }
+        
         const extractionResponse = await fetch(`${supabaseUrl}/functions/v1/openai-extraction`, {
           method: 'POST',
           headers: {
