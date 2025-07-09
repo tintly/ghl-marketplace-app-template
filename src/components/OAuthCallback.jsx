@@ -122,8 +122,8 @@ function OAuthCallback() {
         
         <h2 className={`text-xl font-semibold mb-4 ${getStatusColor()}`}>
           {status === 'processing' && 'Setting up your integration...'}
-          {status === 'success' && 'Installation Complete!'}
-          {status === 'error' && 'Installation Failed'}
+          {status === 'success' && 'Connection Complete!'}
+          {status === 'error' && 'Connection Failed'}
         </h2>
         
         <p className="text-gray-600 mb-4">{message}</p>

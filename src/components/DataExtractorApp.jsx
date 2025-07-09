@@ -158,7 +158,7 @@ function DashboardHome({ user, authService, needsOAuth, getWelcomeMessage, getAg
             Setup Required
           </h2>
           <p className="text-lg text-gray-600">
-            Complete the OAuth installation above to start extracting data from your {getAgencyName()} conversations.
+            Complete the OAuth installation above to start extracting data from your conversations.
           </p>
         </div>
       </div>
@@ -189,7 +189,7 @@ function DashboardHome({ user, authService, needsOAuth, getWelcomeMessage, getAg
           {getWelcomeMessage()}
         </h2>
         <p className="text-lg text-gray-600">
-          Extract valuable insights from your {getAgencyName()} conversations automatically.
+          Extract valuable insights from your conversations automatically.
         </p>
         {user.standaloneMode && (
           <div className="mt-4 success-card">
@@ -304,7 +304,7 @@ function DashboardHome({ user, authService, needsOAuth, getWelcomeMessage, getAg
             I'm available next Tuesday afternoon. Thanks!"
           </div>
           <p className="text-xs text-blue-700 mt-2">
-            Send this message to a contact in your {getAgencyName()} account to test the extraction system.
+            Send this message to a contact to test the extraction system.
           </p>
         </div>
       </div>

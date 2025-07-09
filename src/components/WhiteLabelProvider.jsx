@@ -88,7 +88,14 @@ export const WhiteLabelProvider = ({ children, authService, locationId }) => {
 
   // Branding helper functions
   const getAppName = () => branding?.custom_app_name || 'Data Extractor'
-  const getAgencyName = () => branding?.agency_name || 'GoHighLevel'
+  const getAgencyName = () => {
+    // If hide_ghl_branding is true, return empty string or custom name
+    if (branding?.hide_ghl_branding) {
+      return branding?.agency_name || ''
+    }
+    // Otherwise return agency name or default
+    return branding?.agency_name || 'GoHighLevel'
+  }
   const shouldHideGHLBranding = () => branding?.hide_ghl_branding || false
   const getWelcomeMessage = () => branding?.welcome_message || 'Welcome to your conversation data extractor.'
   const getPrimaryColor = () => branding?.primary_color || '#3B82F6'

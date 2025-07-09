@@ -22,13 +22,13 @@ function InstallationGuide({ user, onInstallationComplete }) {
     <div className="max-w-4xl mx-auto">
       <div className="bg-white rounded-lg shadow-md p-8">
         <h2 className="text-2xl font-bold text-gray-900 mb-6">
-          GoHighLevel Integration Setup Required
+          Integration Setup Required
         </h2>
         
         <div className="space-y-6">
           <div className="info-card">
             <h3 className="text-lg font-semibold text-blue-900 mb-2">
-              Install the App via OAuth
+              Connect Your Account
             </h3>
             <p className="text-blue-800 mb-4">
               Click the button below to authorize this app and get real access tokens.
@@ -40,19 +40,19 @@ function InstallationGuide({ user, onInstallationComplete }) {
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              Install App
+              Connect Account
             </button>
           </div>
 
           <div className="warning-card">
             <h3 className="text-lg font-semibold text-yellow-900 mb-2">
-              Why OAuth Installation is Required
+              Why Connection is Required
             </h3>
             <div className="text-yellow-800 space-y-2">
-              <p>• Your account currently has development tokens that cannot access real GHL data</p>
-              <p>• OAuth installation provides real access tokens for your location</p>
-              <p>• This enables actual data extraction from your GoHighLevel conversations</p>
-              <p>• The installation links the app to your specific location with proper permissions</p>
+              <p>• Your account currently has development tokens that cannot access real data</p>
+              <p>• This connection provides real access tokens for your location</p>
+              <p>• This enables actual data extraction from your conversations</p>
+              <p>• The connection links the app to your specific location with proper permissions</p>
             </div>
           </div>
 
@@ -62,7 +62,7 @@ function InstallationGuide({ user, onInstallationComplete }) {
             </h3>
             <div className="text-green-800 space-y-2">
               <p>1. Click the install button above (opens in new window)</p>
-              <p>2. You'll be redirected to GoHighLevel to authorize the app</p>
+              <p>2. You'll be redirected to authorize the app</p>
               <p>3. Choose the location you want to integrate with</p>
               <p>4. The app will receive real access tokens and store them securely</p>
               <p>5. You'll be redirected back with working tokens</p>

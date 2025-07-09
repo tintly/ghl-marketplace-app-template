@@ -28,7 +28,7 @@ function TokenStatusAlert({ config }) {
             onClick={openOAuthInstall}
             className="btn-danger"
           >
-            Install via OAuth
+            Connect Account
           </button>
         </div>
       </div>
@@ -47,7 +47,7 @@ function TokenStatusAlert({ config }) {
             onClick={openOAuthInstall}
             className="btn-primary"
           >
-            Install via OAuth
+            Connect Account
           </button>
         </div>
       </div>

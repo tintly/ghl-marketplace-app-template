@@ -13,7 +13,7 @@ export class FieldRecreationService {
 
       const originalData = extractionField.original_ghl_field_data
       if (!originalData || Object.keys(originalData).length === 0) {
-        throw new Error('No original field data available for recreation')
+        throw new Error('No original field data available for recreation. This field cannot be recreated.')
       }
 
       console.log('Original field data:', originalData)
