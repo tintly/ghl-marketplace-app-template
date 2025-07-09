@@ -17,10 +17,43 @@ const SubscriptionManager = ({ user, authService }) => {
   const loadSubscriptionData = async () => {
     try {
       setLoading(true)
-      setError(null) 
+      setError(null)
       
       if (!user || !user.locationId) {
         throw new Error('User or location ID not available')
+      }
+      
+      // Check if user is agency type
+      const isAgency = user.type === 'agency'
+      
+      // For agency users, use hardcoded agency plan
+      if (isAgency) {
+        console.log('User is agency type, using agency plan')
+        setSubscription({
+          subscription_id: null,
+          location_id: locationId,
+          plan_id: 'agency-plan',
+          plan_name: 'Agency',
+          plan_code: 'agency',
+          price_monthly: 499,
+          price_annual: 4790,
+          max_users: 999999,
+          messages_included: 999999,
+          overage_price: 0.005,
+          can_use_own_openai_key: true,
+          can_white_label: true,
+          is_active: true,
+          payment_status: 'active'
+        })
+        
+        // Still load plans and usage
+        const plansData = await subscriptionService.getAvailablePlans()
+        const usageData = await subscriptionService.getUsageStats(locationId)
+        
+        setPlans(plansData)
+        setUsage(usageData)
+        setLoading(false)
+        return
       }
       
       const locationId = user.activeLocation || user.locationId || user.companyId
@@ -53,6 +86,14 @@ const SubscriptionManager = ({ user, authService }) => {
   const handlePlanChange = async (planId) => {
     try {
       setLoading(true)
+      
+      // Don't allow changing from agency plan
+      if (subscription?.plan_code === 'agency') {
+        setError('Agency plan cannot be changed')
+        setLoading(false)
+        return
+      }
+      
       const locationId = user.activeLocation || user.locationId || user.companyId
       await subscriptionService.changePlan(locationId, planId)
       await loadSubscriptionData()
@@ -106,16 +147,22 @@ const SubscriptionManager = ({ user, authService }) => {
                 <div className="flex justify-between items-start">
                   <div>
                     <h4 className="font-medium text-blue-900">{subscription.plan_name}</h4>
-                    <p className="text-sm text-blue-700 mt-1">
-                      ${subscription.price_monthly}/month
-                    </p>
+                    {subscription.plan_code !== 'agency' ? (
+                      <p className="text-sm text-blue-700 mt-1">
+                        ${subscription.price_monthly}/month
+                      </p>
+                    ) : (
+                      <p className="text-sm text-blue-700 mt-1">
+                        Enterprise Plan
+                      </p>
+                    )}
                     <p className="text-xs text-blue-600 mt-1">
                       Status: {subscription.payment_status}
                     </p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-blue-700">
-                      {subscription.messages_included} messages/month
+                      {subscription.plan_code === 'agency' ? 'Unlimited' : subscription.messages_included} messages/month
                     </p>
                     {subscription.end_date && (
                       <p className="text-xs text-blue-600 mt-1">
@@ -140,9 +187,14 @@ const SubscriptionManager = ({ user, authService }) => {
                 <div className="bg-gray-50 rounded-lg p-4">
                   <div className="text-2xl font-bold text-gray-900">{usage.messages_used}</div>
                   <div className="text-sm text-gray-600">Messages Used</div>
-                  {subscription && (
+                  {subscription && subscription.plan_code !== 'agency' && (
                     <div className="text-xs text-gray-500 mt-1">
                       of {subscription.messages_included} included
+                    </div>
+                  )}
+                  {subscription && subscription.plan_code === 'agency' && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      Unlimited messages
                     </div>
                   )}
                 </div>
@@ -162,7 +214,13 @@ const SubscriptionManager = ({ user, authService }) => {
           <div>
             <h3 className="text-md font-medium text-gray-900 mb-4">Available Plans</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {plans.map((plan) => (
+              {plans.map((plan) => {
+                // Don't show agency plan for non-agency users
+                if (plan.code === 'agency' && user.type !== 'agency') {
+                  return null;
+                }
+                
+                return (
                 <div
                   key={plan.id}
                   className={`border rounded-lg p-4 ${
@@ -176,14 +234,16 @@ const SubscriptionManager = ({ user, authService }) => {
                     <div className="mt-2">
                       <span className="text-2xl font-bold text-gray-900">
                         ${plan.price_monthly}
+                      </span> 
+                      <span className="text-gray-600">
+                        {plan.code !== 'free' ? '/month' : ''}
                       </span>
-                      <span className="text-gray-600">/month</span>
                     </div>
                     <div className="mt-2 text-sm text-gray-600">
-                      {plan.messages_included} messages included
+                      {plan.code === 'agency' ? 'Unlimited' : plan.messages_included} messages included
                     </div>
                     <div className="mt-2 text-xs text-gray-500">
-                      ${plan.overage_price} per additional message
+                      {plan.code !== 'agency' ? `$${plan.overage_price} per additional message` : 'No overage charges'}
                     </div>
                     
                     <div className="mt-4 space-y-1 text-xs text-gray-600">
@@ -212,7 +272,8 @@ const SubscriptionManager = ({ user, authService }) => {
                       </div>
                     )}
                   </div>
-                </div>
+                );
+              })}
               ))}
             </div>
           </div>

@@ -26,7 +26,7 @@ export const WhiteLabelProvider = ({ children, authService, locationId }) => {
   useEffect(() => {
     const loadBranding = async () => {
       if (!locationId) {
-        console.log('No location ID provided to WhiteLabelProvider')
+        console.log('No location ID provided to WhiteLabelProvider, using defaults')
         const defaultBranding = brandingService.getDefaultBranding()
         setBranding(defaultBranding)
         brandingService.applyBrandingToCSS(defaultBranding)
@@ -41,6 +41,13 @@ export const WhiteLabelProvider = ({ children, authService, locationId }) => {
         console.log('Loading branding for location:', locationId)
         const brandingData = await brandingService.getAgencyBranding(locationId)
         console.log('Branding data loaded:', brandingData)
+        
+        // If user is agency type, ensure they can customize branding
+        if (authService?.getCurrentUser()?.type === 'agency') {
+          console.log('User is agency type, ensuring branding customization is enabled')
+          brandingData.can_customize_branding = true
+        }
+        
         setBranding(brandingData)
         
         // Apply branding to CSS variables

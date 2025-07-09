@@ -9,6 +9,27 @@ export class SubscriptionService {
   async getCurrentSubscription(locationId) {
     try {
       console.log('Getting current subscription for location:', locationId)
+      
+      // Check if this is an agency user
+      const isAgency = this.authService?.getCurrentUser()?.type === 'agency'
+      if (isAgency) {
+        console.log('User is agency type, returning agency plan')
+        return {
+          subscription_id: null,
+          location_id: locationId,
+          plan_name: 'Agency',
+          plan_code: 'agency',
+          price_monthly: 499,
+          max_users: 999999,
+          messages_included: 999999,
+          overage_price: 0.005,
+          can_use_own_openai_key: true,
+          can_white_label: true,
+          is_active: true,
+          payment_status: 'active'
+        }
+      }
+      
       const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
 
       // Direct query for subscription data
@@ -190,6 +211,10 @@ export class SubscriptionService {
   async getUsageStats(locationId) {
     try {
       console.log('Getting usage stats for location:', locationId)
+      
+      // Check if this is an agency user
+      const isAgency = this.authService?.getCurrentUser()?.type === 'agency'
+      
       const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
       
       const currentMonth = new Date().toISOString().substring(0, 7) // YYYY-MM
@@ -214,12 +239,14 @@ export class SubscriptionService {
       // Get subscription for message limits
       const subscription = await this.getCurrentSubscription(locationId)
       console.log('Subscription for usage limits:', subscription)
+
+      // For agency users, always set unlimited messages
+      const messagesIncluded = isAgency ? 999999 : (subscription?.messages_included || 100)
       
       const messagesUsed = usage?.messages_used || 0
-      const messagesIncluded = subscription?.messages_included || 100
       const messagesRemaining = Math.max(0, messagesIncluded - messagesUsed)
       const usagePercentage = messagesIncluded > 0 ? (messagesUsed / messagesIncluded) * 100 : 0
-      const limitReached = messagesUsed >= messagesIncluded && subscription?.plan_code !== 'agency'
+      const limitReached = isAgency ? false : (messagesUsed >= messagesIncluded)
 
       return {
         messages_used: messagesUsed,

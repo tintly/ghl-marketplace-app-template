@@ -16,6 +16,17 @@ const AgencyBrandingManager = ({ user, authService, onBrandingUpdate }) => {
   const loadBranding = async () => {
     if (!agencyId) {
       console.log('No agency ID provided to AgencyBrandingManager');
+      
+      // For agency users without company ID, use location ID as fallback
+      if (user?.type === 'agency' && user?.locationId) {
+        console.log('Using location ID as fallback for agency ID:', user.locationId);
+        const brandingData = await brandingService.getAgencyBranding(user.locationId);
+        console.log('Branding data loaded using location ID:', brandingData);
+        setBranding(brandingData);
+        setLoading(false);
+        return;
+      }
+      
       setLoading(false);
       return;
     }
@@ -39,9 +50,18 @@ const AgencyBrandingManager = ({ user, authService, onBrandingUpdate }) => {
   const handleSave = async (formData) => {
     setSaving(true);
     setError(null);
+
+    // Use agency ID or location ID as fallback
+    const targetId = agencyId || user?.locationId;
+    
+    if (!targetId) {
+      setError('No agency ID available for saving branding');
+      setSaving(false);
+      return;
+    }
     
     try {
-      const result = await brandingService.updateAgencyBranding(agencyId, formData);
+      const result = await brandingService.updateAgencyBranding(targetId, formData);
       
       if (result?.success === false) {
         throw new Error(result.error || 'Failed to save branding');
