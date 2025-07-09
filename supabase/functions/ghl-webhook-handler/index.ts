@@ -65,6 +65,9 @@ interface GHLWebhookPayload {
 // Message types that should trigger AI extraction
 const EXTRACTION_MESSAGE_TYPES = ['SMS', 'GMB', 'FB', 'IG', 'Live Chat'];
 
+// Direction that should trigger AI extraction
+const EXTRACTION_DIRECTION = 'inbound';
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -87,7 +90,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    console.log('=== GHL WEBHOOK RECEIVED ===')
+    console.log('=== WEBHOOK RECEIVED ===')
     
     // Parse the webhook payload
     const webhookData: GHLWebhookPayload = await req.json()
@@ -220,11 +223,13 @@ Deno.serve(async (req: Request) => {
       conversationId: insertedRecord.conversation_id
     })
 
-    // Check if this message type should trigger AI extraction
-    const shouldExtract = EXTRACTION_MESSAGE_TYPES.includes(webhookData.messageType);
+    // Check if this message should trigger AI extraction
+    // Only extract data from inbound messages of supported types
+    const shouldExtract = EXTRACTION_MESSAGE_TYPES.includes(webhookData.messageType) && 
+                          webhookData.direction === EXTRACTION_DIRECTION;
     
     if (shouldExtract) { 
-      console.log(`📝 Message type ${webhookData.messageType} qualifies for AI extraction, triggering process...`)
+      console.log(`📝 Inbound message of type ${webhookData.messageType} qualifies for AI extraction, triggering process...`)
       
       // Check if location has reached message limit
       console.log('Checking message limit for location:', webhookData.locationId)
@@ -372,7 +377,14 @@ Deno.serve(async (req: Request) => {
           .eq('id', insertedRecord.id)
       }
     } else {
-      console.log(`📝 Message type ${webhookData.messageType} does not qualify for AI extraction, skipping`)
+      // Log why we're skipping extraction based on message type and direction
+      if (webhookData.messageType === 'CALL' || webhookData.messageType === 'Voicemail') {
+        console.log(`📞 ${webhookData.messageType} received, logging only (no extraction)`)
+      } else if (webhookData.direction === 'outbound') {
+        console.log(`📤 Outbound message of type ${webhookData.messageType} received, logging only (no extraction)`)
+      } else {
+        console.log(`📝 Message type ${webhookData.messageType} does not qualify for AI extraction, logging only`)
+      }
     }
 
     return new Response(
@@ -382,7 +394,9 @@ Deno.serve(async (req: Request) => {
         recordId: insertedRecord.id,
         messageId: insertedRecord.message_id,
         conversationId: insertedRecord.conversation_id,
-        extractionTriggered: shouldExtract
+        extractionTriggered: shouldExtract,
+        direction: webhookData.direction,
+        messageType: webhookData.messageType
       }),
       {
         status: 200,
