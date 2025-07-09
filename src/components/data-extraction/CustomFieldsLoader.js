@@ -5,10 +5,15 @@ export default class CustomFieldsLoader {
 
   async loadFields(config) {
     try {
-      // Always use mock data for temporary/dev/test tokens
-      if (!config.access_token || this.isTemporaryToken(config.access_token)) {
-        console.log('Using mock data: No valid access token available')
-        return this.getMockCustomFields()
+      // Validate access token
+      if (!config.access_token) {
+        console.error('No access token available')
+        throw new Error('No access token available. Please reconnect your account.')
+      }
+
+      if (this.isTemporaryToken(config.access_token)) {
+        console.error('Temporary token detected. Please reconnect your account.')
+        throw new Error('Temporary token detected. Please reconnect your account.')
       }
 
       try {
@@ -21,13 +26,11 @@ export default class CustomFieldsLoader {
         return fields
       } catch (apiError) {
         console.error('API error fetching custom fields:', apiError)
-        console.log('Falling back to mock data due to API error')
-        return this.getMockCustomFields()
+        throw new Error(`Failed to fetch custom fields: ${apiError.message}`)
       }
     } catch (error) {
       console.error('Error loading custom fields:', error)
-      console.log('Falling back to mock data due to API error')
-      return this.getMockCustomFields()
+      throw error
     }
   }
 
@@ -152,90 +155,5 @@ export default class CustomFieldsLoader {
            token.startsWith('dev-') || 
            token.startsWith('test-') ||
            token === 'invalid-token'
-  }
-
-  getMockCustomFields() {
-    return [
-      {
-        id: "mock-text-field",
-        name: "Customer Name",
-        model: "contact",
-        fieldKey: "contact.customer_name", 
-        placeholder: "Enter customer name",
-        dataType: "TEXT",
-        position: 50,
-        standard: false,
-        parentId: null
-      },
-      {
-        id: "mock-phone-field",
-        name: "Phone Number",
-        model: "contact",
-        fieldKey: "contact.phone_number",
-        placeholder: "",
-        dataType: "PHONE",
-        position: 100,
-        standard: false,
-        parentId: null
-      },
-      {
-        id: "mock-service-field",
-        name: "Services Requested",
-        model: "contact",
-        fieldKey: "contact.services_requested",
-        placeholder: "Select service",
-        dataType: "SINGLE_OPTIONS",
-        position: 150,
-        standard: false,
-        picklistOptions: ["Window Tint", "Paint Protection Film", "Haircut"],
-        parentId: "mock-folder-id"
-      },
-      {
-        id: "mock-date-field",
-        name: "Appointment Date",
-        model: "contact",
-        fieldKey: "contact.appointment_date",
-        placeholder: "",
-        dataType: "DATE",
-        position: 200,
-        standard: false,
-        parentId: null
-      },
-      {
-        id: "mock-priority-field",
-        name: "Priority Level",
-        model: "contact",
-        fieldKey: "contact.priority_level",
-        placeholder: "Select priority",
-        dataType: "SINGLE_OPTIONS",
-        position: 250,
-        standard: false,
-        picklistOptions: ["Low", "Medium", "High", "Urgent"],
-        parentId: "mock-folder-id"
-      },
-      {
-        id: "mock-email-field",
-        name: "Secondary Email",
-        model: "contact",
-        fieldKey: "contact.secondary_email",
-        placeholder: "Enter secondary email",
-        dataType: "EMAIL",
-        position: 300,
-        standard: false,
-        parentId: null
-      },
-      {
-        id: "mock-checkbox-field",
-        name: "Interests",
-        model: "contact",
-        fieldKey: "contact.interests",
-        placeholder: "",
-        dataType: "MULTIPLE_OPTIONS",
-        position: 350,
-        standard: false,
-        picklistOptions: ["Marketing", "Sales", "Support", "Development"],
-        parentId: null
-      }
-    ]
   }
 }

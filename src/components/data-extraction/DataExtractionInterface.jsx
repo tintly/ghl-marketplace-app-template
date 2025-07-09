@@ -56,16 +56,21 @@ function DataExtractionInterface({ config, user, authService }) {
 
   const loadCustomFields = async () => {
     if (!config || !config.access_token) {
-      console.log('No valid configuration or access token available, using mock data')
-      const mockLoader = new CustomFieldsLoader(authService)
-      const mockFields = mockLoader.getMockCustomFields()
-      setCustomFields(mockFields)
+      console.error('No valid configuration or access token available')
+      setError('No valid configuration or access token available. Please reconnect your account.')
+      setCustomFields([])
       return
     }
     
-    const loader = new CustomFieldsLoader(authService)
-    const fields = await loader.loadFields(config)
-    setCustomFields(fields)
+    try {
+      const loader = new CustomFieldsLoader(authService)
+      const fields = await loader.loadFields(config)
+      setCustomFields(fields)
+    } catch (error) {
+      console.error('Error loading custom fields:', error)
+      setError(`Failed to load custom fields: ${error.message}`)
+      setCustomFields([])
+    }
   }
 
   const loadExtractionFields = async () => {

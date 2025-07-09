@@ -81,6 +81,11 @@ export class AuthService {
   // Set up Supabase client with custom JWT
   async setupSupabaseClient() {
     try {
+      if (!this.supabaseJWT) {
+        console.error('No JWT available for Supabase client setup')
+        throw new Error('Authentication token not available')
+      }
+      
       const { createClient } = await import('@supabase/supabase-js')
       
       // Create a new Supabase client with the JWT as the access token
@@ -106,6 +111,13 @@ export class AuthService {
 
   // Get the configured Supabase client
   getSupabaseClient() {
+    if (!this.supabaseClient) {
+      console.warn('Supabase client not initialized, returning default client')
+      return (await import('./supabase')).supabase.catch(e => {
+        console.error('Error importing default supabase client:', e)
+        return null
+      })
+    }
     return this.supabaseClient
   }
 

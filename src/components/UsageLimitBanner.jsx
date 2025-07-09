@@ -18,8 +18,18 @@ function UsageLimitBanner({ user, authService }) {
     try {
       setLoading(true)
       const subscriptionService = new SubscriptionService(authService)
-      const limitData = await subscriptionService.getUsageStats(user.locationId)
-      setUsageData(limitData)
+      
+      if (!subscriptionService) {
+        throw new Error('Subscription service not available')
+      }
+      
+      try {
+        const limitData = await subscriptionService.getUsageStats(user.locationId)
+        setUsageData(limitData)
+      } catch (serviceError) {
+        console.error('Error from subscription service:', serviceError)
+        throw new Error(`Failed to check usage limit: ${serviceError.message}`)
+      }
     } catch (error) {
       console.error('Error checking usage limit:', error)
       setError(error.message)

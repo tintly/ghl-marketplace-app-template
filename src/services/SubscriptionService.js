@@ -212,10 +212,18 @@ export class SubscriptionService {
     try {
       console.log('Getting usage stats for location:', locationId)
       
+      if (!locationId) {
+        throw new Error('Location ID is required to get usage statistics')
+      }
+      
       // Check if this is an agency user
       const isAgency = this.authService?.getCurrentUser()?.type === 'agency'
       
       const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+      
+      if (!supabase) {
+        throw new Error('Supabase client not available')
+      }
       
       const currentMonth = new Date().toISOString().substring(0, 7) // YYYY-MM
       console.log('Current month:', currentMonth)
@@ -230,14 +238,24 @@ export class SubscriptionService {
       if (usageError) {
         console.log('Usage tracking query error:', usageError)
         if (usageError.code !== 'PGRST116') { // PGRST116 is "not found"
-        throw usageError
+          throw usageError
         }
       }
 
       console.log('Usage data:', usage)
       
       // Get subscription for message limits
-      const subscription = await this.getCurrentSubscription(locationId)
+      let subscription
+      try {
+        subscription = await this.getCurrentSubscription(locationId)
+      } catch (subError) {
+        console.error('Error getting subscription:', subError)
+        // Use default values if subscription can't be fetched
+        subscription = {
+          messages_included: isAgency ? 999999 : 100
+        }
+      }
+      
       console.log('Subscription for usage limits:', subscription)
 
       // For agency users, always set unlimited messages

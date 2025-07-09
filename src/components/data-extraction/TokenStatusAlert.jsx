@@ -20,8 +20,8 @@ function TokenStatusAlert({ config }) {
   if (['missing_access_token', 'missing_refresh_token'].includes(tokenStatus.status)) {
     return (
       <div className="error-card mb-6">
-        <h3 className="text-red-800 font-medium">⚠️ Connection Required</h3>
-        <p className="text-red-600 text-sm mt-1">Your connection has expired or is invalid. Please reconnect your account to continue using the app.</p>
+        <h3 className="text-red-800 font-medium">⚠️ Authentication Error</h3>
+        <p className="text-red-600 text-sm mt-1">Your GoHighLevel connection has expired or is invalid. Please reconnect your account to continue using the app.</p>
         
         <div className="mt-3">
           <button
@@ -39,8 +39,8 @@ function TokenStatusAlert({ config }) {
   if (tokenStatus.status === 'temporary_token') {
     return (
       <div className="warning-card mb-6">
-        <h3 className="text-yellow-800 font-medium">⚠️ Development Mode</h3>
-        <p className="text-yellow-600 text-sm mt-1">You're using temporary tokens. Connect your account to access real data.</p>
+        <h3 className="text-yellow-800 font-medium">⚠️ Authentication Required</h3>
+        <p className="text-yellow-600 text-sm mt-1">You need to connect your GoHighLevel account to access your custom fields and data.</p>
         
         <div className="mt-3">
           <button
@@ -59,8 +59,8 @@ function TokenStatusAlert({ config }) {
   if (tokenStatus.status === 'expired') {
     return (
       <div className="warning-card mb-6">
-        <h3 className="text-yellow-800 font-medium">⚠️ Connection Expired</h3>
-        <p className="text-yellow-600 text-sm mt-1">Your connection has expired. The system will attempt to refresh it automatically.</p>
+        <h3 className="text-yellow-800 font-medium">⚠️ Authentication Expired</h3>
+        <p className="text-yellow-600 text-sm mt-1">Your GoHighLevel authentication has expired. Please reconnect your account to refresh your access.</p>
         
         <div className="mt-3">
           <button

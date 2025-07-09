@@ -21,7 +21,7 @@ function DataExtractionModule({ user, authService }) {
       setError(null) 
       
       if (!user || !user.userId || !user.locationId) {
-        throw new Error('User information is incomplete. Please reload the page.')
+        throw new Error('User information is incomplete. Please reload the page or reconnect your account.')
       }
 
       // Use the authenticated Supabase client from AuthService
@@ -30,8 +30,15 @@ function DataExtractionModule({ user, authService }) {
       
       if (result.found) {
         setGhlConfig(result.data)
+        
+        // Validate token status
+        const tokenStatus = configManager.validateTokenStatus(result.data)
+        if (!tokenStatus.isValid) {
+          console.warn('Token validation failed:', tokenStatus)
+        }
       } else {
         setShowDebugger(true)
+        console.error('No configuration found for user', user.userId, 'and location', user.locationId)
       }
     } catch (error) {
       console.error('Error loading configuration:', error)
