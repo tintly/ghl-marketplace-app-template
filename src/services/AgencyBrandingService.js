@@ -8,13 +8,13 @@ export class AgencyBrandingService {
   // Get agency branding for current user's location
   async getAgencyBranding(locationId) {
     const cacheKey = `branding-${locationId}`
-    console.log('Getting agency branding for location:', locationId);
+    console.log('Getting agency branding for location:', locationId)
     
     // Check cache first
     if (this.cache.has(cacheKey)) {
       const cached = this.cache.get(cacheKey)
       if (Date.now() - cached.timestamp < this.cacheTimeout) {
-        console.log('Returning cached branding data');
+        console.log('Returning cached branding data')
         return cached.data
       }
       this.cache.delete(cacheKey)
@@ -28,6 +28,8 @@ export class AgencyBrandingService {
       if (isAgency && this.authService?.getCurrentUser()?.companyId) {
         const companyId = this.authService.getCurrentUser().companyId;
         console.log('User is agency type, trying to get branding directly by company ID:', companyId);
+        
+        const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase;
         
         const { data: directBranding, error: directError } = await supabase
           .from('agency_branding')
@@ -51,7 +53,7 @@ export class AgencyBrandingService {
       const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
 
       // First try to get branding by location
-      console.log('Fetching agency branding by location ID');
+      console.log('Fetching agency branding by location ID')
       const { data: locationConfig, error: locationError } = await supabase
         .from('ghl_configurations')
         .select('agency_ghl_id')
@@ -59,23 +61,24 @@ export class AgencyBrandingService {
         .maybeSingle();
 
       if (locationError) {
-        console.error('Error fetching location config:', locationError);
-        return this.getDefaultBranding();
+        console.error('Error fetching location config:', locationError)
+        return this.getDefaultBranding()
       }
 
       if (!locationConfig || !locationConfig.agency_ghl_id) {
-        console.log('No agency ID found for location, returning default branding');
-        return this.getDefaultBranding();
+        console.log('No agency ID found for location, returning default branding')
+        return this.getDefaultBranding()
       }
 
-      console.log('Found agency ID for location:', locationConfig.agency_ghl_id);
+      console.log('Found agency ID for location:', locationConfig.agency_ghl_id)
       
       // Now get the branding for this agency
+      console.log('Fetching branding for agency')
       const { data, error } = await supabase
         .from('agency_branding')
         .select('*')
         .eq('agency_ghl_id', locationConfig.agency_ghl_id)
-        .maybeSingle();
+        .maybeSingle()
 
       if (error) {
         console.error('Error fetching agency branding:', error)
@@ -83,7 +86,7 @@ export class AgencyBrandingService {
       }
 
       const branding = data || this.getDefaultBranding()
-      console.log('Fetched branding data:', branding);
+      console.log('Fetched branding data:', branding)
       
       // Cache the result
       this.cache.set(cacheKey, {
@@ -115,7 +118,7 @@ export class AgencyBrandingService {
   // Update agency branding (for agency users only)
   async updateAgencyBranding(agencyId, brandingData) {
     try {
-      console.log('Updating agency branding for agency ID:', agencyId);
+      console.log('Updating agency branding for agency ID:', agencyId)
       const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
 
       // First check if a record exists
@@ -123,18 +126,18 @@ export class AgencyBrandingService {
         .from('agency_branding')
         .select('id')
         .eq('agency_ghl_id', agencyId)
-        .maybeSingle();
+        .maybeSingle()
 
       if (checkError) {
-        console.error('Error checking existing branding:', checkError);
-        throw new Error(`Failed to check existing branding: ${checkError.message}`);
+        console.error('Error checking existing branding:', checkError)
+        throw new Error(`Failed to check existing branding: ${checkError.message}`)
       }
 
       let result;
       
       if (existingData) {
         // Update existing record
-        console.log('Updating existing branding record with ID:', existingData.id);
+        console.log('Updating existing branding record with ID:', existingData.id)
         const { data, error } = await supabase
           .from('agency_branding')
           .update({
@@ -143,16 +146,16 @@ export class AgencyBrandingService {
           })
           .eq('id', existingData.id)
           .select()
-          .single();
+          .single()
 
         if (error) {
-          throw new Error(`Failed to update branding: ${error.message}`);
+          throw new Error(`Failed to update branding: ${error.message}`)
         }
         
-        result = data;
+        result = data
       } else {
         // Insert new record
-        console.log('Creating new branding record for agency ID:', agencyId);
+        console.log('Creating new branding record for agency ID:', agencyId)
         const { data, error } = await supabase
           .from('agency_branding')
           .insert({
@@ -161,13 +164,13 @@ export class AgencyBrandingService {
             updated_at: new Date().toISOString()
           })
           .select()
-          .single();
+          .single()
 
         if (error) {
-          throw new Error(`Failed to create branding: ${error.message}`);
+          throw new Error(`Failed to create branding: ${error.message}`)
         }
         
-        result = data;
+        result = data
       }
 
       // Clear cache for this agency

@@ -29,6 +29,7 @@ const SubscriptionManager = ({ user, authService }) => {
       // For agency users, use hardcoded agency plan
       if (isAgency) {
         console.log('User is agency type, using agency plan')
+        const locationId = user.activeLocation || user.locationId || user.companyId
         setSubscription({
           subscription_id: null,
           location_id: locationId,
@@ -48,7 +49,7 @@ const SubscriptionManager = ({ user, authService }) => {
         
         // Still load plans and usage
         const plansData = await subscriptionService.getAvailablePlans()
-        const usageData = await subscriptionService.getUsageStats(locationId)
+        const usageData = await subscriptionService.getUsageStats(user.locationId)
         
         setPlans(plansData)
         setUsage(usageData)
