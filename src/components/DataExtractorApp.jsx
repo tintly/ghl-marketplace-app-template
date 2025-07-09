@@ -1,6 +1,6 @@
 import React from 'react'
 import { Routes, Route } from 'react-router-dom'
-import { WhiteLabelProvider } from './WhiteLabelProvider'
+import { WhiteLabelProvider, useWhiteLabel } from './WhiteLabelProvider'
 import UserLinking from './UserLinking'
 import DataExtractionModule from './DataExtractionModule'
 import SubscriptionManager from './SubscriptionManager'
@@ -13,41 +13,14 @@ import LogViewer from './LogViewer'
 
 function DataExtractorApp({ user, authService }) {
   return (
-    <WhiteLabelProvider children={<DataExtractorAppContent user={user} authService={authService} />} authService={authService} locationId={user?.locationId} />
+    <WhiteLabelProvider authService={authService} locationId={user?.locationId}>
+      <DataExtractorAppContent user={user} authService={authService} />
+    </WhiteLabelProvider>
   )
 }
 
 function DataExtractorAppContent({ user, authService }) {
-  const { getAppName, getAgencyName, shouldHideGHLBranding, getWelcomeMessage } = React.useContext(
-    React.createContext({
-      getAppName: () => 'Data Extractor',
-      getAgencyName: () => 'GoHighLevel',
-      shouldHideGHLBranding: () => false,
-      getWelcomeMessage: () => 'Welcome to your conversation data extractor.'
-    })
-  )
-
-  try {
-    // Import the useWhiteLabel hook dynamically
-    const { useWhiteLabel } = require('./WhiteLabelProvider')
-    const whiteLabel = useWhiteLabel()
-    
-    // If we successfully got the hook, update the functions
-    if (whiteLabel) {
-      getAppName = whiteLabel.getAppName
-      getAgencyName = whiteLabel.getAgencyName
-      shouldHideGHLBranding = whiteLabel.shouldHideGHLBranding
-      getWelcomeMessage = whiteLabel.getWelcomeMessage
-    }
-  } catch (error) {
-    console.warn('Could not load WhiteLabel context, using defaults', error)
-  }
-
-  return (
-    <WhiteLabelProvider>
-      <DataExtractorAppContent user={user} authService={authService} />
-    </WhiteLabelProvider>
-  )
+  const { getAppName, getAgencyName, shouldHideGHLBranding, getWelcomeMessage } = useWhiteLabel()
 
   const getLocationDisplay = () => {
     if (user.activeLocation) {

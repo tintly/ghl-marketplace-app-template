@@ -1,7 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { AgencyBrandingService } from '../services/AgencyBrandingService.js'
 
-const WhiteLabelContext = createContext()
+const WhiteLabelContext = createContext({
+  getAppName: () => 'Data Extractor',
+  getAgencyName: () => 'GoHighLevel',
+  shouldHideGHLBranding: () => false,
+  getWelcomeMessage: () => 'Welcome to your conversation data extractor.'
+})
 
 export const useWhiteLabel = () => {
   const context = useContext(WhiteLabelContext)
@@ -68,12 +73,22 @@ export const WhiteLabelProvider = ({ children, authService, locationId }) => {
     }
   }
 
+  // Branding helper functions
+  const getAppName = () => branding?.custom_app_name || 'Data Extractor'
+  const getAgencyName = () => branding?.agency_name || 'GoHighLevel'
+  const shouldHideGHLBranding = () => branding?.hide_ghl_branding || false
+  const getWelcomeMessage = () => branding?.welcome_message || 'Welcome to your conversation data extractor.'
+
   const value = {
     branding,
     loading,
     error,
     updateBranding,
-    brandingService
+    brandingService,
+    getAppName,
+    getAgencyName,
+    shouldHideGHLBranding,
+    getWelcomeMessage
   }
 
   return (
