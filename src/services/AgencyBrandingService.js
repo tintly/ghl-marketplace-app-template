@@ -8,11 +8,13 @@ export class AgencyBrandingService {
   // Get agency branding for current user's location
   async getAgencyBranding(locationId) {
     const cacheKey = `branding-${locationId}`
+    console.log('Getting agency branding for location:', locationId);
     
     // Check cache first
     if (this.cache.has(cacheKey)) {
       const cached = this.cache.get(cacheKey)
       if (Date.now() - cached.timestamp < this.cacheTimeout) {
+        console.log('Returning cached branding data');
         return cached.data
       }
       this.cache.delete(cacheKey)
@@ -21,10 +23,32 @@ export class AgencyBrandingService {
     try {
       const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
 
+      // First try to get branding by location
+      console.log('Fetching agency branding by location ID');
+      const { data: locationConfig, error: locationError } = await supabase
+        .from('ghl_configurations')
+        .select('agency_ghl_id')
+        .eq('ghl_account_id', locationId)
+        .maybeSingle();
+
+      if (locationError) {
+        console.error('Error fetching location config:', locationError);
+        return this.getDefaultBranding();
+      }
+
+      if (!locationConfig || !locationConfig.agency_ghl_id) {
+        console.log('No agency ID found for location, returning default branding');
+        return this.getDefaultBranding();
+      }
+
+      console.log('Found agency ID for location:', locationConfig.agency_ghl_id);
+      
+      // Now get the branding for this agency
       const { data, error } = await supabase
-        .rpc('get_agency_branding_for_location', {
-          location_id: locationId
-        })
+        .from('agency_branding')
+        .select('*')
+        .eq('agency_ghl_id', locationConfig.agency_ghl_id)
+        .maybeSingle();
 
       if (error) {
         console.error('Error fetching agency branding:', error)
@@ -32,6 +56,7 @@ export class AgencyBrandingService {
       }
 
       const branding = data || this.getDefaultBranding()
+      console.log('Fetched branding data:', branding);
       
       // Cache the result
       this.cache.set(cacheKey, {
@@ -63,26 +88,65 @@ export class AgencyBrandingService {
   // Update agency branding (for agency users only)
   async updateAgencyBranding(agencyId, brandingData) {
     try {
+      console.log('Updating agency branding for agency ID:', agencyId);
       const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
 
-      const { data, error } = await supabase
+      // First check if a record exists
+      const { data: existingData, error: checkError } = await supabase
         .from('agency_branding')
-        .upsert({
-          agency_ghl_id: agencyId,
-          ...brandingData,
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .single()
+        .select('id')
+        .eq('agency_ghl_id', agencyId)
+        .maybeSingle();
 
-      if (error) {
-        throw new Error(`Failed to update branding: ${error.message}`)
+      if (checkError) {
+        console.error('Error checking existing branding:', checkError);
+        throw new Error(`Failed to check existing branding: ${checkError.message}`);
+      }
+
+      let result;
+      
+      if (existingData) {
+        // Update existing record
+        console.log('Updating existing branding record with ID:', existingData.id);
+        const { data, error } = await supabase
+          .from('agency_branding')
+          .update({
+            ...brandingData,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingData.id)
+          .select()
+          .single();
+
+        if (error) {
+          throw new Error(`Failed to update branding: ${error.message}`);
+        }
+        
+        result = data;
+      } else {
+        // Insert new record
+        console.log('Creating new branding record for agency ID:', agencyId);
+        const { data, error } = await supabase
+          .from('agency_branding')
+          .insert({
+            agency_ghl_id: agencyId,
+            ...brandingData,
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (error) {
+          throw new Error(`Failed to create branding: ${error.message}`);
+        }
+        
+        result = data;
       }
 
       // Clear cache for this agency
       this.clearCacheForAgency(agencyId)
 
-      return { success: true, data }
+      return { success: true, data: result }
     } catch (error) {
       console.error('Error updating agency branding:', error)
       return { success: false, error: error.message }

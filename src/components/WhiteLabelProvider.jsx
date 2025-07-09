@@ -1,92 +1,259 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
-import { AgencyBrandingService } from '../services/AgencyBrandingService'
-
-const WhiteLabelContext = createContext()
-
-export function useWhiteLabel() {
-  const context = useContext(WhiteLabelContext)
-  if (!context) {
-    throw new Error('useWhiteLabel must be used within a WhiteLabelProvider')
+export class AgencyBrandingService {
+  constructor(authService = null) {
+    this.authService = authService
+    this.cache = new Map()
+    this.cacheTimeout = 10 * 60 * 1000 // 10 minutes
   }
-  return context
-}
 
-export function WhiteLabelProvider({ children, user, authService }) {
-  const [branding, setBranding] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  const brandingService = new AgencyBrandingService(authService)
-
-  useEffect(() => {
-    loadBranding()
-  }, [user])
-
-  const loadBranding = async () => {
-    try {
-      setLoading(true)
-      
-      if (user?.locationId) {
-        const brandingData = await brandingService.getAgencyBranding(user.locationId)
-        setBranding(brandingData)
-        
-        // Apply branding to CSS
-        brandingService.applyBrandingToCSS(brandingData)
+  // Get agency branding for current user's location
+  async getAgencyBranding(locationId) {
+    const cacheKey = `branding-${locationId}`
+    console.log('Getting agency branding for location:', locationId);
+    
+    // Check cache first
+    if (this.cache.has(cacheKey)) {
+      const cached = this.cache.get(cacheKey)
+      if (Date.now() - cached.timestamp < this.cacheTimeout) {
+        console.log('Returning cached branding data');
+        return cached.data
       }
+      this.cache.delete(cacheKey)
+    }
+
+    try {
+      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+
+      // First try to get branding by location
+      console.log('Fetching agency branding by location ID');
+      const { data: locationConfig, error: locationError } = await supabase
+        .from('ghl_configurations')
+        .select('agency_ghl_id')
+        .eq('ghl_account_id', locationId)
+        .maybeSingle();
+
+      if (locationError) {
+        console.error('Error fetching location config:', locationError);
+        return this.getDefaultBranding();
+      }
+
+      if (!locationConfig || !locationConfig.agency_ghl_id) {
+        console.log('No agency ID found for location, returning default branding');
+        return this.getDefaultBranding();
+      }
+
+      console.log('Found agency ID for location:', locationConfig.agency_ghl_id);
+      
+      // Now get the branding for this agency
+      const { data, error } = await supabase
+        .from('agency_branding')
+        .select('*')
+        .eq('agency_ghl_id', locationConfig.agency_ghl_id)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching agency branding:', error)
+        return this.getDefaultBranding()
+      }
+
+      const branding = data || this.getDefaultBranding()
+      console.log('Fetched branding data:', branding);
+      
+      // Cache the result
+      this.cache.set(cacheKey, {
+        data: branding,
+        timestamp: Date.now()
+      })
+
+      return branding
     } catch (error) {
-      console.error('Error loading white-label branding:', error)
-      // Use default branding on error
-      const defaultBranding = brandingService.getDefaultBranding()
-      setBranding(defaultBranding)
-      brandingService.applyBrandingToCSS(defaultBranding)
-    } finally {
-      setLoading(false)
+      console.error('Agency branding service error:', error)
+      return this.getDefaultBranding()
     }
   }
 
-  const refreshBranding = () => {
-    loadBranding()
+  // Get default branding when no agency branding is available
+  getDefaultBranding() {
+    return {
+      agency_name: 'GoHighLevel',
+      custom_app_name: 'Data Extractor',
+      primary_color: '#3B82F6',
+      secondary_color: '#1F2937',
+      accent_color: '#10B981',
+      hide_ghl_branding: false,
+      welcome_message: 'Welcome to your conversation data extractor.',
+      support_email: 'support@gohighlevel.com'
+    }
   }
 
-  // Helper functions for components to use
-  const getAppName = () => {
-    return branding?.custom_app_name || 'Data Extractor'
+  // Update agency branding (for agency users only)
+  async updateAgencyBranding(agencyId, brandingData) {
+    try {
+      console.log('Updating agency branding for agency ID:', agencyId);
+      console.log('Updating agency branding for agency ID:', agencyId);
+      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+
+      // First check if a record exists
+      const { data: existingData, error: checkError } = await supabase
+        .from('agency_branding')
+        .select('id')
+        .eq('agency_ghl_id', agencyId)
+        .maybeSingle();
+
+      if (checkError) {
+        console.error('Error checking existing branding:', checkError);
+        throw new Error(`Failed to check existing branding: ${checkError.message}`);
+      }
+
+      let result;
+      
+      if (existingData) {
+        // Update existing record
+        console.log('Updating existing branding record with ID:', existingData.id);
+        const { data, error } = await supabase
+          .from('agency_branding')
+          .update({
+            ...brandingData,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingData.id)
+          .select()
+          .single();
+
+        if (error) {
+          throw new Error(`Failed to update branding: ${error.message}`);
+        }
+        
+        result = data;
+      } else {
+        // Insert new record
+        console.log('Creating new branding record for agency ID:', agencyId);
+        const { data, error } = await supabase
+          .from('agency_branding')
+          .insert({
+            agency_ghl_id: agencyId,
+            ...brandingData,
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (error) {
+          throw new Error(`Failed to create branding: ${error.message}`);
+        }
+        
+        result = data;
+      }
+
+      // Clear cache for this agency
+      this.clearCacheForAgency(agencyId)
+
+    } catch (error) {
+      console.error('Error updating agency branding:', error)
+      return { success: false, error: error.message }
+    }
   }
 
-  const getAgencyName = () => {
-    return branding?.agency_name || 'GoHighLevel'
+  // Get agency permissions
+  async getAgencyPermissions(agencyId) {
+    try {
+      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+
+      // First check if a record exists
+      const { data: existingData, error: checkError } = await supabase
+        .from('agency_branding')
+        .select('id')
+        .eq('agency_ghl_id', agencyId)
+        .maybeSingle();
+
+      if (checkError) {
+        console.error('Error checking existing branding:', checkError);
+        throw new Error(`Failed to check existing branding: ${checkError.message}`);
+      }
+
+      let result;
+      
+      if (existingData) {
+        // Update existing record
+        console.log('Updating existing branding record with ID:', existingData.id);
+        const { data, error } = await supabase
+          .from('agency_branding')
+          .update({
+            ...brandingData,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingData.id)
+          .select()
+          .single();
+
+        if (error) {
+          throw new Error(`Failed to update branding: ${error.message}`);
+        }
+        
+        result = data;
+      } else {
+        // Insert new record
+        console.log('Creating new branding record for agency ID:', agencyId);
+        const { data, error } = await supabase
+          .from('agency_branding')
+          .insert({
+            agency_ghl_id: agencyId,
+            ...brandingData,
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+      return data || this.getDefaultPermissions()
+    } catch (error) {
+      console.error('Agency permissions service error:', error)
+      return this.getDefaultPermissions()
+    }
   }
 
-  const shouldHideGHLBranding = () => {
-    return branding?.hide_ghl_branding || false
+  // Get default permissions
+  getDefaultPermissions() {
+    return {
+      plan_type: 'basic',
+      max_locations: 10,
+      max_extractions_per_month: 1000,
+      can_use_own_openai_key: false,
+      can_customize_branding: false,
+      can_use_custom_domain: false,
+      can_access_usage_analytics: false,
+      can_manage_team_members: false
+    }
   }
 
-  const getWelcomeMessage = () => {
-    return branding?.welcome_message || 'Welcome to your conversation data extractor.'
+  // Apply branding to CSS variables
+  applyBrandingToCSS(branding) {
+    if (typeof document === 'undefined') return
+
+    const root = document.documentElement
+    
+    root.style.setProperty('--primary-color', branding.primary_color || '#3B82F6')
+    root.style.setProperty('--secondary-color', branding.secondary_color || '#1F2937')
+    root.style.setProperty('--accent-color', branding.accent_color || '#10B981')
+    
+    // Update page title if custom app name is provided
+    if (branding.custom_app_name) {
+      document.title = branding.custom_app_name
+    }
   }
 
-  const getSupportEmail = () => {
-    return branding?.support_email || 'support@gohighlevel.com'
+  // Clear cache for specific agency
+  clearCacheForAgency(agencyId) {
+    for (const [key] of this.cache) {
+        if (error) {
+          throw new Error(`Failed to create branding: ${error.message}`);
+        }
+        
+        result = data;
+      }
+    }
   }
 
-  const getFooterText = () => {
-    return branding?.footer_text || `© ${new Date().getFullYear()} ${getAgencyName()}. All rights reserved.`
+  // Clear all cache
+  clearCache() {
+    this.cache.clear()
   }
-
-  const value = {
-    branding,
-    loading,
-    refreshBranding,
-    getAppName,
-    getAgencyName,
-    shouldHideGHLBranding,
-    getWelcomeMessage,
-    getSupportEmail,
-    getFooterText
-  }
-
-  return (
-    <WhiteLabelContext.Provider value={value}>
-      {children}
-    </WhiteLabelContext.Provider>
-  )
 }
