@@ -130,7 +130,7 @@ function CustomFieldsList({
                               </span>
                             ))}
                             {field.picklistOptions.length > 3 && (
-                              <span className="text-xs text-gray-500">
+                        </>
                                 +{field.picklistOptions.length - 3} more
                               </span>
                             )}
