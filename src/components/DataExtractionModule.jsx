@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import ConfigurationManager from './data-extraction/ConfigurationManager'
 import DataExtractionInterface from './data-extraction/DataExtractionInterface'
+import UsageLimitBanner from './UsageLimitBanner'
 import TokenStatusAlert from './data-extraction/TokenStatusAlert'
 import ConfigurationDebugger from './ConfigurationDebugger'
 
@@ -98,6 +99,9 @@ function DataExtractionModule({ user, authService }) {
 
   return (
     <div className="space-y-6">
+      {/* Usage Limit Banner */}
+      <UsageLimitBanner user={user} authService={authService} />
+      
       {/* Token Status Alert - Only show if there are issues */}
       <TokenStatusAlert config={ghlConfig} />
 

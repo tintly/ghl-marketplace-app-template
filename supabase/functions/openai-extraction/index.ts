@@ -1,5 +1,53 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
+// Function to check if a location has reached its message limit
+async function checkMessageLimit(supabase: any, locationId: string) {
+  try {
+    const { data, error } = await supabase
+      .rpc('check_location_message_limit', {
+        p_location_id: locationId
+      })
+
+    if (error) {
+      console.error('Error checking message limit:', error)
+      return { limitReached: false, error: error.message }
+    }
+
+    return { 
+      limitReached: data.limit_reached, 
+      plan: data.plan,
+      currentUsage: data.current_usage,
+      messagesRemaining: data.messages_remaining
+    }
+  } catch (error) {
+    console.error('Error checking message limit:', error)
+    return { limitReached: false, error: error.message }
+  }
+}
+
+// Function to increment message usage
+async function incrementMessageUsage(supabase: any, locationId: string, tokensUsed: number, costEstimate: number) {
+  try {
+    const { data, error } = await supabase
+      .rpc('increment_location_message_usage', {
+        p_location_id: locationId,
+        p_messages_count: 1,
+        p_tokens_used: tokensUsed,
+        p_cost_estimate: costEstimate
+      })
+
+    if (error) {
+      console.error('Error incrementing message usage:', error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true, data }
+  } catch (error) {
+    console.error('Error incrementing message usage:', error)
+    return { success: false, error: error.message }
+  }
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -117,6 +165,33 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+    // Step 1.5: Check if location has reached message limit
+    console.log('Step 1.5: Checking message limit for location:', payload.location_id)
+    const limitCheck = await checkMessageLimit(supabase, payload.location_id)
+    
+    if (limitCheck.limitReached) {
+      console.log('⚠️ Message limit reached for location:', payload.location_id)
+      console.log('Plan:', limitCheck.plan?.plan_name)
+      console.log('Current usage:', limitCheck.currentUsage?.messages_used)
+      console.log('Messages included:', limitCheck.plan?.messages_included)
+      
+      return new Response(
+        JSON.stringify({ 
+          error: "Message limit reached",
+          details: "You have reached your monthly message limit. Please upgrade your plan to continue using the service.",
+          plan: limitCheck.plan,
+          currentUsage: limitCheck.currentUsage
+        }),
+        {
+          status: 402, // Payment Required
+          headers: {
+            "Content-Type": "application/json",
+            ...corsHeaders,
+          },
+        }
+      )
+    }
+
     // Get OpenAI API key from environment
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY')
     if (!openaiApiKey) {
@@ -182,6 +257,15 @@ Deno.serve(async (req: Request) => {
     // Calculate cost estimate
     const costEstimate = calculateCost(model, openaiData.usage)
 
+    // Increment message usage
+    console.log('Incrementing message usage for location:', payload.location_id)
+    await incrementMessageUsage(
+      supabase,
+      payload.location_id,
+      openaiData.usage.total_tokens,
+      costEstimate
+    )
+
     // Log usage to database
     usageLogId = await logUsage(supabase, {
       location_id: payload.location_id,
@@ -210,7 +294,7 @@ Deno.serve(async (req: Request) => {
     console.log('✅ Extraction completed successfully')
     console.log('Extracted fields:', Object.keys(extractedData))
     console.log('Usage logged with ID:', usageLogId)
-    console.log('Cost estimate:', `$${costEstimate}`)
+    console.log('Cost estimate:', `$${costEstimate}`) 
 
     // Step 5: Automatically call update-ghl-contact if we have contact_id and extracted data
     let contactUpdateResult = null
@@ -271,7 +355,7 @@ Deno.serve(async (req: Request) => {
         usage: {
           model: openaiData.model,
           input_tokens: openaiData.usage.prompt_tokens,
-          output_tokens: openaiData.usage.completion_tokens,
+          output_tokens: openaiData.usage.completion_tokens, 
           total_tokens: openaiData.usage.total_tokens,
           cost_estimate: costEstimate,
           response_time_ms: responseTime
@@ -297,7 +381,7 @@ Deno.serve(async (req: Request) => {
     const responseTime = Date.now() - startTime
 
     // Log failed usage if we have the required info
-    if (usageLogId === null) {
+    if (usageLogId === null) { 
       try {
         const payload = await req.json().catch(() => ({}))
         if (payload.location_id) {
@@ -308,7 +392,7 @@ Deno.serve(async (req: Request) => {
           await logUsage(supabase, {
             location_id: payload.location_id,
             model: 'gpt-4o-mini',
-            input_tokens: 0,
+            input_tokens: 0, 
             output_tokens: 0,
             total_tokens: 0,
             cost_estimate: 0,

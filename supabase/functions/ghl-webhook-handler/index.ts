@@ -1,5 +1,30 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
+// Function to check if a location has reached its message limit
+async function checkMessageLimit(supabase: any, locationId: string) {
+  try {
+    const { data, error } = await supabase
+      .rpc('check_location_message_limit', {
+        p_location_id: locationId
+      })
+
+    if (error) {
+      console.error('Error checking message limit:', error)
+      return { limitReached: false, error: error.message }
+    }
+
+    return { 
+      limitReached: data.limit_reached, 
+      plan: data.plan,
+      currentUsage: data.current_usage,
+      messagesRemaining: data.messages_remaining
+    }
+  } catch (error) {
+    console.error('Error checking message limit:', error)
+    return { limitReached: false, error: error.message }
+  }
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -198,8 +223,48 @@ Deno.serve(async (req: Request) => {
     // Check if this message type should trigger AI extraction
     const shouldExtract = EXTRACTION_MESSAGE_TYPES.includes(webhookData.messageType);
     
-    if (shouldExtract) {
+    if (shouldExtract) { 
       console.log(`📝 Message type ${webhookData.messageType} qualifies for AI extraction, triggering process...`)
+      
+      // Check if location has reached message limit
+      console.log('Checking message limit for location:', webhookData.locationId)
+      const limitCheck = await checkMessageLimit(supabase, webhookData.locationId)
+      
+      if (limitCheck.limitReached) {
+        console.log('⚠️ Message limit reached for location:', webhookData.locationId)
+        console.log('Plan:', limitCheck.plan?.plan_name)
+        console.log('Current usage:', limitCheck.currentUsage?.messages_used)
+        console.log('Messages included:', limitCheck.plan?.messages_included)
+        
+        // Update the conversation record to mark as processed with limit error
+        await supabase
+          .from('ghl_conversations')
+          .update({
+            processed: true,
+            processing_error: `Message limit reached. Current plan: ${limitCheck.plan?.plan_name}, Messages used: ${limitCheck.currentUsage?.messages_used}/${limitCheck.plan?.messages_included}`,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', insertedRecord.id)
+          
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Webhook processed but extraction skipped due to message limit",
+            recordId: insertedRecord.id,
+            messageId: insertedRecord.message_id,
+            conversationId: insertedRecord.conversation_id,
+            limitReached: true,
+            plan: limitCheck.plan
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              ...corsHeaders,
+            },
+          }
+        )
+      }
       
       try {
         // Call the ai-extraction-payload function

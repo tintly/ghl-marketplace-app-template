@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import StandardFieldsList from './StandardFieldsList'
 import StandardExtractionFieldsList from './StandardExtractionFieldsList'
+import UsageLimitBanner from './UsageLimitBanner'
 import ExtractionFieldForm from './data-extraction/ExtractionFieldForm'
 import ConfigurationManager from './data-extraction/ConfigurationManager'
 import { isStandardField } from '../utils/standardContactFields'
@@ -176,6 +177,9 @@ function StandardFieldsExtractionModule({ user, authService }) {
 
   return (
     <div className="bg-white rounded-lg shadow">
+      {/* Usage Limit Banner */}
+      <UsageLimitBanner user={user} authService={authService} />
+      
       <div className="px-6 py-4 border-b border-gray-200">
         <h2 className="text-xl font-semibold text-gray-900">Standard Contact Fields</h2>
         <p className="text-sm text-gray-600 mt-1">

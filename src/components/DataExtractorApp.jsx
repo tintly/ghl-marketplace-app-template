@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom'
 import { WhiteLabelProvider, useWhiteLabel } from './WhiteLabelProvider'
 import UserLinking from './UserLinking'
 import DataExtractionModule from './DataExtractionModule'
+import SubscriptionManager from './SubscriptionManager'
 import StandardFieldsExtractionModule from './StandardFieldsExtractionModule'
 import AgencyBrandingManager from './AgencyBrandingManager'
 import AgencyOpenAIManager from './AgencyOpenAIManager'
@@ -88,6 +89,15 @@ function DataExtractorAppContent({ user, authService }) {
         
         <Routes>
           <Route path="/" element={<DashboardHome user={user} authService={authService} needsOAuth={needsOAuthInstallation()} getWelcomeMessage={getWelcomeMessage} getAgencyName={getAgencyName} />} />
+          <Route path="/subscription" element={
+            needsOAuthInstallation() ? (
+              <div className="text-center py-8">
+                <p className="text-gray-600">Please complete the OAuth installation first.</p>
+              </div>
+            ) : (
+              <SubscriptionManager user={user} authService={authService} />
+            )
+          } />
           <Route path="/data-extraction" element={
             needsOAuthInstallation() ? (
               <div className="text-center py-8">
@@ -157,6 +167,23 @@ function DashboardHome({ user, authService, needsOAuth, getWelcomeMessage, getAg
 
   return (
     <div className="space-y-8">
+      {/* Subscription Banner */}
+      <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg shadow-lg p-6 text-white">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+          <div>
+            <h3 className="text-xl font-bold">Manage Your Subscription</h3>
+            <p className="mt-1 text-blue-100">
+              View your current plan, usage statistics, and upgrade options.
+            </p>
+          </div>
+          <div className="mt-4 md:mt-0">
+            <a href="/subscription" className="inline-block px-5 py-2 bg-white text-blue-600 font-medium rounded-md shadow-sm hover:bg-blue-50 transition-colors">
+              View Subscription
+            </a>
+          </div>
+        </div>
+      </div>
+      
       <div className="mb-8">
         <h2 className="text-3xl font-bold text-gray-900 mb-2">
           {getWelcomeMessage()}
@@ -204,6 +231,18 @@ function DashboardHome({ user, authService, needsOAuth, getWelcomeMessage, getAg
                 className="btn-success inline-block"
               >
                 Configure
+              </a>
+            </div>
+            
+            <div className="text-center p-6 border border-gray-200 rounded-lg card-hover">
+              <div className="text-4xl mb-4">💰</div>
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">Subscription</h4>
+              <p className="text-gray-600 mb-4">Manage your plan and view usage statistics</p>
+              <a
+                href="/subscription"
+                className="btn-primary inline-block"
+              >
+                Manage Plan
               </a>
             </div>
             
