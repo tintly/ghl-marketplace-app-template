@@ -21,89 +21,56 @@ function SubscriptionManager({ user, authService }) {
       setLoading(true)
       setError(null)
 
+      // Get Supabase client
+      const supabase = authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
+
+      // Try direct functions first
+      console.log('Loading subscription data using direct functions...')
+      
       try {
-        // Get Supabase client
-        const supabase = authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
-
-        // Try the fixed function first
+        // Get subscription details
         const { data: subscriptionData, error: subscriptionError } = await supabase
-          .rpc('get_user_subscription_details_fixed')
-
+          .rpc('get_my_subscription_direct')
+          
         if (subscriptionError) {
-          console.error('Error loading subscription with fixed function:', subscriptionError)
-          
-          // Fall back to original function
-          const { data: fallbackData, error: fallbackError } = await supabase
-            .rpc('get_user_subscription_details')
-            
-          if (fallbackError) {
-            console.error('Error loading subscription with fallback function:', fallbackError)
-            throw new Error('Failed to load subscription details')
-          }
-          
-          setSubscription(fallbackData)
-        } else {
-          setSubscription(subscriptionData)
+          console.error('Error loading subscription with direct function:', subscriptionError)
+          throw subscriptionError
         }
-
-        // Try the fixed usage function first
-        const { data: usageData, error: usageError } = await supabase
-          .rpc('get_user_usage_with_limits_fixed')
-
-        if (usageError) {
-          console.error('Error loading usage with fixed function:', usageError)
-          
-          // Fall back to original function
-          const { data: fallbackUsageData, error: fallbackUsageError } = await supabase
-            .rpc('get_user_usage_with_limits')
-            
-          if (fallbackUsageError) {
-            console.error('Error loading usage with fallback function:', fallbackUsageError)
-            throw new Error('Failed to load usage statistics')
-          }
-          
-          setUsageStats(fallbackUsageData)
-        } else {
-          setUsageStats(usageData)
-        }
-
-        // Try the fixed plans function first
-        const { data: plansData, error: plansError } = await supabase
-          .rpc('get_available_plans_fixed')
-
-        if (plansError) {
-          console.error('Error loading plans with fixed function:', plansError)
-          
-          // Fall back to original function
-          const { data: fallbackPlansData, error: fallbackPlansError } = await supabase
-            .rpc('get_available_plans')
-            
-          if (fallbackPlansError) {
-            console.error('Error loading plans with fallback function:', fallbackPlansError)
-            
-            // Last resort: direct query
-            const { data: directPlansData, error: directPlansError } = await supabase
-              .from('subscription_plans')
-              .select('*')
-              .eq('is_active', true)
-              .order('price_monthly', { ascending: true })
-              
-            if (directPlansError) {
-              console.error('Error loading plans with direct query:', directPlansError)
-              throw new Error('Failed to load available plans')
-            }
-            
-            setAvailablePlans(directPlansData || [])
-          } else {
-            setAvailablePlans(fallbackPlansData || [])
-          }
-        } else {
-          setAvailablePlans(plansData || [])
-        }
-      } catch (innerError) {
-        console.error('Inner error loading subscription data:', innerError)
         
-        // Fallback to hardcoded data for agency users
+        setSubscription(subscriptionData)
+        console.log('Subscription loaded successfully:', subscriptionData)
+        
+        // Get usage statistics
+        const { data: usageData, error: usageError } = await supabase
+          .rpc('get_my_usage_with_limits')
+          
+        if (usageError) {
+          console.error('Error loading usage with direct function:', usageError)
+          throw usageError
+        }
+        
+        setUsageStats(usageData)
+        console.log('Usage stats loaded successfully:', usageData)
+        
+        // Get available plans
+        const { data: plansData, error: plansError } = await supabase
+          .from('subscription_plans')
+          .select('*')
+          .eq('is_active', true)
+          .order('price_monthly', { ascending: true })
+          
+        if (plansError) {
+          console.error('Error loading plans with direct query:', plansError)
+          throw plansError
+        }
+        
+        setAvailablePlans(plansData || [])
+        console.log('Available plans loaded successfully:', plansData?.length || 0)
+        
+      } catch (directError) {
+        console.error('Error with direct functions, falling back to hardcoded data:', directError)
+        
+        // Fallback to hardcoded data
         if (user.type === 'agency') {
           setSubscription({
             plan: {
@@ -141,16 +108,147 @@ function SubscriptionManager({ user, authService }) {
               can_white_label: true
             }
           ])
-          
-          return
+        } else {
+          // For non-agency users, try to get subscription directly from database
+          try {
+            const { data: subData, error: subError } = await supabase
+              .from('location_subscriptions')
+              .select(`
+                id,
+                location_id,
+                is_active,
+                payment_status,
+                subscription_plans (
+                  id,
+                  name,
+                  code,
+                  price_monthly,
+                  price_annual,
+                  max_users,
+                  messages_included,
+                  overage_price,
+                  can_use_own_openai_key,
+                  can_white_label
+                )
+              `)
+              .eq('location_id', user.locationId)
+              .eq('is_active', true)
+              .single()
+              
+            if (subError) {
+              console.error('Error loading subscription directly:', subError)
+              throw subError
+            }
+            
+            setSubscription({
+              subscription_id: subData.id,
+              location_id: subData.location_id,
+              plan: subData.subscription_plans,
+              is_active: subData.is_active,
+              payment_status: subData.payment_status
+            })
+            
+            // Get usage directly
+            const { data: usageData, error: usageError } = await supabase
+              .from('usage_tracking')
+              .select('*')
+              .eq('location_id', user.locationId)
+              .eq('month_year', new Date().toISOString().substring(0, 7))
+              .single()
+              
+            if (!usageError && usageData) {
+              const messagesIncluded = subData.subscription_plans.messages_included || 100
+              const messagesUsed = usageData.messages_used || 0
+              const usagePercentage = (messagesUsed / messagesIncluded) * 100
+              
+              setUsageStats({
+                messages_used: messagesUsed,
+                tokens_used: usageData.tokens_used || 0,
+                cost_estimate: usageData.cost_estimate || 0,
+                messages_included: messagesIncluded,
+                usage_percentage: usagePercentage,
+                limit_reached: messagesUsed >= messagesIncluded
+              })
+            } else {
+              // Default usage stats
+              setUsageStats({
+                messages_used: 0,
+                tokens_used: 0,
+                cost_estimate: 0,
+                messages_included: subData.subscription_plans.messages_included || 100,
+                usage_percentage: 0,
+                limit_reached: false
+              })
+            }
+            
+            // Get plans directly
+            const { data: plansData } = await supabase
+              .from('subscription_plans')
+              .select('*')
+              .eq('is_active', true)
+              .order('price_monthly', { ascending: true })
+              
+            setAvailablePlans(plansData || [])
+            
+          } catch (directDbError) {
+            console.error('Error with direct database queries:', directDbError)
+            
+            // Last resort fallback
+            setSubscription({
+              plan: {
+                name: 'Free',
+                code: 'free',
+                max_users: 1,
+                messages_included: 100,
+                overage_price: 0.08,
+                can_use_own_openai_key: false,
+                can_white_label: false
+              },
+              payment_status: 'free'
+            })
+            
+            setUsageStats({
+              messages_used: 0,
+              tokens_used: 0,
+              cost_estimate: 0,
+              messages_included: 100,
+              usage_percentage: 0,
+              limit_reached: false
+            })
+            
+            setAvailablePlans([
+              {
+                id: '1',
+                name: 'Free',
+                code: 'free',
+                price_monthly: 0,
+                price_annual: 0,
+                max_users: 1,
+                messages_included: 100,
+                overage_price: 0.08,
+                can_use_own_openai_key: false,
+                can_white_label: false
+              },
+              {
+                id: '2',
+                name: 'Agency',
+                code: 'agency',
+                price_monthly: 499,
+                price_annual: 4790,
+                max_users: 999999,
+                messages_included: 999999,
+                overage_price: 0.005,
+                can_use_own_openai_key: true,
+                can_white_label: true
+              }
+            ])
+          }
         }
-        
-        throw innerError
       }
 
     } catch (error) {
       console.error('Error loading subscription data:', error)
-      setError(error.message)
+      setError('Failed to load subscription data. Please try again later.')
     } finally {
       setLoading(false)
     }
@@ -162,21 +260,30 @@ function SubscriptionManager({ user, authService }) {
       setError(null)
       setSuccess(null)
 
-      try {
-        // Get Supabase client
-        const supabase = authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
+      // Get Supabase client
+      const supabase = authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
 
-        // Try the safe function first
+      console.log('Changing subscription plan to:', planCode)
+      
+      // Try the direct function first
+      try {
         const { data, error } = await supabase
-          .rpc('change_subscription_plan_safe', {
+          .rpc('force_change_subscription_plan', {
             p_location_id: user.locationId,
             p_plan_code: planCode
           })
 
         if (error) {
-          console.error('Error upgrading with safe function:', error)
-          
-          // Fall back to direct database operations
+          console.error('Error upgrading with direct function:', error)
+          throw error
+        }
+        
+        console.log('Plan changed successfully:', data)
+      } catch (directError) {
+        console.error('Error with direct function, trying fallback:', directError)
+        
+        // Fallback to direct database operations
+        try {
           // First get the plan ID
           const { data: planData, error: planError } = await supabase
             .from('subscription_plans')
@@ -191,7 +298,7 @@ function SubscriptionManager({ user, authService }) {
           }
 
           // Update or insert subscription
-          const { data: upsertData, error: upsertError } = await supabase
+          const { error: upsertError } = await supabase
             .from('location_subscriptions')
             .upsert({
               location_id: user.locationId,
@@ -201,21 +308,14 @@ function SubscriptionManager({ user, authService }) {
               payment_status: 'active',
               updated_at: new Date().toISOString()
             })
-            .select()
 
           if (upsertError) {
             console.error('Error upgrading subscription:', upsertError)
             throw new Error(`Failed to upgrade: ${upsertError.message}`)
           }
-        }
-      } catch (innerError) {
-        console.error('Inner error upgrading subscription:', innerError)
-        
-        // For agency users, just simulate success
-        if (user.type === 'agency') {
-          // No need to do anything, just continue
-        } else {
-          throw innerError
+        } catch (fallbackError) {
+          console.error('Error with fallback method:', fallbackError)
+          throw fallbackError
         }
       }
 
@@ -225,7 +325,7 @@ function SubscriptionManager({ user, authService }) {
       setSuccess(`Successfully changed to ${planCode} plan!`)
     } catch (error) {
       console.error('Error upgrading subscription:', error)
-      setError(error.message)
+      setError(error.message || 'Failed to change plan. Please try again later.')
     } finally {
       setUpgrading(false)
     }

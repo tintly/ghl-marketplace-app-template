@@ -24,8 +24,16 @@ function AgencyOpenAIManager({ user, authService }) {
       // Check permissions
       // For agency users, we'll check both methods
       const isAgency = user.type === 'agency'
-      const canUse = isAgency || await openaiService.canUseCustomOpenAIKey(user.companyId)
-      const isAgencyPlan = isAgency || await openaiService.isAgencyPlan()
+      
+      // For agency users, always allow access regardless of database permissions
+      let canUse = isAgency
+      let isAgencyPlan = isAgency
+      
+      // Only check database permissions for non-agency users
+      if (!isAgency) {
+        canUse = await openaiService.canUseCustomOpenAIKey(user.companyId)
+        isAgencyPlan = await openaiService.isAgencyPlan()
+      }
       
       setPermissions({ 
         can_use_own_openai_key: canUse,
@@ -102,17 +110,26 @@ function AgencyOpenAIManager({ user, authService }) {
   }
 
   if (user.type !== 'agency' && !permissions?.is_agency_plan) {
+    // For non-agency users without permissions, show upgrade message
     return (
-      <div className="info-card">
-        <h3 className="text-blue-800 font-medium">Agency Feature</h3>
-        <p className="text-blue-600 text-sm mt-1">
-          Custom OpenAI key management is only available for agency accounts.
-        </p>
+      <div className="bg-white rounded-lg shadow">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-900">OpenAI API Keys</h2>
+        </div>
+        <div className="p-6">
+          <div className="info-card">
+            <h3 className="text-blue-800 font-medium">Agency Feature</h3>
+            <p className="text-blue-600 text-sm mt-1">
+              Custom OpenAI key management is only available for agency accounts.
+            </p>
+          </div>
+        </div>
       </div>
     )
   }
 
-  if (upgradeRequired) {
+  // For agency users, never require upgrade
+  if (!user.type === 'agency' && upgradeRequired) {
     return (
       <div className="bg-white rounded-lg shadow">
         <div className="px-6 py-4 border-b border-gray-200">
