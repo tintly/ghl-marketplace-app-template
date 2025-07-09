@@ -1,260 +1,210 @@
-export class AgencyBrandingService {
-  constructor(authService = null) {
-    this.authService = authService
-    this.cache = new Map()
-    this.cacheTimeout = 10 * 60 * 1000 // 10 minutes
-  }
+import React, { useState, useEffect } from 'react'
+import { SubscriptionService } from '../services/SubscriptionService'
 
-  // Get agency branding for current user's location
-  async getAgencyBranding(locationId) {
-    const cacheKey = `branding-${locationId}`
-    console.log('Getting agency branding for location:', locationId);
-    
-    // Check cache first
-    if (this.cache.has(cacheKey)) {
-      const cached = this.cache.get(cacheKey)
-      if (Date.now() - cached.timestamp < this.cacheTimeout) {
-        console.log('Returning cached branding data');
-        return cached.data
-      }
-      this.cache.delete(cacheKey)
-    }
+function SubscriptionManager({ user, authService }) {
+  const [loading, setLoading] = useState(true)
+  const [subscription, setSubscription] = useState(null)
+  const [plans, setPlans] = useState([])
+  const [usage, setUsage] = useState(null)
+  const [error, setError] = useState(null)
 
+  const subscriptionService = new SubscriptionService(authService)
+
+  useEffect(() => {
+    loadSubscriptionData()
+  }, [user])
+
+  const loadSubscriptionData = async () => {
     try {
-      const supabase = this.authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
+      setLoading(true)
+      setError(null)
 
-      // First try to get branding by location
-      console.log('Fetching agency branding by location ID');
-      const { data: locationConfig, error: locationError } = await supabase
-        .from('ghl_configurations')
-        .select('agency_ghl_id')
-        .eq('ghl_account_id', locationId)
-        .maybeSingle();
+      const [subscriptionData, plansData, usageData] = await Promise.all([
+        subscriptionService.getCurrentSubscription(user.activeLocation || user.companyId),
+        subscriptionService.getAvailablePlans(),
+        subscriptionService.getUsageStats(user.activeLocation || user.companyId)
+      ])
 
-      if (locationError) {
-        console.error('Error fetching location config:', locationError);
-        return this.getDefaultBranding();
-      }
-
-      if (!locationConfig || !locationConfig.agency_ghl_id) {
-        console.log('No agency ID found for location, returning default branding');
-        return this.getDefaultBranding();
-      }
-
-      console.log('Found agency ID for location:', locationConfig.agency_ghl_id);
-      
-      // Now get the branding for this agency
-      const { data, error } = await supabase
-        .from('agency_branding')
-        .select('*')
-        .eq('agency_ghl_id', locationConfig.agency_ghl_id)
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error fetching agency branding:', error)
-        return this.getDefaultBranding()
-      }
-
-      const branding = data || this.getDefaultBranding()
-      console.log('Fetched branding data:', branding);
-      
-      // Cache the result
-      this.cache.set(cacheKey, {
-        data: branding,
-        timestamp: Date.now()
-      })
-
-      return branding
-    } catch (error) {
-      console.error('Agency branding service error:', error)
-      return this.getDefaultBranding()
+      setSubscription(subscriptionData)
+      setPlans(plansData)
+      setUsage(usageData)
+    } catch (err) {
+      console.error('Error loading subscription data:', err)
+      setError('Failed to load subscription information')
+    } finally {
+      setLoading(false)
     }
   }
 
-  // Get default branding when no agency branding is available
-  getDefaultBranding() {
-    return {
-      agency_name: 'GoHighLevel',
-      custom_app_name: 'Data Extractor',
-      primary_color: '#3B82F6',
-      secondary_color: '#1F2937',
-      accent_color: '#10B981',
-      hide_ghl_branding: false,
-      welcome_message: 'Welcome to your conversation data extractor.',
-      support_email: 'support@gohighlevel.com'
-    }
-  }
-
-  // Update agency branding (for agency users only)
-  async updateAgencyBranding(agencyId, brandingData) {
+  const handlePlanChange = async (planId) => {
     try {
-      console.log('Updating agency branding for agency ID:', agencyId);
-      console.log('Updating agency branding for agency ID:', agencyId);
-      const supabase = this.authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
+      setLoading(true)
+      await subscriptionService.changePlan(user.activeLocation || user.companyId, planId)
+      await loadSubscriptionData()
+    } catch (err) {
+      console.error('Error changing plan:', err)
+      setError('Failed to change subscription plan')
+    } finally {
+      setLoading(false)
+    }
+  }
 
-      // First check if a record exists
-      const { data: existingData, error: checkError } = await supabase
-        .from('agency_branding')
-        .select('id')
-        .eq('agency_ghl_id', agencyId)
-        .maybeSingle();
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
 
-      if (checkError) {
-        console.error('Error checking existing branding:', checkError);
-        throw new Error(`Failed to check existing branding: ${checkError.message}`);
-      }
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="flex">
+          <div className="text-red-400">
+            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <div className="ml-3">
+            <h3 className="text-sm font-medium text-red-800">Error</h3>
+            <p className="text-sm text-red-700 mt-1">{error}</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
-      let result;
-      
-      if (existingData) {
-        // Update existing record
-        console.log('Updating existing branding record with ID:', existingData.id);
-        const { data, error } = await supabase
-          .from('agency_branding')
-          .update({
-            ...brandingData,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingData.id)
-          .select()
-          .single();
-
-        if (error) {
-          throw new Error(`Failed to update branding: ${error.message}`);
-        }
+  return (
+    <div className="space-y-6">
+      <div className="bg-white shadow rounded-lg">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-medium text-gray-900">Subscription Management</h2>
+        </div>
         
-        result = data;
-      } else {
-        // Insert new record
-        console.log('Creating new branding record for agency ID:', agencyId);
-        const { data, error } = await supabase
-          .from('agency_branding')
-          .insert({
-            agency_ghl_id: agencyId,
-            ...brandingData,
-            updated_at: new Date().toISOString()
-          })
-          .select()
-          .single();
+        <div className="p-6">
+          {/* Current Subscription */}
+          <div className="mb-8">
+            <h3 className="text-md font-medium text-gray-900 mb-4">Current Plan</h3>
+            {subscription ? (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-medium text-blue-900">{subscription.plan_name}</h4>
+                    <p className="text-sm text-blue-700 mt-1">
+                      ${subscription.price_monthly}/month
+                    </p>
+                    <p className="text-xs text-blue-600 mt-1">
+                      Status: {subscription.payment_status}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-blue-700">
+                      {subscription.messages_included} messages/month
+                    </p>
+                    {subscription.end_date && (
+                      <p className="text-xs text-blue-600 mt-1">
+                        Expires: {new Date(subscription.end_date).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p className="text-yellow-800">No active subscription found</p>
+              </div>
+            )}
+          </div>
 
-        if (error) {
-          throw new Error(`Failed to create branding: ${error.message}`);
-        }
-        
-        result = data;
-      }
+          {/* Usage Statistics */}
+          {usage && (
+            <div className="mb-8">
+              <h3 className="text-md font-medium text-gray-900 mb-4">Usage This Month</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="text-2xl font-bold text-gray-900">{usage.messages_used}</div>
+                  <div className="text-sm text-gray-600">Messages Used</div>
+                  {subscription && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      of {subscription.messages_included} included
+                    </div>
+                  )}
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="text-2xl font-bold text-gray-900">{usage.tokens_used.toLocaleString()}</div>
+                  <div className="text-sm text-gray-600">Tokens Used</div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="text-2xl font-bold text-gray-900">${usage.cost_estimate.toFixed(2)}</div>
+                  <div className="text-sm text-gray-600">Estimated Cost</div>
+                </div>
+              </div>
+            </div>
+          )}
 
-      // Clear cache for this agency
-      this.clearCacheForAgency(agencyId)
+          {/* Available Plans */}
+          <div>
+            <h3 className="text-md font-medium text-gray-900 mb-4">Available Plans</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {plans.map((plan) => (
+                <div
+                  key={plan.id}
+                  className={`border rounded-lg p-4 ${
+                    subscription?.plan_id === plan.id
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="text-center">
+                    <h4 className="font-medium text-gray-900">{plan.name}</h4>
+                    <div className="mt-2">
+                      <span className="text-2xl font-bold text-gray-900">
+                        ${plan.price_monthly}
+                      </span>
+                      <span className="text-gray-600">/month</span>
+                    </div>
+                    <div className="mt-2 text-sm text-gray-600">
+                      {plan.messages_included} messages included
+                    </div>
+                    <div className="mt-2 text-xs text-gray-500">
+                      ${plan.overage_price} per additional message
+                    </div>
+                    
+                    <div className="mt-4 space-y-1 text-xs text-gray-600">
+                      <div>Max {plan.max_users} users</div>
+                      {plan.can_use_own_openai_key && (
+                        <div>✓ Custom OpenAI keys</div>
+                      )}
+                      {plan.can_white_label && (
+                        <div>✓ White label branding</div>
+                      )}
+                    </div>
 
-      return { success: true, data: result }
-    } catch (error) {
-      console.error('Error updating agency branding:', error)
-      return { success: false, error: error.message }
-    }
-  }
-
-  // Get agency permissions
-  async getAgencyPermissions(agencyId) {
-    try {
-      const supabase = this.authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
-
-      // First check if a record exists
-      const { data: existingData, error: checkError } = await supabase
-        .from('agency_branding')
-        .select('id')
-        .eq('agency_ghl_id', agencyId)
-        .maybeSingle();
-
-      if (checkError) {
-        console.error('Error checking existing branding:', checkError);
-        throw new Error(`Failed to check existing branding: ${checkError.message}`);
-      }
-
-      let result;
-      
-      if (existingData) {
-        // Update existing record
-        console.log('Updating existing branding record with ID:', existingData.id);
-        const { data, error } = await supabase
-          .from('agency_branding')
-          .update({
-            ...brandingData,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingData.id)
-          .select()
-          .single();
-
-        if (error) {
-          throw new Error(`Failed to update branding: ${error.message}`);
-        }
-        
-        result = data;
-      } else {
-        // Insert new record
-        console.log('Creating new branding record for agency ID:', agencyId);
-        const { data, error } = await supabase
-          .from('agency_branding')
-          .insert({
-            agency_ghl_id: agencyId,
-            ...brandingData,
-            updated_at: new Date().toISOString()
-          })
-          .select()
-          .single();
-      }
-
-      return data || this.getDefaultPermissions()
-    } catch (error) {
-      console.error('Agency permissions service error:', error)
-      return this.getDefaultPermissions()
-    }
-  }
-
-  // Get default permissions
-  getDefaultPermissions() {
-    return {
-      plan_type: 'basic',
-      max_locations: 10,
-      max_extractions_per_month: 1000,
-      can_use_own_openai_key: false,
-      can_customize_branding: false,
-      can_use_custom_domain: false,
-      can_access_usage_analytics: false,
-      can_manage_team_members: false
-    }
-  }
-
-  // Apply branding to CSS variables
-  applyBrandingToCSS(branding) {
-    if (typeof document === 'undefined') return
-
-    const root = document.documentElement
-    
-    root.style.setProperty('--primary-color', branding.primary_color || '#3B82F6')
-    root.style.setProperty('--secondary-color', branding.secondary_color || '#1F2937')
-    root.style.setProperty('--accent-color', branding.accent_color || '#10B981')
-    
-    // Update page title if custom app name is provided
-    if (branding.custom_app_name) {
-      document.title = branding.custom_app_name
-    }
-  }
-
-  // Clear cache for specific agency
-  clearCacheForAgency(agencyId) {
-    for (const [key] of this.cache) {
-      if (error) {
-        throw new Error(`Failed to create branding: ${error.message}`);
-      }
-      
-      result = data;
-    }
-  }
-
-  // Clear all cache
-  clearCache() {
-    this.cache.clear()
-  }
+                    {subscription?.plan_id !== plan.id && (
+                      <button
+                        onClick={() => handlePlanChange(plan.id)}
+                        className="mt-4 w-full bg-blue-600 text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
+                        disabled={loading}
+                      >
+                        {loading ? 'Processing...' : 'Select Plan'}
+                      </button>
+                    )}
+                    
+                    {subscription?.plan_id === plan.id && (
+                      <div className="mt-4 w-full bg-blue-100 text-blue-800 py-2 px-4 rounded-md text-sm font-medium">
+                        Current Plan
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
+
+export default SubscriptionManager
