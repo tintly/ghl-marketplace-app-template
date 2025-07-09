@@ -120,6 +120,8 @@ function CustomFieldsList({
                           <span className="font-medium">Options:</span>
                           <div className="flex flex-wrap gap-1 mt-1">
                             <span className="ml-2 text-xs text-blue-600">(live sync)</span>
+                            <span className="ml-2 text-xs text-blue-600">(live sync)</span>
+                            {field.picklistOptions.slice(0, 3).map((option, index) => (
                               <span
                                 key={index}
                                 className="field-badge bg-blue-100 text-blue-800"
@@ -132,7 +134,11 @@ function CustomFieldsList({
                                 +{field.picklistOptions.length - 3} more
                               </span>
                             )}
-                          <strong>Note:</strong> Option values are synced from your account. You can only edit the AI descriptions here.
+                          </div>
+                          </div>
+                          <p className="text-xs text-gray-600 mt-1">
+                            <strong>Note:</strong> Option values are synced from your account. You can only edit the AI descriptions here.
+                          </p>
                         </div>
                       )}
                     </div>
