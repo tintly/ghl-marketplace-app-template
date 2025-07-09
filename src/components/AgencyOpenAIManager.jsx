@@ -6,6 +6,7 @@ function AgencyOpenAIManager({ user, authService }) {
   const [permissions, setPermissions] = useState(null)
   const [usage, setUsage] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [upgradeRequired, setUpgradeRequired] = useState(false)
   const [error, setError] = useState(null)
   const [showAddForm, setShowAddForm] = useState(false)
 
@@ -23,6 +24,7 @@ function AgencyOpenAIManager({ user, authService }) {
       // Check permissions
       const canUse = await openaiService.canUseCustomOpenAIKey(user.companyId)
       setPermissions({ can_use_own_openai_key: canUse })
+      setUpgradeRequired(!canUse)
 
       if (canUse) {
         // Load keys
@@ -101,14 +103,69 @@ function AgencyOpenAIManager({ user, authService }) {
     )
   }
 
-  if (!permissions?.can_use_own_openai_key) {
+  if (upgradeRequired) {
     return (
-      <div className="warning-card">
-        <h3 className="text-yellow-800 font-medium">Upgrade Required</h3>
-        <p className="text-yellow-600 text-sm mt-1">
-          Your current plan does not include custom OpenAI key management. 
-          Please upgrade to access this feature.
-        </p>
+      <div className="bg-white rounded-lg shadow">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-900">OpenAI API Keys</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            Manage your agency's OpenAI API keys for AI-powered data extraction.
+          </p>
+        </div>
+        
+        <div className="p-6">
+          <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-lg p-6 mb-6">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-lg font-medium text-yellow-800">Upgrade Required</h3>
+                <div className="mt-2 text-sm text-yellow-700">
+                  <p>Your current plan does not include custom OpenAI key management.</p>
+                  <p className="mt-1">Upgrade to the Business or Agency plan to use your own OpenAI API keys.</p>
+                </div>
+                <div className="mt-4">
+                  <a href="/subscription" className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500">
+                    View Subscription Options
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Benefits of Using Your Own OpenAI Keys</h3>
+            <ul className="space-y-3">
+              <li className="flex items-start">
+                <svg className="h-5 w-5 text-green-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                <span>Direct control over API usage and billing</span>
+              </li>
+              <li className="flex items-start">
+                <svg className="h-5 w-5 text-green-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                <span>Access to the latest OpenAI models</span>
+              </li>
+              <li className="flex items-start">
+                <svg className="h-5 w-5 text-green-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                <span>Set custom usage limits for better cost management</span>
+              </li>
+              <li className="flex items-start">
+                <svg className="h-5 w-5 text-green-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                <span>Improved reliability with your dedicated API access</span>
+              </li>
+            </ul>
+          </div>
+        </div>
       </div>
     )
   }
