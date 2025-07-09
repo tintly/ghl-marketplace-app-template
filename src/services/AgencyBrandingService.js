@@ -135,6 +135,7 @@ export class AgencyBrandingService {
       if (existingData) {
         // Update existing record
         console.log('Updating existing branding record with ID:', existingData.id);
+        const { data, error } = await supabase
           .from('agency_branding')
           .update({
             ...brandingData,
