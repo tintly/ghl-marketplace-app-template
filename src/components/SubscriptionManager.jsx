@@ -350,14 +350,12 @@ function SubscriptionManager({ user, authService }) {
               Manage your subscription and usage
             </p>
           </div>
-          {subscription && subscription.plan?.code !== 'agency' && (
-            <button
-              onClick={() => setShowUpgradeModal(true)}
-              className="btn-primary"
-            >
-              Upgrade Plan
-            </button>
-          )}
+          <button
+            onClick={() => setShowUpgradeModal(true)}
+            className="btn-primary"
+          >
+            Change Plan
+          </button>
         </div>
       </div>
 
