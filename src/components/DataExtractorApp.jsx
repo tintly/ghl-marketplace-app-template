@@ -290,23 +290,6 @@ function DashboardHome({ user, authService, needsOAuth, getWelcomeMessage, getAg
       </div>
       
       <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
-        <p className="text-sm text-gray-600">
-          Send a message to your {getAgencyName()} contact to see the AI extraction in action. 
-          The system will automatically process new messages and extract data based on your configuration.
-        </p>
-        
-        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <h4 className="text-md font-medium text-blue-800 mb-2">Test with this message:</h4>
-          <div className="bg-white p-3 rounded border border-blue-100 text-sm">
-            "Hi, my name is John Smith. I'm interested in getting my 2018 Toyota Tundra windows tinted. 
-            I'd like to do the front doors and windshield. My email is john.smith@example.com and my phone is 555-123-4567. 
-            I'm available next Tuesday afternoon. Thanks!"
-          </div>
-          <p className="text-xs text-blue-700 mt-2">
-            Send this message to a contact to test the extraction system.
-          </p>
-        </div>
       </div>
     </div>
   )
