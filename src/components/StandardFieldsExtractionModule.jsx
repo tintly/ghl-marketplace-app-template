@@ -183,7 +183,7 @@ function StandardFieldsExtractionModule({ user, authService }) {
       <div className="px-6 py-4 border-b border-gray-200">
         <h2 className="text-xl font-semibold text-gray-900">Standard Contact Fields</h2>
         <p className="text-sm text-gray-600 mt-1">
-          Configure AI extraction for built-in GoHighLevel contact fields like name, email, phone, and address.
+          Configure AI extraction for built-in contact fields like name, email, phone, and address.
         </p>
       </div>
 

@@ -530,7 +530,7 @@ function DataExtractionInterface({ config, user, authService }) {
       <div className="px-6 py-4 border-b border-gray-200">
         <h2 className="text-xl font-semibold text-gray-900">Data Extraction Configuration</h2>
         <p className="text-sm text-gray-600 mt-1">
-          Configure which custom fields should be automatically populated by AI during conversations.
+          Configure which fields should be automatically populated by AI during conversations.
         </p>
       </div>
 
@@ -539,7 +539,7 @@ function DataExtractionInterface({ config, user, authService }) {
         <div className="mx-6 mt-4 success-card">
           <div className="flex items-center">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600 mr-2"></div>
-            <span className="text-green-800">Creating new custom field in GoHighLevel...</span>
+            <span className="text-green-800">Creating new custom field...</span>
           </div>
           <p className="text-green-700 text-xs mt-1">
             This may take a few moments. The field will be created and automatically configured for extraction.

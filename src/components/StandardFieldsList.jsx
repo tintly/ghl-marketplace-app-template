@@ -26,7 +26,7 @@ function StandardFieldsList({ extractionFields, onCreateExtraction }) {
       <div className="flex items-center justify-between mb-4">
         <h3 className="section-title">Standard Contact Fields</h3>
         <span className="text-sm text-gray-500">
-          Built-in GoHighLevel contact fields
+          Built-in contact fields
         </span>
       </div>
 

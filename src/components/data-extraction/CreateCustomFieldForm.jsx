@@ -161,7 +161,7 @@ function CreateCustomFieldForm({ onSubmit, onCancel, customFields = [] }) {
         <div className="modal-header">
           <h3 className="text-lg font-medium text-gray-900">Create New Custom Field</h3>
           <p className="text-sm text-gray-600 mt-1">
-            Create a new custom field in GoHighLevel and automatically configure it for data extraction.
+            Create a new custom field and automatically configure it for data extraction.
           </p>
         </div>
 

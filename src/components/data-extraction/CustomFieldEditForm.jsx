@@ -124,9 +124,9 @@ function CustomFieldEditForm({ customField, onSubmit, onCancel, onDelete }) {
         <div className="modal-header">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-medium text-gray-900">Edit Custom Field</h3>
+              <h3 className="text-lg font-medium text-gray-900">Edit Field</h3>
               <p className="text-sm text-gray-600 mt-1">
-                Update the custom field in GoHighLevel
+                Update the custom field
               </p>
             </div>
             <button

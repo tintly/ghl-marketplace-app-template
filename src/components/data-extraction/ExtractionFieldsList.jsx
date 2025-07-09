@@ -190,7 +190,7 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
 
                       {nameOutOfSync && (
                         <p className="text-yellow-700 text-xs">
-                          <span className="font-medium">Note:</span> Field was renamed in GHL from "{field.field_name}" to "{displayData.name}". 
+                          <span className="font-medium">Note:</span> Field was renamed from "{field.field_name}" to "{displayData.name}". 
                           The name will be updated automatically on next refresh.
                         </p>
                       )}
@@ -232,7 +232,7 @@ function ExtractionFieldsList({ extractionFields, customFields, onEdit, onDelete
                       {!displayData.isActive && (
                         <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
                           <p className="text-yellow-800">
-                            <strong>Note:</strong> This field was deleted from GoHighLevel. 
+                            <strong>Note:</strong> This field was deleted. 
                             {canRecreate ? ' You can recreate it using the stored configuration.' : ' Recreation data is not available.'}
                           </p>
                           {!canRecreate && (
