@@ -221,60 +221,60 @@ const SubscriptionManager = ({ user, authService }) => {
                 }
                 
                 return (
-                <div
-                  key={plan.id}
-                  className={`border rounded-lg p-4 ${
-                    subscription?.plan_id === plan.id
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="text-center">
-                    <h4 className="font-medium text-gray-900">{plan.name}</h4>
-                    <div className="mt-2">
-                      <span className="text-2xl font-bold text-gray-900">
-                        ${plan.price_monthly}
-                      </span> 
-                      <span className="text-gray-600">
-                        {plan.code !== 'free' ? '/month' : ''}
-                      </span>
-                    </div>
-                    <div className="mt-2 text-sm text-gray-600">
-                      {plan.code === 'agency' ? 'Unlimited' : plan.messages_included} messages included
-                    </div>
-                    <div className="mt-2 text-xs text-gray-500">
-                      {plan.code !== 'agency' ? `$${plan.overage_price} per additional message` : 'No overage charges'}
-                    </div>
-                    
-                    <div className="mt-4 space-y-1 text-xs text-gray-600">
-                      <div>Max {plan.max_users} users</div>
-                      {plan.can_use_own_openai_key && (
-                        <div>✓ Custom OpenAI keys</div>
-                      )}
-                      {plan.can_white_label && (
-                        <div>✓ White label branding</div>
-                      )}
-                    </div>
-
-                    {subscription?.plan_id !== plan.id && (
-                      <button
-                        onClick={() => handlePlanChange(plan.id)}
-                        className="mt-4 w-full bg-blue-600 text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
-                        disabled={loading}
-                      >
-                        {loading ? 'Processing...' : 'Select Plan'}
-                      </button>
-                    )}
-                    
-                    {subscription?.plan_id === plan.id && (
-                      <div className="mt-4 w-full bg-blue-100 text-blue-800 py-2 px-4 rounded-md text-sm font-medium">
-                        Current Plan
+                  <div
+                    key={plan.id}
+                    className={`border rounded-lg p-4 ${
+                      subscription?.plan_id === plan.id
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="text-center">
+                      <h4 className="font-medium text-gray-900">{plan.name}</h4>
+                      <div className="mt-2">
+                        <span className="text-2xl font-bold text-gray-900">
+                          ${plan.price_monthly}
+                        </span> 
+                        <span className="text-gray-600">
+                          {plan.code !== 'free' ? '/month' : ''}
+                        </span>
                       </div>
-                    )}
+                      <div className="mt-2 text-sm text-gray-600">
+                        {plan.code === 'agency' ? 'Unlimited' : plan.messages_included} messages included
+                      </div>
+                      <div className="mt-2 text-xs text-gray-500">
+                        {plan.code !== 'agency' ? `$${plan.overage_price} per additional message` : 'No overage charges'}
+                      </div>
+                      
+                      <div className="mt-4 space-y-1 text-xs text-gray-600">
+                        <div>Max {plan.max_users} users</div>
+                        {plan.can_use_own_openai_key && (
+                          <div>✓ Custom OpenAI keys</div>
+                        )}
+                        {plan.can_white_label && (
+                          <div>✓ White label branding</div>
+                        )}
+                      </div>
+
+                      {subscription?.plan_id !== plan.id && (
+                        <button
+                          onClick={() => handlePlanChange(plan.id)}
+                          className="mt-4 w-full bg-blue-600 text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
+                          disabled={loading}
+                        >
+                          {loading ? 'Processing...' : 'Select Plan'}
+                        </button>
+                      )}
+                      
+                      {subscription?.plan_id === plan.id && (
+                        <div className="mt-4 w-full bg-blue-100 text-blue-800 py-2 px-4 rounded-md text-sm font-medium">
+                          Current Plan
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
-              ))}
             </div>
           </div>
         </div>
