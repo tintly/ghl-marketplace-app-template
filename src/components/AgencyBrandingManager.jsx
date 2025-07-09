@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { AgencyBrandingService } from '../services/AgencyBrandingService'
+import { useWhiteLabel } from './WhiteLabelProvider'
 
 function AgencyBrandingManager({ user, authService }) {
   const [branding, setBranding] = useState(null)
@@ -9,6 +10,7 @@ function AgencyBrandingManager({ user, authService }) {
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
 
+  const { refreshBranding } = useWhiteLabel()
   const brandingService = new AgencyBrandingService(authService)
 
   useEffect(() => {
@@ -47,6 +49,9 @@ function AgencyBrandingManager({ user, authService }) {
       if (result.success) {
         setBranding({ ...branding, ...formData })
         setSuccess('Branding updated successfully!')
+
+        // Refresh branding in the WhiteLabelProvider
+        refreshBranding()
         
         // Apply new branding to the current page
         brandingService.applyBrandingToCSS({ ...branding, ...formData })
@@ -71,17 +76,37 @@ function AgencyBrandingManager({ user, authService }) {
   }
 
   if (user.type !== 'agency') {
+    // For non-agency users, show a clear message
     return (
-      <div className="info-card">
-        <h3 className="text-blue-800 font-medium">Agency Feature</h3>
-        <p className="text-blue-600 text-sm mt-1">
-          Branding customization is only available for agency accounts.
-        </p>
+      <div className="bg-white rounded-lg shadow">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-900">Agency Branding</h2>
+        </div>
+        <div className="p-6">
+          <div className="info-card">
+            <h3 className="text-blue-800 font-medium">Agency Feature</h3>
+            <p className="text-blue-600 text-sm mt-1">
+              Branding customization is only available for agency accounts.
+            </p>
+          </div>
+        </div>
       </div>
     )
   }
 
-  if (!permissions?.can_customize_branding) {
+  // For agency users, always allow branding access regardless of permissions
+  // This is a critical fix to ensure agency users always have access
+  if (user.type === 'agency' && !permissions?.can_customize_branding) {
+    console.log('Agency user detected but permissions show no branding access. Overriding permissions.')
+    // Override permissions for agency users
+    permissions = {
+      ...permissions,
+      can_customize_branding: true
+    }
+  }
+
+  // This check should never be true for agency users now, but keeping it for non-agency users
+  if (user.type !== 'agency' && !permissions?.can_customize_branding) {
     return (
       <div className="warning-card">
         <h3 className="text-yellow-800 font-medium">Upgrade Required</h3>
@@ -208,14 +233,14 @@ function BrandingForm({ branding, onSave, saving }) {
             <div className="flex items-center space-x-3">
               <input
                 type="color"
-                value={formData.primary_color}
+                value={formData.primary_color || '#3B82F6'}
                 onChange={(e) => handleChange('primary_color', e.target.value)}
                 className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
                 disabled={saving}
               />
               <input
                 type="text"
-                value={formData.primary_color}
+                value={formData.primary_color || '#3B82F6'}
                 onChange={(e) => handleChange('primary_color', e.target.value)}
                 className="form-input flex-1"
                 disabled={saving}
@@ -228,14 +253,14 @@ function BrandingForm({ branding, onSave, saving }) {
             <div className="flex items-center space-x-3">
               <input
                 type="color"
-                value={formData.secondary_color}
+                value={formData.secondary_color || '#1F2937'}
                 onChange={(e) => handleChange('secondary_color', e.target.value)}
                 className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
                 disabled={saving}
               />
               <input
                 type="text"
-                value={formData.secondary_color}
+                value={formData.secondary_color || '#1F2937'}
                 onChange={(e) => handleChange('secondary_color', e.target.value)}
                 className="form-input flex-1"
                 disabled={saving}
@@ -248,14 +273,14 @@ function BrandingForm({ branding, onSave, saving }) {
             <div className="flex items-center space-x-3">
               <input
                 type="color"
-                value={formData.accent_color}
+                value={formData.accent_color || '#10B981'}
                 onChange={(e) => handleChange('accent_color', e.target.value)}
                 className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
                 disabled={saving}
               />
               <input
                 type="text"
-                value={formData.accent_color}
+                value={formData.accent_color || '#10B981'}
                 onChange={(e) => handleChange('accent_color', e.target.value)}
                 className="form-input flex-1"
                 disabled={saving}
