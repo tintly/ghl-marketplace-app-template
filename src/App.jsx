@@ -30,26 +30,6 @@ function AppContent() {
       
       // Get user data from GHL SSO or standalone mode
       const userData = await authService.getUserData()
-     
-     // Check for agency branding in configuration
-     if (userData.configId) {
-       try {
-         const supabase = authService.getSupabaseClient()
-         const { data: config } = await supabase
-           .from('ghl_configurations')
-           .select('agency_brand_name, agency_logo_url')
-           .eq('id', userData.configId)
-           .single()
-           
-         if (config) {
-           userData.agencyBrandName = config.agency_brand_name
-           userData.agencyLogoUrl = config.agency_logo_url
-         }
-       } catch (configError) {
-         console.error('Error fetching agency branding:', configError)
-       }
-     }
-     
       setUser(userData)
       
       console.log('User authenticated successfully:', userData)

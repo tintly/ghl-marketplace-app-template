@@ -69,15 +69,6 @@ export class AuthService {
       }
       
       this.currentUser = result.user
-     
-     // Extract payment plan from JWT claims if available
-     if (result.jwtClaims && result.jwtClaims.ghl_payment_plan) {
-       this.currentUser.paymentPlan = result.jwtClaims.ghl_payment_plan
-     } else {
-       // Default to standard plan if not specified
-       this.currentUser.paymentPlan = 'standard'
-     }
-     
       this.isAuthenticated = true
       
       return result.user

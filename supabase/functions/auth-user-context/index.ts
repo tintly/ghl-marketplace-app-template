@@ -90,15 +90,7 @@ Deno.serve(async (req: Request) => {
           tokenStatus: configResult?.tokenStatus || 'unknown',
           tokenValidation: configResult?.tokenValidation || null
         },
-        supabaseJWT: jwtToken,
-        jwtClaims: {
-          ghl_user_id: userContext.userId,
-          ghl_location_id: userContext.locationId,
-          ghl_company_id: userContext.companyId,
-          ghl_user_type: userContext.type,
-          ghl_user_role: userContext.role,
-          ghl_payment_plan: 'premium' // Hardcoded for testing
-        }
+        supabaseJWT: jwtToken
       }),
       {
         status: 200,
@@ -199,9 +191,7 @@ async function generateSupabaseJWT(userContext: any): Promise<string> {
       ghl_company_id: userContext.companyId,
       ghl_user_name: userContext.userName,
       ghl_user_role: userContext.role,
-      ghl_user_type: userContext.type,
-      // Add payment plan claim - for now, hardcode 'premium' for testing
-      ghl_payment_plan: 'premium'
+      ghl_user_type: userContext.type
     }
 
     // Encode header and payload

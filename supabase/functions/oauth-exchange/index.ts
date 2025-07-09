@@ -198,8 +198,6 @@ async function saveGHLConfiguration(supabase: any, tokenData: TokenResponse, sta
     token_expires_at: expiresAt,
     business_name: `GHL ${tokenData.userType} - ${resourceId}`,
     business_description: 'OAuth installation with real GHL access tokens',
-    ghl_company_id: tokenData.companyId,
-    ghl_user_type: tokenData.userType,
     is_active: true,
     created_by: userId
   }
@@ -239,8 +237,6 @@ async function saveGHLConfiguration(supabase: any, tokenData: TokenResponse, sta
         token_expires_at: expiresAt,
         client_id: Deno.env.get('GHL_MARKETPLACE_CLIENT_ID'),
         business_description: 'OAuth installation with real GHL access tokens - updated',
-        ghl_company_id: tokenData.companyId,
-        ghl_user_type: tokenData.userType,
         updated_at: new Date().toISOString(),
         created_by: userId
       })
