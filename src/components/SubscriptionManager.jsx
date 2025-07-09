@@ -203,6 +203,7 @@ export class AgencyBrandingService {
           })
           .select()
           .single();
+      }
 
       return data || this.getDefaultPermissions()
     } catch (error) {
@@ -244,18 +245,16 @@ export class AgencyBrandingService {
   // Clear cache for specific agency
   clearCacheForAgency(agencyId) {
     for (const [key] of this.cache) {
-        if (error) {
-          throw new Error(`Failed to create branding: ${error.message}`);
-        }
-        
-        result = data;
+      if (error) {
+        throw new Error(`Failed to create branding: ${error.message}`);
       }
+      
+      result = data;
     }
   }
 
   // Clear all cache
   clearCache() {
     this.cache.clear()
+  }
 }
-  // Show all available plans
-  const upgradePlans = availablePlans;
