@@ -25,41 +25,81 @@ function SubscriptionManager({ user, authService }) {
         // Get Supabase client
         const supabase = authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
 
-        // Load current subscription using RPC function
+        // Try the fixed function first
         const { data: subscriptionData, error: subscriptionError } = await supabase
-          .rpc('get_user_subscription_details')
+          .rpc('get_user_subscription_details_fixed')
 
         if (subscriptionError) {
-          console.error('Error loading subscription:', subscriptionError)
-          throw new Error('Failed to load subscription details')
+          console.error('Error loading subscription with fixed function:', subscriptionError)
+          
+          // Fall back to original function
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .rpc('get_user_subscription_details')
+            
+          if (fallbackError) {
+            console.error('Error loading subscription with fallback function:', fallbackError)
+            throw new Error('Failed to load subscription details')
+          }
+          
+          setSubscription(fallbackData)
+        } else {
+          setSubscription(subscriptionData)
         }
 
-        setSubscription(subscriptionData)
-
-        // Load usage statistics
+        // Try the fixed usage function first
         const { data: usageData, error: usageError } = await supabase
-          .rpc('get_user_usage_with_limits')
+          .rpc('get_user_usage_with_limits_fixed')
 
         if (usageError) {
-          console.error('Error loading usage:', usageError)
-          throw new Error('Failed to load usage statistics')
+          console.error('Error loading usage with fixed function:', usageError)
+          
+          // Fall back to original function
+          const { data: fallbackUsageData, error: fallbackUsageError } = await supabase
+            .rpc('get_user_usage_with_limits')
+            
+          if (fallbackUsageError) {
+            console.error('Error loading usage with fallback function:', fallbackUsageError)
+            throw new Error('Failed to load usage statistics')
+          }
+          
+          setUsageStats(fallbackUsageData)
+        } else {
+          setUsageStats(usageData)
         }
 
-        setUsageStats(usageData)
-
-        // Load available plans
+        // Try the fixed plans function first
         const { data: plansData, error: plansError } = await supabase
-          .from('subscription_plans')
-          .select('*')
-          .eq('is_active', true)
-          .order('price_monthly', { ascending: true })
+          .rpc('get_available_plans_fixed')
 
         if (plansError) {
-          console.error('Error loading plans:', plansError)
-          throw new Error('Failed to load available plans')
+          console.error('Error loading plans with fixed function:', plansError)
+          
+          // Fall back to original function
+          const { data: fallbackPlansData, error: fallbackPlansError } = await supabase
+            .rpc('get_available_plans')
+            
+          if (fallbackPlansError) {
+            console.error('Error loading plans with fallback function:', fallbackPlansError)
+            
+            // Last resort: direct query
+            const { data: directPlansData, error: directPlansError } = await supabase
+              .from('subscription_plans')
+              .select('*')
+              .eq('is_active', true)
+              .order('price_monthly', { ascending: true })
+              
+            if (directPlansError) {
+              console.error('Error loading plans with direct query:', directPlansError)
+              throw new Error('Failed to load available plans')
+            }
+            
+            setAvailablePlans(directPlansData || [])
+          } else {
+            setAvailablePlans(fallbackPlansData || [])
+          }
+        } else {
+          setAvailablePlans(plansData || [])
         }
-
-        setAvailablePlans(plansData || [])
       } catch (innerError) {
         console.error('Inner error loading subscription data:', innerError)
         
@@ -126,35 +166,47 @@ function SubscriptionManager({ user, authService }) {
         // Get Supabase client
         const supabase = authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
 
-        // First get the plan ID
-        const { data: planData, error: planError } = await supabase
-          .from('subscription_plans')
-          .select('id')
-          .eq('code', planCode)
-          .eq('is_active', true)
-          .single()
-
-        if (planError || !planData) {
-          console.error('Error fetching plan:', planError)
-          throw new Error('Invalid plan code')
-        }
-
-        // Update or insert subscription
+        // Try the safe function first
         const { data, error } = await supabase
-          .from('location_subscriptions')
-          .upsert({
-            location_id: user.locationId,
-            plan_id: planData.id,
-            start_date: new Date().toISOString(),
-            is_active: true,
-            payment_status: 'active',
-            updated_at: new Date().toISOString()
+          .rpc('change_subscription_plan_safe', {
+            p_location_id: user.locationId,
+            p_plan_code: planCode
           })
-          .select()
 
         if (error) {
-          console.error('Error upgrading subscription:', error)
-          throw new Error(`Failed to upgrade: ${error.message}`)
+          console.error('Error upgrading with safe function:', error)
+          
+          // Fall back to direct database operations
+          // First get the plan ID
+          const { data: planData, error: planError } = await supabase
+            .from('subscription_plans')
+            .select('id')
+            .eq('code', planCode)
+            .eq('is_active', true)
+            .single()
+
+          if (planError || !planData) {
+            console.error('Error fetching plan:', planError)
+            throw new Error('Invalid plan code')
+          }
+
+          // Update or insert subscription
+          const { data: upsertData, error: upsertError } = await supabase
+            .from('location_subscriptions')
+            .upsert({
+              location_id: user.locationId,
+              plan_id: planData.id,
+              start_date: new Date().toISOString(),
+              is_active: true,
+              payment_status: 'active',
+              updated_at: new Date().toISOString()
+            })
+            .select()
+
+          if (upsertError) {
+            console.error('Error upgrading subscription:', upsertError)
+            throw new Error(`Failed to upgrade: ${upsertError.message}`)
+          }
         }
       } catch (innerError) {
         console.error('Inner error upgrading subscription:', innerError)
@@ -291,13 +343,13 @@ function SubscriptionManager({ user, authService }) {
                       <div className="mt-2 w-full bg-gray-200 rounded-full h-2.5">
                         <div 
                           className={`h-2.5 rounded-full ${
-                            (usageStats?.usage_percentage || 0) > 90 
+                            (usageStats?.usage_percentage || 0) > 90
                               ? 'bg-red-600' 
                               : (usageStats?.usage_percentage || 0) > 70 
                                 ? 'bg-yellow-500' 
                                 : 'bg-green-600'
                           }`}
-                          style={{ width: `${Math.min(100, usageStats?.usage_percentage || 0)}%` }}
+                          style={{ width: `${Math.min(100, Math.max(0, usageStats?.usage_percentage || 0))}%` }}
                         ></div>
                       </div>
                     )}
@@ -306,14 +358,14 @@ function SubscriptionManager({ user, authService }) {
                   <div>
                     <p className="text-sm text-gray-500">Tokens Used</p>
                     <p className="text-2xl font-medium text-gray-900 mt-1">
-                      {(usageStats?.tokens_used || 0).toLocaleString()}
+                      {(parseInt(usageStats?.tokens_used) || 0).toLocaleString()}
                     </p>
                   </div>
                   
                   <div>
                     <p className="text-sm text-gray-500">Estimated Cost</p>
                     <p className="text-2xl font-medium text-gray-900 mt-1">
-                      ${(usageStats?.cost_estimate || 0).toFixed(2)}
+                      ${(parseFloat(usageStats?.cost_estimate) || 0).toFixed(2)}
                     </p>
                   </div>
                 </div>
@@ -321,7 +373,7 @@ function SubscriptionManager({ user, authService }) {
                 {usageStats?.messages_included !== 999999 && (usageStats?.usage_percentage || 0) > 90 && (
                   <div className="mt-4 warning-card">
                     <p className="text-sm text-yellow-800">
-                      <strong>Warning:</strong> You're approaching your monthly message limit of {usageStats?.messages_included} messages. Consider upgrading your plan to avoid overage charges.
+                      <strong>Warning:</strong> You're approaching your monthly message limit of {usageStats?.messages_included || 100} messages. Consider upgrading your plan to avoid overage charges.
                     </p>
                   </div>
                 )}
