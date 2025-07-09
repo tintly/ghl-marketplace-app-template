@@ -7,7 +7,7 @@ function AgencyBrandingManager({ user, authService }) {
   const [permissions, setPermissions] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState(null) 
   const [success, setSuccess] = useState(null)
 
   const { refreshBranding } = useWhiteLabel()
@@ -98,12 +98,11 @@ function AgencyBrandingManager({ user, authService }) {
   // This is a critical fix to ensure agency users always have access
   if (user.type === 'agency' && !permissions?.can_customize_branding) {
     console.log('Agency user detected but permissions show no branding access. Overriding permissions.')
-    // Override permissions for agency users
-    const updatedPermissions = {
-      ...permissions,
+    // Use setPermissions to update state instead of direct assignment
+    setPermissions(prevPermissions => ({
+      ...prevPermissions,
       can_customize_branding: true
-    }
-    setPermissions(updatedPermissions)
+    }))
   }
 
   // This check should never be true for agency users now, but keeping it for non-agency users
