@@ -1,195 +1,224 @@
-export class AgencyBrandingService {
-  constructor(authService = null) {
-    this.authService = authService
-    this.cache = new Map()
-    this.cacheTimeout = 10 * 60 * 1000 // 10 minutes
-  }
+import React, { useState, useEffect } from 'react';
+import { AgencyBrandingService } from '../services/AgencyBrandingService.js';
 
-  // Get agency branding for current user's location
-  async getAgencyBranding(locationId) {
-    const cacheKey = `branding-${locationId}`
+const AgencyBrandingManager = ({ authService, agencyId, onBrandingUpdate }) => {
+  const [branding, setBranding] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [brandingService] = useState(() => new AgencyBrandingService(authService));
+
+  useEffect(() => {
+    loadBranding();
+  }, [agencyId]);
+
+  const loadBranding = async () => {
+    if (!agencyId) return;
     
-    // Check cache first
-    if (this.cache.has(cacheKey)) {
-      const cached = this.cache.get(cacheKey)
-      if (Date.now() - cached.timestamp < this.cacheTimeout) {
-        return cached.data
-      }
-      this.cache.delete(cacheKey)
-    }
-
+    setLoading(true);
+    setError(null);
+    
     try {
-      const supabase = this.authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
+      const brandingData = await brandingService.getAgencyBranding(agencyId);
+      setBranding(brandingData);
+    } catch (err) {
+      setError('Failed to load branding settings');
+      console.error('Error loading branding:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      const { data, error } = await supabase
-        .rpc('get_agency_branding_for_location', {
-          location_id: locationId
-        })
-
-      if (error) {
-        console.error('Error fetching agency branding:', error)
-        return this.getDefaultBranding()
-      }
-
-      const branding = data || this.getDefaultBranding()
+  const handleSave = async (formData) => {
+    setSaving(true);
+    setError(null);
+    
+    try {
+      const result = await brandingService.updateAgencyBranding(agencyId, formData);
       
-      // Cache the result
-      this.cache.set(cacheKey, {
-        data: branding,
-        timestamp: Date.now()
-      })
-
-      return branding
-    } catch (error) {
-      console.error('Agency branding service error:', error)
-      return this.getDefaultBranding()
-    }
-  }
-
-  // Get default branding when no agency branding is available
-  getDefaultBranding() {
-    return {
-      agency_name: 'GoHighLevel',
-      custom_app_name: 'Data Extractor',
-      primary_color: '#3B82F6',
-      secondary_color: '#1F2937',
-      accent_color: '#10B981',
-      hide_ghl_branding: false,
-      welcome_message: 'Welcome to your conversation data extractor.',
-      support_email: 'support@gohighlevel.com'
-    }
-  }
-
-  // Update agency branding (for agency users only)
-  async updateAgencyBranding(agencyId, brandingData) {
-    try {
-      console.log('Updating agency branding for agency ID:', agencyId);
-      const supabase = this.authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
-
-      // First check if a record exists
-      const { data: existingData, error: checkError } = await supabase
-        .from('agency_branding')
-        .select('id')
-        .eq('agency_ghl_id', agencyId)
-        .maybeSingle();
-
-      if (checkError) {
-        console.error('Error checking existing branding:', checkError);
-        throw new Error(`Failed to check existing branding: ${checkError.message}`);
+      if (result?.success === false) {
+        throw new Error(result.error || 'Failed to save branding');
       }
-
-      let result;
       
-      if (existingData) {
-        // Update existing record
-        console.log('Updating existing branding record with ID:', existingData.id);
-        const { data, error } = await supabase
-          .from('agency_branding')
-          .update({
-            ...brandingData,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingData.id)
-          .select()
-          .single();
+      setBranding({ ...branding, ...formData });
+      onBrandingUpdate?.(formData);
+    } catch (err) {
+      setError(err.message || 'Failed to save branding settings');
+      console.error('Error saving branding:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
 
-        if (error) {
-          throw new Error(`Failed to update branding: ${error.message}`);
-        }
+  const handleInputChange = (field, value) => {
+    setBranding(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-2">Loading branding settings...</span>
+      </div>
+    );
+  }
+
+  if (!branding) {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+        <p className="text-red-800">Failed to load branding settings</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white shadow rounded-lg p-6">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Agency Branding</h3>
         
-        result = data;
-      } else {
-        // Insert new record
-        console.log('Creating new branding record for agency ID:', agencyId);
-        const { data, error } = await supabase
-          .from('agency_branding')
-          .insert({
-            agency_ghl_id: agencyId,
-            ...brandingData,
-            updated_at: new Date().toISOString()
-          })
-          .select()
-          .single();
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-red-800">{error}</p>
+          </div>
+        )}
 
-        if (error) {
-          throw new Error(`Failed to create branding: ${error.message}`);
-        }
-        
-        result = data;
-      }
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          handleSave(branding);
+        }} className="space-y-4">
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Agency Name
+            </label>
+            <input
+              type="text"
+              value={branding.agency_name || ''}
+              onChange={(e) => handleInputChange('agency_name', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter agency name"
+            />
+          </div>
 
-      // Clear cache for this agency
-      this.clearCacheForAgency(agencyId)
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Custom App Name
+            </label>
+            <input
+              type="text"
+              value={branding.custom_app_name || ''}
+              onChange={(e) => handleInputChange('custom_app_name', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Data Extractor"
+            />
+          </div>
 
-    } catch (error) {
-      console.error('Error updating agency branding:', error)
-      return { success: false, error: error.message }
-    }
-  }
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Primary Color
+              </label>
+              <input
+                type="color"
+                value={branding.primary_color || '#3B82F6'}
+                onChange={(e) => handleInputChange('primary_color', e.target.value)}
+                className="w-full h-10 border border-gray-300 rounded-md"
+              />
+            </div>
 
-  // Get agency permissions
-  async getAgencyPermissions(agencyId) {
-    try {
-      const supabase = this.authService?.getSupabaseClient() || (await import('../services/supabase')).supabase
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Secondary Color
+              </label>
+              <input
+                type="color"
+                value={branding.secondary_color || '#1F2937'}
+                onChange={(e) => handleInputChange('secondary_color', e.target.value)}
+                className="w-full h-10 border border-gray-300 rounded-md"
+              />
+            </div>
 
-      const { data, error } = await supabase
-        .rpc('get_agency_permissions', {
-          agency_id: agencyId
-        })
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Accent Color
+              </label>
+              <input
+                type="color"
+                value={branding.accent_color || '#10B981'}
+                onChange={(e) => handleInputChange('accent_color', e.target.value)}
+                className="w-full h-10 border border-gray-300 rounded-md"
+              />
+            </div>
+          </div>
 
-      if (error) {
-        console.error('Error fetching agency permissions:', error)
-        return this.getDefaultPermissions()
-      }
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Agency Logo URL
+            </label>
+            <input
+              type="url"
+              value={branding.agency_logo_url || ''}
+              onChange={(e) => handleInputChange('agency_logo_url', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="https://example.com/logo.png"
+            />
+          </div>
 
-      return data || this.getDefaultPermissions()
-    } catch (error) {
-      console.error('Agency permissions service error:', error)
-      return this.getDefaultPermissions()
-    }
-  }
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Welcome Message
+            </label>
+            <textarea
+              value={branding.welcome_message || ''}
+              onChange={(e) => handleInputChange('welcome_message', e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Welcome to your conversation data extractor."
+            />
+          </div>
 
-  // Get default permissions
-  getDefaultPermissions() {
-    return {
-      plan_type: 'basic',
-      max_locations: 10,
-      max_extractions_per_month: 1000,
-      can_use_own_openai_key: false,
-      can_customize_branding: false,
-      can_use_custom_domain: false,
-      can_access_usage_analytics: false,
-      can_manage_team_members: false
-    }
-  }
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Support Email
+            </label>
+            <input
+              type="email"
+              value={branding.support_email || ''}
+              onChange={(e) => handleInputChange('support_email', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="support@youragency.com"
+            />
+          </div>
 
-  // Apply branding to CSS variables
-  applyBrandingToCSS(branding) {
-    if (typeof document === 'undefined') return
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="hide_ghl_branding"
+              checked={branding.hide_ghl_branding || false}
+              onChange={(e) => handleInputChange('hide_ghl_branding', e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label htmlFor="hide_ghl_branding" className="ml-2 block text-sm text-gray-900">
+              Hide GoHighLevel Branding
+            </label>
+          </div>
 
-    const root = document.documentElement
-    
-    root.style.setProperty('--primary-color', branding.primary_color || '#3B82F6')
-    root.style.setProperty('--secondary-color', branding.secondary_color || '#1F2937')
-    root.style.setProperty('--accent-color', branding.accent_color || '#10B981')
-    
-    // Update page title if custom app name is provided
-    if (branding.custom_app_name) {
-      document.title = branding.custom_app_name
-    }
-  }
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : 'Save Branding'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
 
-  // Clear cache for specific agency
-  clearCacheForAgency(agencyId) {
-    for (const [key] of this.cache) {
-      if (key.includes(agencyId)) {
-        this.cache.delete(key)
-      }
-    }
-  }
-
-  // Clear all cache
-  clearCache() {
-    this.cache.clear()
-  }
-}
+export default AgencyBrandingManager;
