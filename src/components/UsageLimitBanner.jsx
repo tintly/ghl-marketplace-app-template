@@ -18,7 +18,7 @@ function UsageLimitBanner({ user, authService }) {
     try {
       setLoading(true)
       const subscriptionService = new SubscriptionService(authService)
-      const limitData = await subscriptionService.checkMessageLimit(user.locationId)
+      const limitData = await subscriptionService.getUsageStats(user.locationId)
       setUsageData(limitData)
     } catch (error) {
       console.error('Error checking usage limit:', error)
@@ -33,14 +33,14 @@ function UsageLimitBanner({ user, authService }) {
   }
 
   // Don't show for unlimited plans
-  if (usageData.plan?.plan_code === 'agency' || usageData.plan?.is_agency_plan === true) {
+  if (usageData.messages_included >= 999999) {
     return null
   }
 
   // Calculate usage percentage
-  const messagesUsed = usageData.current_usage?.messages_used || 0
-  const messagesIncluded = usageData.plan?.messages_included || 100
-  const usagePercentage = Math.min(100, (messagesUsed / messagesIncluded) * 100)
+  const messagesUsed = usageData.messages_used || 0
+  const messagesIncluded = usageData.messages_included || 100
+  const usagePercentage = Math.min(100, usageData.usage_percentage || (messagesUsed / messagesIncluded) * 100)
 
   // Only show warning if usage is over 70%
   if (usagePercentage < 70) {
@@ -49,7 +49,7 @@ function UsageLimitBanner({ user, authService }) {
 
   // Determine severity based on usage
   const isNearLimit = usagePercentage >= 90
-  const isOverLimit = usageData.limit_reached
+  const isOverLimit = usageData.limit_reached || false
 
   return (
     <div className={`rounded-lg p-4 mb-6 ${
@@ -101,13 +101,13 @@ function UsageLimitBanner({ user, authService }) {
           }`}>
             <p>
               {isOverLimit 
-                ? `You've reached your monthly limit of ${messagesIncluded} messages.` 
-                : `You've used ${messagesUsed} of ${messagesIncluded} messages (${Math.round(usagePercentage)}%) for this month.`
+                ? `You've reached your monthly limit of ${messagesIncluded.toLocaleString()} messages.` 
+                : `You've used ${messagesUsed.toLocaleString()} of ${messagesIncluded.toLocaleString()} messages (${Math.round(usagePercentage)}%) for this month.`
               }
             </p>
             {isOverLimit && (
               <p className="mt-1">
-                Additional messages will be charged at ${usageData.plan?.overage_price} per message, or you can upgrade your plan for more included messages.
+                Additional messages will be charged at the overage rate, or you can upgrade your plan for more included messages.
               </p>
             )}
           </div>
