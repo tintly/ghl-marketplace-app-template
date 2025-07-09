@@ -18,7 +18,7 @@ export const STANDARD_CONTACT_FIELDS = [
     key: 'contact.name',
     name: 'Full Name',
     dataType: 'TEXT',
-    description: 'Extract the person\'s complete name (first and last name combined) from the conversation. Look for full introductions, email signatures, or when someone provides their complete name. Format as "First Last" without titles or honorifics. Do NOT extract email addresses or parts of email addresses as names. For example, if someone says "my email is markphilwsceo@gmail.com", do NOT extract "Markphilwsceo" as their name.',
+    description: 'Extract the person\'s complete name (first and last name combined) from the conversation. Look for full introductions, email signatures, or when someone provides their complete name. Format as "First Last" without titles or honorifics. Do NOT extract the username portion of the email as the person\'s name',
     category: 'Personal Information'
   },
   {
