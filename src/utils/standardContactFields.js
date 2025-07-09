@@ -4,35 +4,35 @@ export const STANDARD_CONTACT_FIELDS = [
     key: 'contact.first_name',
     name: 'First Name',
     dataType: 'TEXT',
-    description: 'Extract the person\'s given name or first name from the conversation. Look for introductions like "Hi, I\'m John" or "My name is Sarah" or when someone refers to themselves by their first name. Ignore titles, last names, or business names.',
+    description: 'Extract the person\'s given name or first name from the conversation. Look for introductions like "Hi, I\'m John" or "My name is Sarah" or when someone refers to themselves by their first name. Ignore titles, last names, business names, or email addresses. Do NOT extract parts of email addresses as names.',
     category: 'Personal Information'
   },
   {
     key: 'contact.last_name',
     name: 'Last Name',
     dataType: 'TEXT',
-    description: 'Extract the person\'s family name or surname from the conversation. Look for full name introductions like "I\'m John Smith" or formal signatures. Extract only the surname portion, excluding first names, middle names, or titles.',
+    description: 'Extract the person\'s family name or surname from the conversation. Look for full name introductions like "I\'m John Smith" or formal signatures. Extract only the surname portion, excluding first names, middle names, titles, or email addresses. Do NOT extract parts of email addresses as last names.',
     category: 'Personal Information'
   },
   {
     key: 'contact.name',
     name: 'Full Name',
     dataType: 'TEXT',
-    description: 'Extract the person\'s complete name (first and last name combined) from the conversation. Look for full introductions, email signatures, or when someone provides their complete name. Format as "First Last" without titles or honorifics.',
+    description: 'Extract the person\'s complete name (first and last name combined) from the conversation. Look for full introductions, email signatures, or when someone provides their complete name. Format as "First Last" without titles or honorifics. Do NOT extract email addresses or parts of email addresses as names. For example, if someone says "my email is markphilwsceo@gmail.com", do NOT extract "Markphilwsceo" as their name.',
     category: 'Personal Information'
   },
   {
     key: 'contact.email',
     name: 'Email Address',
     dataType: 'EMAIL',
-    description: 'Extract valid email addresses mentioned in the conversation. Look for patterns like "contact me at john@company.com" or "send it to my email: sarah.smith@gmail.com". Only extract properly formatted email addresses with @ symbols and valid domains.',
+    description: 'Extract valid email addresses mentioned in the conversation. Look for patterns like "contact me at john@company.com" or "send it to my email: sarah.smith@gmail.com". Only extract properly formatted email addresses with @ symbols and valid domains. Do NOT extract the username portion of the email as the person\'s name.',
     category: 'Contact Information'
   },
   {
     key: 'contact.phone_raw',
     name: 'Phone Number',
     dataType: 'PHONE',
-    description: 'Extract phone numbers mentioned in the conversation in any format. Look for phrases like "call me at", "my number is", or "reach me on". Include area codes, country codes, and any formatting (dashes, spaces, parentheses). Extract the complete number as provided.',
+    description: 'Extract phone numbers mentioned in the conversation in any format. Look for phrases like "call me at", "my number is", or "reach me on". Include area codes, country codes, and any formatting (dashes, spaces, parentheses). Extract the complete number as provided. Do NOT extract phone numbers as names.',
     category: 'Contact Information'
   },
   {
