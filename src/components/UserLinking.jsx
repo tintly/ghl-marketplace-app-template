@@ -74,7 +74,7 @@ function UserLinking({ user, authService, onLinkingComplete }) {
   return (
     <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
       <h3 className="text-lg font-semibold text-blue-900 mb-2">
-        Link Your Installation
+        Link Your Account
       </h3>
       <p className="text-blue-800 mb-4">
         We found an existing installation for this location that needs to be linked to your account.

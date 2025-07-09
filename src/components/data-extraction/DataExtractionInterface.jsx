@@ -552,7 +552,7 @@ function DataExtractionInterface({ config, user, authService }) {
           <div className="flex items-center">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
             <span className="text-blue-800">
-              {editingCustomField ? 'Updating custom field in GoHighLevel...' : 'Processing field operation...'}
+              {editingCustomField ? 'Updating custom field...' : 'Processing field operation...'}
             </span>
           </div>
           <p className="text-blue-700 text-xs mt-1">
@@ -565,7 +565,7 @@ function DataExtractionInterface({ config, user, authService }) {
         <div className="mx-6 mt-4 info-card">
           <div className="flex items-center">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-            <span className="text-blue-800">Recreating field in GoHighLevel...</span>
+            <span className="text-blue-800">Recreating field...</span>
           </div>
           <p className="text-blue-700 text-xs mt-1">
             This may take a few moments. The field will be recreated in the same folder and get a new ID.
