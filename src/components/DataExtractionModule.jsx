@@ -18,7 +18,11 @@ function DataExtractionModule({ user, authService }) {
   const loadConfiguration = async () => {
     try {
       setLoading(true)
-      setError(null)
+      setError(null) 
+      
+      if (!user || !user.userId || !user.locationId) {
+        throw new Error('User information is incomplete. Please reload the page.')
+      }
 
       // Use the authenticated Supabase client from AuthService
       const configManager = new ConfigurationManager(authService)
@@ -74,9 +78,9 @@ function DataExtractionModule({ user, authService }) {
     return (
       <div className="space-y-6">
         <div className="warning-card">
-          <h3 className="text-yellow-800 font-medium">❌ No Configuration Found</h3>
+          <h3 className="text-yellow-800 font-medium">❌ No Connection Found</h3>
           <p className="text-yellow-600 text-sm mt-1">
-            No GoHighLevel configuration found for this user and location combination.
+            No connection found for this user and location combination.
           </p>
           <button
             onClick={() => setShowDebugger(!showDebugger)}
@@ -90,7 +94,7 @@ function DataExtractionModule({ user, authService }) {
           <ConfigurationDebugger 
             user={user} 
             authService={authService}
-            onConfigurationFound={handleConfigurationFound}
+            onConfigurationFound={handleConfigurationFound} 
           />
         )}
       </div>
@@ -101,7 +105,7 @@ function DataExtractionModule({ user, authService }) {
     <div className="space-y-6">
       {/* Usage Limit Banner */}
       <UsageLimitBanner user={user} authService={authService} />
-      
+
       {/* Token Status Alert - Only show if there are issues */}
       <TokenStatusAlert config={ghlConfig} />
 
