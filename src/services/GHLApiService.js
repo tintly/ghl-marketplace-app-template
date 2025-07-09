@@ -8,6 +8,10 @@ export class GHLApiService {
   async makeRequest(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`
     
+    if (!this.accessToken) {
+      throw new Error('No access token provided')
+    }
+    
     const headers = {
       'Authorization': `Bearer ${this.accessToken}`,
       'Version': this.version,
@@ -29,11 +33,27 @@ export class GHLApiService {
     const response = await fetch(url, config)
 
     if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`GHL API Error: ${response.status} - ${errorText}`)
+      let errorText = ''
+      try {
+        errorText = await response.text()
+      } catch (e) {
+        errorText = `Status code: ${response.status}`
+      }
+      
+      // For 401 errors, provide a more helpful message
+      if (response.status === 401) {
+        throw new Error(`Authentication failed: Invalid or expired access token. Please reconnect your account.`)
+      } else {
+        throw new Error(`API Error: ${response.status} - ${errorText}`)
+      }
     }
 
-    return response.json()
+    try {
+      return await response.json()
+    } catch (e) {
+      console.error('Error parsing JSON response:', e)
+      throw new Error('Invalid response format')
+    }
   }
 
   async getCustomFields(locationId, model = 'contact') {
@@ -44,7 +64,7 @@ export class GHLApiService {
       const response = await this.makeRequest(`${endpoint}?${params}`)
       return response.customFields || []
     } catch (error) {
-      console.error('Error fetching custom fields:', error)
+      console.error(`Error fetching custom fields for location ${locationId}:`, error)
       throw new Error('Failed to fetch custom fields from GoHighLevel')
     }
   }

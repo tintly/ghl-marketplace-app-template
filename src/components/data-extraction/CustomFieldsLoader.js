@@ -6,18 +6,24 @@ export default class CustomFieldsLoader {
   async loadFields(config) {
     try {
       // Always use mock data for temporary/dev/test tokens
-      if (this.isTemporaryToken(config.access_token)) {
-        console.log('Using mock data for temporary tokens')
+      if (!config.access_token || this.isTemporaryToken(config.access_token)) {
+        console.log('Using mock data: No valid access token available')
         return this.getMockCustomFields()
       }
 
-      const ghlService = new (await import('../../services/GHLApiService')).GHLApiService(config.access_token)
-      const fields = await ghlService.getCustomFields(config.ghl_account_id)
-      
-      // Update stored field data for existing extraction fields
-      await this.updateStoredFieldData(config.id, fields)
-      
-      return fields
+      try {
+        const ghlService = new (await import('../../services/GHLApiService')).GHLApiService(config.access_token)
+        const fields = await ghlService.getCustomFields(config.ghl_account_id)
+        
+        // Update stored field data for existing extraction fields
+        await this.updateStoredFieldData(config.id, fields)
+        
+        return fields
+      } catch (apiError) {
+        console.error('API error fetching custom fields:', apiError)
+        console.log('Falling back to mock data due to API error')
+        return this.getMockCustomFields()
+      }
     } catch (error) {
       console.error('Error loading custom fields:', error)
       console.log('Falling back to mock data due to API error')
@@ -141,9 +147,11 @@ export default class CustomFieldsLoader {
   }
 
   isTemporaryToken(token) {
+    if (!token) return true
     return token.startsWith('temp-') || 
            token.startsWith('dev-') || 
-           token.startsWith('test-')
+           token.startsWith('test-') ||
+           token === 'invalid-token'
   }
 
   getMockCustomFields() {
@@ -152,7 +160,7 @@ export default class CustomFieldsLoader {
         id: "mock-text-field",
         name: "Customer Name",
         model: "contact",
-        fieldKey: "contact.customer_name",
+        fieldKey: "contact.customer_name", 
         placeholder: "Enter customer name",
         dataType: "TEXT",
         position: 50,
@@ -175,7 +183,7 @@ export default class CustomFieldsLoader {
         name: "Services Requested",
         model: "contact",
         fieldKey: "contact.services_requested",
-        placeholder: "",
+        placeholder: "Select service",
         dataType: "SINGLE_OPTIONS",
         position: 150,
         standard: false,
@@ -198,12 +206,35 @@ export default class CustomFieldsLoader {
         name: "Priority Level",
         model: "contact",
         fieldKey: "contact.priority_level",
-        placeholder: "",
+        placeholder: "Select priority",
         dataType: "SINGLE_OPTIONS",
         position: 250,
         standard: false,
         picklistOptions: ["Low", "Medium", "High", "Urgent"],
         parentId: "mock-folder-id"
+      },
+      {
+        id: "mock-email-field",
+        name: "Secondary Email",
+        model: "contact",
+        fieldKey: "contact.secondary_email",
+        placeholder: "Enter secondary email",
+        dataType: "EMAIL",
+        position: 300,
+        standard: false,
+        parentId: null
+      },
+      {
+        id: "mock-checkbox-field",
+        name: "Interests",
+        model: "contact",
+        fieldKey: "contact.interests",
+        placeholder: "",
+        dataType: "MULTIPLE_OPTIONS",
+        position: 350,
+        standard: false,
+        picklistOptions: ["Marketing", "Sales", "Support", "Development"],
+        parentId: null
       }
     ]
   }

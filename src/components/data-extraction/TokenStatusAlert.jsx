@@ -19,9 +19,9 @@ function TokenStatusAlert({ config }) {
   // Only show errors for invalid tokens that need user intervention
   if (['missing_access_token', 'missing_refresh_token'].includes(tokenStatus.status)) {
     return (
-      <div className="error-card">
-        <h3 className="text-red-800 font-medium">⚠️ Authentication Required</h3>
-        <p className="text-red-600 text-sm mt-1">{tokenStatus.message}</p>
+      <div className="error-card mb-6">
+        <h3 className="text-red-800 font-medium">⚠️ Connection Required</h3>
+        <p className="text-red-600 text-sm mt-1">Your connection has expired or is invalid. Please reconnect your account to continue using the app.</p>
         
         <div className="mt-3">
           <button
@@ -38,9 +38,9 @@ function TokenStatusAlert({ config }) {
   // For temporary tokens, show OAuth installation option
   if (tokenStatus.status === 'temporary_token') {
     return (
-      <div className="warning-card">
+      <div className="warning-card mb-6">
         <h3 className="text-yellow-800 font-medium">⚠️ Development Mode</h3>
-        <p className="text-yellow-600 text-sm mt-1">{tokenStatus.message}</p>
+        <p className="text-yellow-600 text-sm mt-1">You're using temporary tokens. Connect your account to access real data.</p>
         
         <div className="mt-3">
           <button
@@ -55,7 +55,26 @@ function TokenStatusAlert({ config }) {
   }
 
   // Don't show anything for expired tokens - let the automatic refresh handle it
-  return null
+  // But if token is expired, show a warning
+  if (tokenStatus.status === 'expired') {
+    return (
+      <div className="warning-card mb-6">
+        <h3 className="text-yellow-800 font-medium">⚠️ Connection Expired</h3>
+        <p className="text-yellow-600 text-sm mt-1">Your connection has expired. The system will attempt to refresh it automatically.</p>
+        
+        <div className="mt-3">
+          <button
+            onClick={openOAuthInstall}
+            className="btn-primary"
+          >
+            Reconnect Account
+          </button>
+        </div>
+      </div>
+    )
+  }
+  
+  return null;
 }
 
 export default TokenStatusAlert
