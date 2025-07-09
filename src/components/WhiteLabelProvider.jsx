@@ -19,13 +19,17 @@ export const useWhiteLabel = () => {
 export const WhiteLabelProvider = ({ children, authService, locationId }) => {
   const [branding, setBranding] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState(null) 
   
-  const brandingService = new AgencyBrandingService(authService)
+  const [brandingService] = useState(() => new AgencyBrandingService(authService))
 
   useEffect(() => {
     const loadBranding = async () => {
       if (!locationId) {
+        console.log('No location ID provided to WhiteLabelProvider')
+        const defaultBranding = brandingService.getDefaultBranding()
+        setBranding(defaultBranding)
+        brandingService.applyBrandingToCSS(defaultBranding)
         setLoading(false)
         return
       }
@@ -37,10 +41,10 @@ export const WhiteLabelProvider = ({ children, authService, locationId }) => {
         const brandingData = await brandingService.getAgencyBranding(locationId)
         setBranding(brandingData)
         
-        // Apply branding to CSS
+        // Apply branding to CSS variables
         brandingService.applyBrandingToCSS(brandingData)
       } catch (err) {
-        console.error('Error loading branding:', err)
+        console.error('Could not load WhiteLabel context, using defaults', err)
         setError(err.message)
         
         // Use default branding on error
@@ -53,7 +57,7 @@ export const WhiteLabelProvider = ({ children, authService, locationId }) => {
     }
 
     loadBranding()
-  }, [locationId])
+  }, [locationId, brandingService])
 
   const updateBranding = async (agencyId, brandingData) => {
     try {
@@ -78,6 +82,9 @@ export const WhiteLabelProvider = ({ children, authService, locationId }) => {
   const getAgencyName = () => branding?.agency_name || 'GoHighLevel'
   const shouldHideGHLBranding = () => branding?.hide_ghl_branding || false
   const getWelcomeMessage = () => branding?.welcome_message || 'Welcome to your conversation data extractor.'
+  const getPrimaryColor = () => branding?.primary_color || '#3B82F6'
+  const getSecondaryColor = () => branding?.secondary_color || '#1F2937'
+  const getAccentColor = () => branding?.accent_color || '#10B981'
 
   const value = {
     branding,
@@ -88,7 +95,10 @@ export const WhiteLabelProvider = ({ children, authService, locationId }) => {
     getAppName,
     getAgencyName,
     shouldHideGHLBranding,
-    getWelcomeMessage
+    getWelcomeMessage,
+    getPrimaryColor,
+    getSecondaryColor,
+    getAccentColor
   }
 
   return (

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { SubscriptionService } from '../services/SubscriptionService'
 
-function SubscriptionManager({ user, authService }) {
+const SubscriptionManager = ({ user, authService }) => {
   const [loading, setLoading] = useState(true)
   const [subscription, setSubscription] = useState(null)
   const [plans, setPlans] = useState([])
@@ -17,12 +17,18 @@ function SubscriptionManager({ user, authService }) {
   const loadSubscriptionData = async () => {
     try {
       setLoading(true)
-      setError(null)
+      setError(null) 
+      
+      if (!user || !user.locationId) {
+        throw new Error('User or location ID not available')
+      }
+      
+      const locationId = user.activeLocation || user.locationId || user.companyId
 
       const [subscriptionData, plansData, usageData] = await Promise.all([
-        subscriptionService.getCurrentSubscription(user.activeLocation || user.companyId),
+        subscriptionService.getCurrentSubscription(locationId),
         subscriptionService.getAvailablePlans(),
-        subscriptionService.getUsageStats(user.activeLocation || user.companyId)
+        subscriptionService.getUsageStats(locationId)
       ])
 
       setSubscription(subscriptionData)
@@ -39,7 +45,8 @@ function SubscriptionManager({ user, authService }) {
   const handlePlanChange = async (planId) => {
     try {
       setLoading(true)
-      await subscriptionService.changePlan(user.activeLocation || user.companyId, planId)
+      const locationId = user.activeLocation || user.locationId || user.companyId
+      await subscriptionService.changePlan(locationId, planId)
       await loadSubscriptionData()
     } catch (err) {
       console.error('Error changing plan:', err)

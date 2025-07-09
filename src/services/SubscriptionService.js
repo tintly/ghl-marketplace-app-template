@@ -5,197 +5,143 @@ export class SubscriptionService {
     this.cacheTimeout = 5 * 60 * 1000 // 5 minutes
   }
 
-  // Get subscription plan for a location
-  async getLocationSubscription(locationId) {
-    const cacheKey = `subscription-${locationId}`
-    
-    // Check cache first
-    if (this.cache.has(cacheKey)) {
-      const cached = this.cache.get(cacheKey)
-      if (Date.now() - cached.timestamp < this.cacheTimeout) {
-        return cached.data
-      }
-      this.cache.delete(cacheKey)
-    }
-
+  // Get current subscription for a location
+  async getCurrentSubscription(locationId) {
     try {
       const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
 
-      const { data, error } = await supabase
-        .rpc('get_location_subscription_plan', {
-          p_location_id: locationId
-        })
+      // Try to use the RPC function first
+      const { data: subscriptionData, error: rpcError } = await supabase
+        .rpc('get_my_subscription_direct')
 
-      if (error) {
-        console.error('Error fetching subscription plan:', error)
-        return this.getDefaultPlan()
+      if (!rpcError && subscriptionData) {
+        return this.formatSubscriptionData(subscriptionData)
       }
 
-      const plan = data || this.getDefaultPlan()
-      
-      // Cache the result
-      this.cache.set(cacheKey, {
-        data: plan,
-        timestamp: Date.now()
-      })
-
-      return plan
-    } catch (error) {
-      console.error('Subscription service error:', error)
-      return this.getDefaultPlan()
-    }
-  }
-
-  // Get default free plan
-  getDefaultPlan() {
-    return {
-      plan_id: null,
-      plan_name: 'Free',
-      plan_code: 'free',
-      max_users: 1,
-      messages_included: 100,
-      overage_price: 0.08,
-      can_use_own_openai_key: false,
-      can_white_label: false,
-      is_active: true,
-      payment_status: 'free'
-    }
-  }
-
-  // Check if a location has reached its message limit
-  async checkMessageLimit(locationId) {
-    try {
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
-
-      const { data, error } = await supabase
-        .rpc('check_location_message_limit', {
-          p_location_id: locationId
-        })
-
-      if (error) {
-        console.error('Error checking message limit:', error)
-        throw error
-      }
-
-      return data
-    } catch (error) {
-      console.error('Error checking message limit:', error)
-      throw error
-    }
-  }
-
-  // Increment message usage for a location
-  async incrementMessageUsage(locationId, messagesCount = 1, tokensUsed = 0, costEstimate = 0) {
-    try {
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
-
-      const { data, error } = await supabase
-        .rpc('increment_location_message_usage', {
-          p_location_id: locationId,
-          p_messages_count: messagesCount,
-          p_tokens_used: tokensUsed,
-          p_cost_estimate: costEstimate
-        })
-
-      if (error) {
-        console.error('Error incrementing message usage:', error)
-        throw error
-      }
-
-      return data
-    } catch (error) {
-      console.error('Error incrementing message usage:', error)
-      throw error
-    }
-  }
-
-  // Get usage statistics for a location
-  async getUsageStatistics(locationId, timeframe = 'current_month') {
-    try {
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
-
-      let query = supabase
-        .from('usage_tracking')
-        .select('*')
+      // Fallback to direct query if RPC fails
+      const { data: locationSub, error: subError } = await supabase
+        .from('location_subscriptions')
+        .select(`
+          id,
+          location_id,
+          start_date,
+          end_date,
+          is_active,
+          payment_status,
+          subscription_plans (
+            id,
+            name,
+            code,
+            price_monthly,
+            price_annual,
+            max_users,
+            messages_included,
+            overage_price,
+            can_use_own_openai_key,
+            can_white_label
+          )
+        `)
         .eq('location_id', locationId)
-      
-      // Filter by timeframe
-      if (timeframe === 'current_month') {
-        const currentMonth = new Date().toISOString().substring(0, 7) // YYYY-MM
-        query = query.eq('month_year', currentMonth)
-      } else if (timeframe === 'last_3_months') {
-        // Get last 3 months
-        const now = new Date()
-        const months = []
-        for (let i = 0; i < 3; i++) {
-          const month = new Date(now.getFullYear(), now.getMonth() - i, 1)
-          months.push(month.toISOString().substring(0, 7))
-        }
-        query = query.in('month_year', months)
-      }
-
-      const { data, error } = await query.order('month_year', { ascending: false })
-
-      if (error) {
-        console.error('Error fetching usage statistics:', error)
-        throw error
-      }
-
-      return data || []
-    } catch (error) {
-      console.error('Error fetching usage statistics:', error)
-      throw error
-    }
-  }
-
-  // Update subscription for a location
-  async updateSubscription(locationId, planCode) {
-    try {
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
-
-      // First get the plan ID
-      const { data: planData, error: planError } = await supabase
-        .from('subscription_plans')
-        .select('id')
-        .eq('code', planCode)
         .eq('is_active', true)
         .single()
 
-      if (planError || !planData) {
-        console.error('Error fetching plan:', planError)
-        throw new Error('Invalid plan code')
+      if (subError && subError.code !== 'PGRST116') { // PGRST116 is "not found"
+        throw subError
       }
 
-      // Update or insert subscription
-      const { data, error } = await supabase
-        .from('location_subscriptions')
-        .upsert({
-          location_id: locationId,
-          plan_id: planData.id,
-          start_date: new Date().toISOString(),
-          is_active: true,
-          payment_status: 'active',
-          updated_at: new Date().toISOString()
-        })
-        .select()
+      if (locationSub) {
+        return {
+          subscription_id: locationSub.id,
+          location_id: locationSub.location_id,
+          plan_id: locationSub.subscription_plans.id,
+          plan_name: locationSub.subscription_plans.name,
+          plan_code: locationSub.subscription_plans.code,
+          price_monthly: locationSub.subscription_plans.price_monthly,
+          price_annual: locationSub.subscription_plans.price_annual,
+          max_users: locationSub.subscription_plans.max_users,
+          messages_included: locationSub.subscription_plans.messages_included,
+          overage_price: locationSub.subscription_plans.overage_price,
+          can_use_own_openai_key: locationSub.subscription_plans.can_use_own_openai_key,
+          can_white_label: locationSub.subscription_plans.can_white_label,
+          start_date: locationSub.start_date,
+          end_date: locationSub.end_date,
+          is_active: locationSub.is_active,
+          payment_status: locationSub.payment_status
+        }
+      }
+
+      // If no subscription found, return free plan
+      const { data: freePlan, error: freeError } = await supabase
+        .from('subscription_plans')
+        .select('*')
+        .eq('code', 'free')
         .single()
 
-      if (error) {
-        console.error('Error updating subscription:', error)
-        throw error
+      if (freeError) {
+        throw freeError
       }
 
-      // Clear cache
-      this.clearCacheForLocation(locationId)
-
-      return { success: true, data }
+      return {
+        subscription_id: null,
+        location_id: locationId,
+        plan_id: freePlan.id,
+        plan_name: freePlan.name,
+        plan_code: freePlan.code,
+        price_monthly: freePlan.price_monthly,
+        price_annual: freePlan.price_annual,
+        max_users: freePlan.max_users,
+        messages_included: freePlan.messages_included,
+        overage_price: freePlan.overage_price,
+        can_use_own_openai_key: freePlan.can_use_own_openai_key,
+        can_white_label: freePlan.can_white_label,
+        is_active: true,
+        payment_status: 'free'
+      }
     } catch (error) {
-      console.error('Error updating subscription:', error)
-      return { success: false, error: error.message }
+      console.error('Error getting subscription:', error)
+      // Return a default subscription on error
+      return {
+        subscription_id: null,
+        location_id: locationId,
+        plan_name: 'Free',
+        plan_code: 'free',
+        price_monthly: 0,
+        max_users: 1,
+        messages_included: 100,
+        overage_price: 0.08,
+        can_use_own_openai_key: false,
+        can_white_label: false,
+        is_active: true,
+        payment_status: 'free'
+      }
     }
   }
 
-  // Get all available subscription plans
+  // Format subscription data from RPC function
+  formatSubscriptionData(data) {
+    if (!data || !data.plan) return null
+    
+    return {
+      subscription_id: data.subscription_id,
+      location_id: data.location_id,
+      plan_id: data.plan.id,
+      plan_name: data.plan.name,
+      plan_code: data.plan.code,
+      price_monthly: data.plan.price_monthly,
+      price_annual: data.plan.price_annual,
+      max_users: data.plan.max_users,
+      messages_included: data.plan.messages_included,
+      overage_price: data.plan.overage_price,
+      can_use_own_openai_key: data.plan.can_use_own_openai_key,
+      can_white_label: data.plan.can_white_label,
+      start_date: data.start_date,
+      end_date: data.end_date,
+      is_active: data.is_active,
+      payment_status: data.payment_status
+    }
+  }
+
+  // Get available subscription plans
   async getAvailablePlans() {
     try {
       const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
@@ -207,14 +153,131 @@ export class SubscriptionService {
         .order('price_monthly', { ascending: true })
 
       if (error) {
-        console.error('Error fetching plans:', error)
         throw error
       }
 
       return data || []
     } catch (error) {
-      console.error('Error fetching plans:', error)
-      throw error
+      console.error('Error getting available plans:', error)
+      return []
+    }
+  }
+
+  // Get usage statistics for a location
+  async getUsageStats(locationId) {
+    try {
+      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+      
+      // Try to use the RPC function first
+      const { data: usageData, error: rpcError } = await supabase
+        .rpc('get_my_usage_with_limits')
+
+      if (!rpcError && usageData) {
+        return {
+          messages_used: usageData.messages_used,
+          tokens_used: usageData.tokens_used,
+          cost_estimate: usageData.cost_estimate,
+          messages_included: usageData.messages_included,
+          messages_remaining: usageData.messages_remaining,
+          usage_percentage: usageData.usage_percentage,
+          limit_reached: usageData.limit_reached
+        }
+      }
+
+      // Fallback to direct query
+      const currentMonth = new Date().toISOString().substring(0, 7) // YYYY-MM
+      
+      const { data: usage, error: usageError } = await supabase
+        .from('usage_tracking')
+        .select('*')
+        .eq('location_id', locationId)
+        .eq('month_year', currentMonth)
+        .maybeSingle()
+
+      if (usageError && usageError.code !== 'PGRST116') {
+        throw usageError
+      }
+
+      // Get subscription for message limits
+      const subscription = await this.getCurrentSubscription(locationId)
+      
+      const messagesUsed = usage?.messages_used || 0
+      const messagesIncluded = subscription?.messages_included || 100
+      const messagesRemaining = Math.max(0, messagesIncluded - messagesUsed)
+      const usagePercentage = messagesIncluded > 0 ? (messagesUsed / messagesIncluded) * 100 : 0
+      const limitReached = messagesUsed >= messagesIncluded && subscription?.plan_code !== 'agency'
+
+      return {
+        messages_used: messagesUsed,
+        tokens_used: usage?.tokens_used || 0,
+        cost_estimate: usage?.cost_estimate || 0,
+        messages_included: messagesIncluded,
+        messages_remaining: messagesRemaining,
+        usage_percentage: usagePercentage,
+        limit_reached: limitReached
+      }
+    } catch (error) {
+      console.error('Error getting usage stats:', error)
+      return {
+        messages_used: 0,
+        tokens_used: 0,
+        cost_estimate: 0,
+        messages_included: 100,
+        messages_remaining: 100,
+        usage_percentage: 0,
+        limit_reached: false
+      }
+    }
+  }
+
+  // Change subscription plan
+  async changePlan(locationId, planId) {
+    try {
+      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+
+      // Get plan code from ID
+      const { data: plan, error: planError } = await supabase
+        .from('subscription_plans')
+        .select('code')
+        .eq('id', planId)
+        .single()
+
+      if (planError) {
+        throw planError
+      }
+
+      // Try to use the RPC function first
+      const { data, error } = await supabase
+        .rpc('force_change_subscription_plan', {
+          p_location_id: locationId,
+          p_plan_code: plan.code
+        })
+
+      if (error) {
+        // Fallback to direct update
+        const { error: updateError } = await supabase
+          .from('location_subscriptions')
+          .upsert({
+            location_id: locationId,
+            plan_id: planId,
+            start_date: new Date().toISOString(),
+            is_active: true,
+            payment_status: 'active',
+            updated_at: new Date().toISOString()
+          })
+
+        if (updateError) {
+          throw updateError
+        }
+      }
+
+      // Clear cache
+      this.clearCacheForLocation(locationId)
+
+      return { success: true }
+    } catch (error) {
+      console.error('Error changing plan:', error)
+      return { success: false, error: error.message }
     }
   }
 

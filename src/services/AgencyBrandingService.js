@@ -63,7 +63,6 @@ export class AgencyBrandingService {
   // Update agency branding (for agency users only)
   async updateAgencyBranding(agencyId, brandingData) {
     try {
-      console.log('Updating agency branding for agency ID:', agencyId);
       const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
 
       // First check if a record exists
@@ -82,7 +81,6 @@ export class AgencyBrandingService {
       
       if (existingData) {
         // Update existing record
-        console.log('Updating existing branding record with ID:', existingData.id);
         const { data, error } = await supabase
           .from('agency_branding')
           .update({
@@ -100,7 +98,6 @@ export class AgencyBrandingService {
         result = data;
       } else {
         // Insert new record
-        console.log('Creating new branding record for agency ID:', agencyId);
         const { data, error } = await supabase
           .from('agency_branding')
           .insert({
