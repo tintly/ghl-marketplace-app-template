@@ -22,9 +22,18 @@ function AgencyOpenAIManager({ user, authService }) {
       setError(null)
 
       // Check permissions
-      const canUse = await openaiService.canUseCustomOpenAIKey(user.companyId)
-      setPermissions({ can_use_own_openai_key: canUse })
-      setUpgradeRequired(!canUse)
+      // For agency users, we'll check both methods
+      const isAgency = user.type === 'agency'
+      const canUse = isAgency || await openaiService.canUseCustomOpenAIKey(user.companyId)
+      const isAgencyPlan = isAgency || await openaiService.isAgencyPlan()
+      
+      setPermissions({ 
+        can_use_own_openai_key: canUse,
+        is_agency_plan: isAgencyPlan
+      })
+      
+      // Only require upgrade if not agency type and can't use keys
+      setUpgradeRequired(!isAgency && !canUse)
 
       if (canUse) {
         // Load keys
@@ -92,7 +101,7 @@ function AgencyOpenAIManager({ user, authService }) {
     )
   }
 
-  if (user.type !== 'agency') {
+  if (user.type !== 'agency' && !permissions?.is_agency_plan) {
     return (
       <div className="info-card">
         <h3 className="text-blue-800 font-medium">Agency Feature</h3>

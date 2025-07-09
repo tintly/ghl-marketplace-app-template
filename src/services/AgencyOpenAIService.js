@@ -6,6 +6,12 @@ export class AgencyOpenAIService {
   // Check if agency can use custom OpenAI keys
   async canUseCustomOpenAIKey(agencyId) {
     try {
+      // If no agency ID, return false
+      if (!agencyId) {
+        console.log('No agency ID provided for OpenAI key permission check')
+        return false
+      }
+      
       const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
 
       const { data, error } = await supabase
@@ -19,6 +25,31 @@ export class AgencyOpenAIService {
       }
 
       return data || false
+    } catch (error) {
+      console.error('Agency OpenAI service error:', error)
+      
+      // For agency users, default to true if there's an error
+      // This ensures agencies can use their keys even if the function fails
+      if (this.authService?.getCurrentUser()?.type === 'agency') {
+        console.log('Defaulting to true for agency user due to error')
+        return true
+      }
+      
+      return false
+    }
+  }
+
+  // Check if user is on agency plan
+  async isAgencyPlan() {
+    try {
+      const user = this.authService?.getCurrentUser()
+      
+      // If user is agency type, they're on agency plan
+      if (user?.type === 'agency') {
+        return true
+      }
+      
+      return false
     } catch (error) {
       console.error('Agency OpenAI service error:', error)
       return false
