@@ -426,6 +426,8 @@ function AddOpenAIKeyForm({ onSubmit, onCancel, saving = false }) {
         org_id: formData.org_id || null,
         usage_limit: formData.usage_limit ? parseFloat(formData.usage_limit) : null
       })
+    } catch (error) {
+      console.error('Error submitting form:', error)
     }
   }
 
