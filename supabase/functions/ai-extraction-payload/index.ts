@@ -170,6 +170,20 @@ Deno.serve(async (req)=>{
     // Step 4: Auto-invoke OpenAI extraction if enabled
     if (autoExtract) {
       console.log('Step 4: Auto-invoking OpenAI extraction...');
+      
+      // Log the full payload being sent to OpenAI extraction
+      console.log('=== FULL PAYLOAD SENT TO OPENAI EXTRACTION ===');
+      console.log(JSON.stringify({
+        conversation_id: payload.conversation_id,
+        location_id: payload.location_id,
+        contact_id: payload.contact_id,
+        business_context: payload.business_context,
+        fields_to_extract: payload.fields_to_extract.length,
+        conversation_history: payload.conversation_history.length,
+        system_prompt_length: payload.system_prompt.length
+      }, null, 2));
+      console.log('=== END FULL PAYLOAD SENT TO OPENAI EXTRACTION ===');
+      
       try {
         // The system prompt to be sent to OpenAI is now directly from promptData.prompt
         console.log('=== SYSTEM PROMPT SENT TO OPENAI ===');

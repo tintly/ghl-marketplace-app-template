@@ -195,7 +195,15 @@ Deno.serve(async (req: Request) => {
     // Get OpenAI API key from environment
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY')
     if (!openaiApiKey) {
-      throw new Error('OPENAI_API_KEY environment variable is not set')
+      // Try to get agency OpenAI key
+      console.log('No default OpenAI API key, checking for agency key...')
+      const agencyKey = await getAgencyOpenAIKey(supabase, payload.location_id)
+      
+      if (!agencyKey) {
+        throw new Error('No OpenAI API key available. Please configure an API key.')
+      }
+      
+      console.log('Using agency OpenAI key')
     }
 
     // Build the system prompt
@@ -221,13 +229,17 @@ Deno.serve(async (req: Request) => {
     // Use gpt-4o-mini as the default model
     const model = 'gpt-4o-mini'
     
-    console.log('Calling OpenAI API with model:', model)
+    // Get the API key to use (default or agency key)
+    const apiKeyToUse = await getApiKeyToUse(supabase, payload.location_id, openaiApiKey)
+    const keySource = apiKeyToUse.source
+    
+    console.log(`Calling OpenAI API with model: ${model} (key source: ${keySource})`)
 
     // Call OpenAI API
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
+        'Authorization': `Bearer ${apiKeyToUse.key}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -272,12 +284,14 @@ Deno.serve(async (req: Request) => {
     // Log usage to database
     usageLogId = await logUsage(supabase, {
       location_id: payload.location_id,
+      agency_ghl_id: await getAgencyIdForLocation(supabase, payload.location_id),
       model: openaiData.model,
       input_tokens: openaiData.usage.prompt_tokens,
       output_tokens: openaiData.usage.completion_tokens, 
       total_tokens: openaiData.usage.total_tokens,
       platform_cost_estimate: costEstimate,
       customer_cost_estimate: customerCostEstimate,
+      openai_key_used: keySource,
       customer_cost_calculated: true,
       conversation_id: payload.conversation_id,
       extraction_type: 'data_extraction',
@@ -541,4 +555,81 @@ async function logUsage(supabase: any, usageData: any): Promise<string> {
     console.error('Error logging usage:', error)
     throw error
   }
+}
+
+// Function to get agency ID for a location
+async function getAgencyIdForLocation(supabase: any, locationId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from('ghl_configurations')
+      .select('agency_ghl_id')
+      .eq('ghl_account_id', locationId)
+      .maybeSingle()
+
+    if (error || !data) {
+      console.log('No agency ID found for location:', locationId)
+      return null
+    }
+
+    return data.agency_ghl_id
+  } catch (error) {
+    console.error('Error getting agency ID:', error)
+    return null
+  }
+}
+
+// Function to get agency OpenAI key
+async function getAgencyOpenAIKey(supabase: any, locationId: string): Promise<string | null> {
+  try {
+    // Get agency ID for this location
+    const agencyId = await getAgencyIdForLocation(supabase, locationId)
+    
+    if (!agencyId) {
+      console.log('No agency ID found for location:', locationId)
+      return null
+    }
+    
+    console.log('Looking for OpenAI key for agency:', agencyId)
+    
+    // Get agency OpenAI key
+    const { data, error } = await supabase
+      .from('agency_openai_keys')
+      .select('encrypted_openai_api_key')
+      .eq('agency_ghl_id', agencyId)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    if (error || !data || !data.encrypted_openai_api_key) {
+      console.log('No OpenAI key found for agency:', agencyId)
+      return null
+    }
+
+    // Decrypt the key (in this case, it's just base64 encoded)
+    const decryptedKey = atob(data.encrypted_openai_api_key)
+    
+    console.log('Found and decrypted OpenAI key for agency')
+    return decryptedKey
+  } catch (error) {
+    console.error('Error getting agency OpenAI key:', error)
+    return null
+  }
+}
+
+// Function to determine which API key to use
+async function getApiKeyToUse(supabase: any, locationId: string, defaultKey: string | null): Promise<{ key: string, source: string }> {
+  // Try to get agency key first
+  const agencyKey = await getAgencyOpenAIKey(supabase, locationId)
+  
+  if (agencyKey) {
+    console.log('Using agency OpenAI key')
+    return { key: agencyKey, source: 'agency' }
+  }
+  
+  // Fall back to default key
+  if (defaultKey) {
+    console.log('Using default OpenAI key')
+    return { key: defaultKey, source: 'default' }
+  }
+  
+  throw new Error('No OpenAI API key available')
 }

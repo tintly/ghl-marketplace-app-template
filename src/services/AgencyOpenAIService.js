@@ -299,28 +299,28 @@ export class AgencyOpenAIService {
   // Simple encryption for API keys (in production, use proper encryption service)
   async encryptApiKey(apiKey) {
     // This is a placeholder - in production, use proper encryption
-    try {
-      return btoa(apiKey) // Base64 encoding as placeholder
-    } catch (error) {
-      console.error('Error encrypting API key:', error)
-      // Fallback for environments where btoa might not be available
-      return Buffer.from(apiKey).toString('base64')
+    if (typeof btoa === 'function') {
+      return btoa(apiKey);
+    } else {
+      // Use TextEncoder for environments without btoa
+      const encoder = new TextEncoder();
+      const data = encoder.encode(apiKey);
+      return Array.from(data)
+        .map(byte => String.fromCharCode(byte))
+        .join('');
     }
   }
 
   // Simple decryption for API keys (in production, use proper decryption service)
   async decryptApiKey(encryptedKey) {
     // This is a placeholder - in production, use proper decryption
-    try {
-      try {
-        return atob(encryptedKey) // Base64 decoding as placeholder
-      } catch (error) {
-        // Fallback for environments where atob might not be available
-        return Buffer.from(encryptedKey, 'base64').toString()
-      }
-    } catch (error) {
-      console.error('Error decrypting API key:', error)
-      return null
+    if (typeof atob === 'function') {
+      return atob(encryptedKey);
+    } else {
+      // Use TextDecoder for environments without atob
+      const charCodes = encryptedKey.split('').map(c => c.charCodeAt(0));
+      const decoder = new TextDecoder();
+      return decoder.decode(new Uint8Array(charCodes));
     }
   }
   

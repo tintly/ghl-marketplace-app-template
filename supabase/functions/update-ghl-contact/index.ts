@@ -383,6 +383,11 @@ async function getGHLContact(accessToken: string, contactId: string) {
   return responseData.contact || responseData
 }
 
+// Check if a field key is a standard field
+function isStandardFieldKey(fieldKey) {
+  return fieldKey.includes('.') && fieldKey.startsWith('contact.');
+}
+
 function prepareUpdatePayload(
   existingContact: any, 
   extractedData: Record<string, any>,
@@ -471,7 +476,7 @@ function prepareUpdatePayload(
     const field = fieldsMap.get(fieldKey)
     
     // Determine if this is a standard field
-    const isStandardField = fieldKey.includes('.') && fieldKey.startsWith('contact.') 
+    const isStandardField = isStandardFieldKey(fieldKey)
     
     if (!field && !isStandardField) {
       console.log(`No field configuration found for ${fieldKey}, skipping`)
@@ -615,8 +620,6 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
     delete cleanPayload.dateAdded
     delete cleanPayload.dateUpdated
     delete cleanPayload.lastActivity
-    // Remove any fields that GHL API doesn't accept
-    delete cleanPayload.services_mentioned
 
     console.log('Sending update to GHL:', {
       contactId,
@@ -630,6 +633,7 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
     // Log the fields being updated
     console.log('Standard fields:', Object.keys(cleanPayload).filter(k => k !== 'customFields'))
     console.log('Custom fields:', cleanPayload.customFields?.length || 0)
+    console.log('Fields to update:', Object.keys(cleanPayload))
 
     // Final validation to ensure we're not sending any invalid fields
     const validStandardFields = [
@@ -640,9 +644,24 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
     
     // Remove any standard fields that aren't in the valid list
     Object.keys(cleanPayload).forEach(key => {
-      if (!validStandardFields.includes(key) && key !== 'customFields') {
+      if (!validStandardFields.includes(key) && key !== 'customFields' && key !== 'tags') {
         console.log(`⚠️ Removing invalid standard field: ${key}`)
+        
+        // Instead of deleting, move to customFields
+        if (!cleanPayload.customFields) {
+          cleanPayload.customFields = []
+        }
+        
+        // Add as custom field
+        cleanPayload.customFields.push({
+          id: key,
+          value: cleanPayload[key]
+        })
+        
+        // Remove from standard fields
         delete cleanPayload[key]
+        
+        console.log(`🔄 Moved '${key}' to customFields array`)
       }
     })
 
