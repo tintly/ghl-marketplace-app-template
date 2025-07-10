@@ -384,9 +384,10 @@ async function getGHLContact(accessToken: string, contactId: string) {
 }
 
 // Check if a field key is a standard field
-function isStandardFieldKey(fieldKey: string): boolean {
-  // Standard fields must have a dot AND start with 'contact.'
-  return fieldKey.includes('.') && fieldKey.startsWith('contact.')
+function isStandardField(field: any): boolean {
+  // Use the database information to determine if this is a standard field
+  // This is the most reliable way since we already have this information
+  return field && field.target_ghl_key && field.target_ghl_key.includes('.')
 }
 
 function prepareUpdatePayload(
@@ -480,14 +481,62 @@ function prepareUpdatePayload(
     // Get field configuration if available
     const field = fieldsMap.get(fieldKey)
     
-    // Determine if this is a standard field or custom field
-    const isStandard = isStandardFieldKey(fieldKey)
+    // Use the database information to determine if this is a standard field
+    const isStandard = isStandardField(field)
     
     console.log(`Field ${fieldKey} is ${isStandard ? 'standard' : 'custom'} field`)
     
-    // If no field configuration and not a standard field format, treat as custom field
-    if (!field && !isStandard) {
-      console.log(`No field configuration found for ${fieldKey}, treating as custom field`)
+    // If this is a standard field (based on our database)
+    if (isStandard) {
+      // For standard fields, we need to use the field name without the "contact." prefix
+      // Extract the field name part after 'contact.'
+      const fieldKeyParts = field.target_ghl_key.split('.')
+      if (fieldKeyParts.length >= 2) {
+        const standardFieldName = getGHLStandardFieldName(field.target_ghl_key)
+        
+        // Special handling for specific field types
+        switch(standardFieldName) {
+          case 'tags':
+            // Merge tags to avoid duplicates
+            const existingTags = existingContact.tags || []
+            const newTags = Array.isArray(newValue) ? newValue : [newValue]
+            updatePayload.tags = Array.from(new Set([...existingTags, ...newTags]))
+            break
+            
+          default:
+            // For standard fields, just add them directly to the update payload
+            updatePayload[standardFieldName] = newValue
+            break
+        }
+        
+        console.log(`✅ Will update standard field ${standardFieldName}: ${JSON.stringify(currentValue)} → ${JSON.stringify(newValue)}`)
+        updatedFields.push(fieldKey)
+      } else {
+        console.log(`⚠️ Invalid standard field format: ${field.target_ghl_key}`)
+        skippedFields.push(fieldKey)
+      }
+    } 
+    // If this is a custom field (based on our database)
+    else if (field) {
+      // For custom fields, we need the GHL field ID from target_ghl_key
+      const customFieldId = field.target_ghl_key
+      
+      if (customFieldId) {
+        updatePayload.customFields.push({
+          id: customFieldId,
+          value: newValue
+        })
+        
+        console.log(`✅ Will update custom field ${customFieldId} (${field.field_name}): ${JSON.stringify(currentValue)} → ${JSON.stringify(newValue)}`)
+        updatedFields.push(fieldKey)
+      } else {
+        console.log(`⚠️ Missing custom field ID for ${fieldKey}`)
+        skippedFields.push(fieldKey)
+      }
+    }
+    // If we don't have field configuration, try to match by field key
+    else {
+      console.log(`No field configuration found for ${fieldKey}, attempting to match`)
       
       // Try to find a matching custom field in the existing contact
       const matchingCustomField = existingContact.customFields?.find((cf: any) => 
@@ -507,130 +556,6 @@ function prepareUpdatePayload(
         skippedFields.push(fieldKey)
         continue
       }
-    }
-    
-    const fieldName = field?.field_name || fieldKey
-    const policy = field?.overwrite_policy || 'always'
-    
-    // Get current value and target field ID
-    let currentValue: any = null
-    let targetFieldId: string = field?.target_ghl_key || fieldKey
-    
-    if (isStandard) {
-      // Standard field (e.g., contact.firstName)
-      const ghlStandardKey = getGHLStandardFieldName(fieldKey)
-      currentValue = existingContact[ghlStandardKey]
-      
-      console.log(`Standard field ${fieldKey} -> ${ghlStandardKey}:`, {
-        currentValue,
-        newValue
-      })
-    } else {
-      // Custom field - use the GHL field ID from target_ghl_key
-      if (field) {
-        targetFieldId = field.target_ghl_key
-        currentValue = customFieldsMap.get(targetFieldId)
-      } else {
-        // If no field configuration, use the key as is (might be a direct custom field ID)
-        targetFieldId = fieldKey
-        currentValue = customFieldsMap.get(targetFieldId)
-      }
-      
-      console.log(`Custom field ${fieldKey} -> ${targetFieldId}:`, {
-        currentValue,
-        newValue
-      })
-    }
-
-    // Check if field has existing value
-    const hasExistingValue = currentValue !== null && 
-                            currentValue !== undefined && 
-                            currentValue !== '' &&
-                            !(Array.isArray(currentValue) && currentValue.length === 0)
-
-    // Apply overwrite policy
-    let shouldUpdate = false
-    let skipReason = ''
-
-    // Special handling for date fields - ensure proper format
-    if (field && field.field_type === 'DATE' && typeof newValue === 'string') {
-      // Ensure date is in YYYY-MM-DD format for GHL
-      if (newValue.includes('T')) {
-        newValue = newValue.split('T')[0]
-      }
-    }
-
-    switch (policy) {
-      case 'always':
-        shouldUpdate = true
-        break
-        
-      case 'never':
-        shouldUpdate = false
-        skipReason = 'Policy set to never overwrite'
-        break
-        
-      case 'only_empty':
-        shouldUpdate = !hasExistingValue
-        if (hasExistingValue) {
-          skipReason = 'Field has existing value and policy is only_empty'
-        }
-        break
-        
-      default:
-        // Default to always overwrite
-        shouldUpdate = true
-        break
-    }
-
-    if (shouldUpdate) {
-      if (isStandard) {
-        // For standard fields, we need to use the field name without the "contact." prefix
-        // Extract the field name part after 'contact.'
-        let ghlStandardKey
-        if (fieldKey.includes('.')) {
-          ghlStandardKey = getGHLStandardFieldName(fieldKey)
-        } else {
-          ghlStandardKey = getGHLStandardFieldName(`contact.${fieldKey}`)
-        }
-        
-        // Special handling for specific field types
-        switch (ghlStandardKey) {
-          case 'tags':
-            // Merge tags to avoid duplicates
-            const existingTags = existingContact.tags || []
-            const newTags = Array.isArray(newValue) ? newValue : [newValue]
-            updatePayload.tags = Array.from(new Set([...existingTags, ...newTags]))
-            break
-            
-          default:
-            // For standard fields, just add them directly to the update payload
-            updatePayload[ghlStandardKey] = newValue
-            break
-        }
-        
-        console.log(`✅ Will update standard field ${ghlStandardKey}: ${currentValue} → ${newValue}`)
-      } else if (targetFieldId) {
-        // Initialize customFields array if not already done
-        // For custom fields, add to the customFields array with the correct format
-        if (targetFieldId) {
-          updatePayload.customFields.push({
-            id: targetFieldId,
-            value: newValue
-          })
-          
-          console.log(`✅ Will update custom field ${targetFieldId}: ${currentValue} → ${newValue}`)
-        } else {
-          console.log(`⚠️ Cannot update custom field ${fieldKey} - no target field ID available`)
-          skippedFields.push(fieldKey)
-          continue
-        }
-      }
-      
-      updatedFields.push(fieldKey)
-    } else {
-      skippedFields.push(fieldKey)
-      console.log(`⏭️ Skipping ${fieldKey}: ${skipReason}`)
     }
   }
 
@@ -692,23 +617,7 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
     // Move any standard fields that aren't in the valid list to customFields
     Object.keys(cleanPayload).forEach(key => {
       if (!validStandardFields.includes(key) && key !== 'customFields' && key !== 'tags') {
-        console.log(`⚠️ Invalid standard field detected: ${key}, moving to customFields`)
-        
-        // Move to customFields
-        if (!cleanPayload.customFields) {
-          cleanPayload.customFields = []
-        }
-        
-        // Check if this might be a custom field ID
-        if (key.length > 10 && !key.includes('.')) {
-          console.log(`🔄 Moving '${key}' to customFields array with ID: ${key}`)
-          cleanPayload.customFields.push({
-            id: key,
-            value: cleanPayload[key]
-          })
-        } else {
-          console.log(`⚠️ Skipping invalid field: ${key} - not a valid standard field or custom field ID`)
-        }
+        console.log(`⚠️ Invalid standard field detected: ${key}, removing from payload`)
         
         // Remove from standard fields
         delete cleanPayload[key]
