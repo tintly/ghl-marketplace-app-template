@@ -6,13 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 }
 
-interface UpdateRequest {
-  ghl_contact_id: string
-  location_id: string
-  extracted_data: Record<string, any>
-  force_overwrite?: string[]
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -35,24 +28,16 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    console.log('=== GHL CONTACT UPDATE REQUEST ===')
+    console.log('=== AI EXTRACTION PAYLOAD REQUEST ===')
     
-    const requestBody: UpdateRequest = await req.json()
+    const requestBody = await req.json()
+    const conversationId = requestBody.conversation_id
     
-    // Validate required fields
-    if (!requestBody.ghl_contact_id || !requestBody.location_id || !requestBody.extracted_data) {
+    if (!conversationId) {
       return new Response(
-        JSON.stringify({
-          error: "ghl_contact_id, location_id, and extracted_data are required.",
-          example: {
-            ghl_contact_id: "ocQHyuzHvysMo5N5VsXc",
-            location_id: "4beIyWyWrcoPRD7PEN5G",
-            extracted_data: {
-              "contact.firstName": "John",
-              "contact.email": "john.doe@example.com",
-              "custom_field_id": "Some value"
-            }
-          }
+        JSON.stringify({ 
+          error: "conversation_id is required",
+          example: { conversation_id: "abc123" }
         }),
         {
           status: 400,
@@ -64,31 +49,25 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    console.log('Processing update for contact:', {
-      ghl_contact_id: requestBody.ghl_contact_id,
-      location_id: requestBody.location_id,
-      extracted_data_keys: Object.keys(requestBody.extracted_data)
-    })
+    console.log('Building extraction payload for conversation:', conversationId)
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-          console.log(`✅ Will update standard field ${ghlStandardKey}: ${JSON.stringify(currentValue)} → ${JSON.stringify(newValue)}`)
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Step 1: Get GHL configuration
-    console.log('Step 1: Fetching GHL configuration...')
-      if (fieldKey.startsWith('contact.')) {
-        customFieldId = fieldKey.split('.')[1]
-        console.log(`Extracted custom field ID from ${fieldKey}: ${customFieldId}`)
-    const ghlConfig = await getGHLConfiguration(supabase, requestBody.location_id)
-      
-      // Check if this is a direct custom field ID (no contact. prefix)
-      if (field && field.target_ghl_key) {
-        customFieldId = field.target_ghl_key
-        console.log(`Using target_ghl_key as custom field ID: ${customFieldId}`)
-      }
-      
-      // Add to customFields array
+    // Step 1: Get conversation history
+    console.log('Step 1: Fetching conversation history...')
+    const conversationResponse = await fetch(`${supabaseUrl}/functions/v1/get-conversation-history`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`
+      },
+      body: JSON.stringify({ conversation_id: conversationId })
+    })
+
+    if (!conversationResponse.ok) {
       const errorText = await conversationResponse.text()
       throw new Error(`Failed to fetch conversation history: ${conversationResponse.status} - ${errorText}`)
     }
@@ -176,7 +155,7 @@ Deno.serve(async (req: Request) => {
 
     // Build the final payload
     const extractionPayload = {
-      conversation_id: requestBody.conversation_id,
+      conversation_id: conversationId,
       location_id: conversationData.location_id,
       contact_id: conversationData.contact_id,
       business_context: businessContext,
@@ -204,8 +183,35 @@ Deno.serve(async (req: Request) => {
       messages_count: extractionPayload.conversation_history.length
     })
 
+    // Step 7: Call OpenAI extraction function
+    console.log('Step 7: Calling OpenAI extraction function...')
+    const extractionResponse = await fetch(`${supabaseUrl}/functions/v1/openai-extraction`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`
+      },
+      body: JSON.stringify(extractionPayload)
+    })
+
+    if (!extractionResponse.ok) {
+      const errorText = await extractionResponse.text()
+      throw new Error(`OpenAI extraction failed: ${extractionResponse.status} - ${errorText}`)
+    }
+
+    const extractionResult = await extractionResponse.json()
+    console.log('✅ OpenAI extraction completed successfully')
+    console.log('Extracted fields:', Object.keys(extractionResult.extracted_data || {}))
+
     return new Response(
-      JSON.stringify(extractionPayload),
+      JSON.stringify({
+        success: true,
+        conversation_id: conversationId,
+        location_id: conversationData.location_id,
+        contact_id: conversationData.contact_id,
+        extraction_result: extractionResult,
+        timestamp: new Date().toISOString()
+      }),
       {
         status: 200,
         headers: {
@@ -216,7 +222,7 @@ Deno.serve(async (req: Request) => {
     )
 
   } catch (error) {
-    console.error("=== CONTACT UPDATE ERROR ===")
+    console.error("=== AI EXTRACTION PAYLOAD ERROR ===")
     console.error("Error message:", error.message)
     console.error("Stack trace:", error.stack)
     
@@ -279,73 +285,6 @@ async function getGHLConfiguration(supabase: any, locationId: string) {
   return data
 }
 
-function validateTokenExpiry(config: any) {
-  if (!config.token_expires_at) {
-    return { needsRefresh: false }
-  }
-
-  const expiryDate = new Date(config.token_expires_at)
-  const now = new Date()
-  const hoursUntilExpiry = (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60)
-
-  return {
-    needsRefresh: hoursUntilExpiry <= 1,
-    hoursUntilExpiry: Math.round(hoursUntilExpiry)
-  }
-}
-
-async function refreshAccessToken(supabase: any, config: any) {
-  try {
-    const clientId = Deno.env.get('GHL_MARKETPLACE_CLIENT_ID')
-    const clientSecret = Deno.env.get('GHL_MARKETPLACE_CLIENT_SECRET')
-    const apiDomain = Deno.env.get('GHL_API_DOMAIN') || 'https://services.leadconnectorhq.com'
-
-    const params = new URLSearchParams({
-      client_id: clientId!,
-      client_secret: clientSecret!,
-      grant_type: 'refresh_token',
-      refresh_token: config.refresh_token
-    })
-
-    const response = await fetch(`${apiDomain}/oauth/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': 'application/json'
-      },
-      body: params.toString()
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Token refresh failed: ${response.status} - ${errorText}`)
-    }
-
-    const tokenData = await response.json()
-    const expiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString()
-    
-    await supabase
-      .from('ghl_configurations')
-      .update({
-        access_token: tokenData.access_token,
-        refresh_token: tokenData.refresh_token,
-        token_expires_at: expiresAt,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', config.id)
-
-    return {
-      success: true,
-      accessToken: tokenData.access_token
-    }
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message
-    }
-  }
-}
-
 async function getExtractionFields(supabase: any, configId: string) {
   const { data, error } = await supabase
     .from('data_extraction_fields')
@@ -370,3 +309,4 @@ async function getExtractionFields(supabase: any, configId: string) {
   }
 
   return data || []
+}
