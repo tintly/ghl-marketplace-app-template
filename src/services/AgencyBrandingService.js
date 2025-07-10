@@ -21,7 +21,14 @@ export class AgencyBrandingService {
     }
 
     try {
+      // Check if user is agency type
+      const isAgency = this.authService?.getCurrentUser()?.type === 'agency'
+      
+      // For agency users, try to get branding directly by company ID first
+      if (isAgency && this.authService?.getCurrentUser()?.companyId) {
+        const companyId = this.authService.getCurrentUser().companyId
         console.log('User is agency type, trying to get branding directly by company ID:', companyId)
+        
         let supabase
         try {
           supabase = await this.getSupabaseClient()
@@ -83,7 +90,7 @@ export class AgencyBrandingService {
         .from('agency_branding')
         .select('*')
         .eq('agency_ghl_id', locationConfig.agency_ghl_id)
-        .single()
+        .maybeSingle()
 
       if (error) {
         console.error('Error fetching agency branding:', error)
@@ -110,7 +117,7 @@ export class AgencyBrandingService {
   async getSupabaseClient() {
     try {
       if (this.authService?.getSupabaseClient) {
-        const client = await this.authService.getSupabaseClient()
+        const client = this.authService.getSupabaseClient()
         if (client) return client
       }
       
@@ -140,7 +147,13 @@ export class AgencyBrandingService {
   async updateAgencyBranding(agencyId, brandingData) {
     try {
       console.log('Updating agency branding for agency ID:', agencyId)
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+      let supabase
+      try {
+        supabase = await this.getSupabaseClient()
+      } catch (error) {
+        console.error('Error getting Supabase client:', error)
+        throw new Error('Database connection error: ' + error.message)
+      }
 
       // First check if a record exists
       const { data: existingData, error: checkError } = await supabase
@@ -207,7 +220,13 @@ export class AgencyBrandingService {
   // Get agency permissions
   async getAgencyPermissions(agencyId) {
     try {
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+      let supabase
+      try {
+        supabase = await this.getSupabaseClient()
+      } catch (error) {
+        console.error('Error getting Supabase client:', error)
+        return this.getDefaultPermissions()
+      }
 
       const { data, error } = await supabase
         .rpc('get_agency_permissions', {

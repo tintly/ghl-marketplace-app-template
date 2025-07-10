@@ -1,272 +1,286 @@
-export class AgencyBrandingService {
-  constructor(authService = null) {
-    this.authService = authService
-    this.cache = new Map()
-    this.cacheTimeout = 5 * 60 * 1000 // 5 minutes
-  }
+import React, { useState, useEffect } from 'react'
+import { DatabaseService } from '../services/DatabaseService'
 
-  // Get agency branding for current user's location
-  async getAgencyBranding(locationId) {
-    const cacheKey = `branding-${locationId}`
-    console.log('Getting agency branding for location:', locationId)
-    
-    // Check cache first
-    if (this.cache.has(cacheKey)) {
-      const cached = this.cache.get(cacheKey)
-      if (Date.now() - cached.timestamp < this.cacheTimeout) {
-        console.log('Returning cached branding data')
-        return cached.data
-      }
-      this.cache.delete(cacheKey)
-    }
+function ConfigurationDebugger({ user, authService, onConfigurationFound }) {
+  const [loading, setLoading] = useState(false)
+  const [debugData, setDebugData] = useState(null)
+  const [allConfigs, setAllConfigs] = useState([])
+  const [error, setError] = useState(null)
+  const [rlsTest, setRlsTest] = useState(null)
+
+  useEffect(() => {
+    runDiagnostics()
+  }, [user])
+
+  const runDiagnostics = async () => {
+    setLoading(true)
+    setError(null)
 
     try {
-        console.log('User is agency type, trying to get branding directly by company ID:', companyId)
+      console.log('=== CONFIGURATION DIAGNOSTICS ===')
+      
+      // Test RLS policies first
+      console.log('Testing RLS policies...')
+      try {
         let supabase
         try {
-          supabase = await this.getSupabaseClient()
-        } catch (error) {
-          console.error('Error getting Supabase client:', error)
-          return this.getDefaultBranding()
+          if (authService?.getSupabaseClient) {
+            supabase = authService.getSupabaseClient()
+          } else {
+            const { supabase: defaultClient } = await import('../services/supabase')
+            supabase = defaultClient
+          }
+        } catch (clientError) {
+          console.error('Error getting Supabase client:', clientError)
+          throw new Error('Database connection error: ' + clientError.message)
         }
         
-        const { data: directBranding, error: directError } = await supabase
-          .from('agency_branding')
-          .select('*')
-          .eq('agency_ghl_id', companyId)
-          .maybeSingle()
-          
-        if (!directError && directBranding) {
-          console.log('Found branding directly by company ID:', directBranding)
-          
-          // Cache the result
-          this.cache.set(cacheKey, {
-            data: directBranding,
-            timestamp: Date.now()
-          })
-          
-          return directBranding
+        const { data: rlsTestData, error: rlsError } = await supabase
+          .rpc('test_ghl_configuration_access')
+
+        if (rlsError) {
+          console.error('RLS test failed:', rlsError)
+          setRlsTest({ error: rlsError.message })
+        } else {
+          console.log('RLS test result:', rlsTestData)
+          setRlsTest(rlsTestData?.[0] || null)
         }
+      } catch (rlsTestError) {
+        console.error('RLS test error:', rlsTestError)
+        setRlsTest({ error: rlsTestError.message })
       }
 
-      let supabase
-      try {
-        supabase = await this.getSupabaseClient()
-      } catch (error) {
-        console.error('Error getting Supabase client:', error)
-        return this.getDefaultBranding()
+      // Get all configurations for debugging
+      const allConfigsResult = await DatabaseService.getAllConfigurations(authService)
+      if (allConfigsResult.error) {
+        console.error('Failed to fetch configurations:', allConfigsResult.error)
+        setAllConfigs([])
+      } else {
+        setAllConfigs(allConfigsResult.data)
+        console.log('Total configurations in database:', allConfigsResult.data.length)
       }
 
-      // First try to get branding by location
-      console.log('Fetching agency branding by location ID')
-      const { data: locationConfig, error: locationError } = await supabase
-        .from('ghl_configurations')
-        .select('agency_ghl_id')
-        .eq('ghl_account_id', locationId)
-        .maybeSingle()
-
-      if (locationError) {
-        console.error('Error fetching location config:', locationError)
-        return this.getDefaultBranding()
-      }
-
-      if (!locationConfig || !locationConfig.agency_ghl_id) {
-        console.log('No agency ID found for location, returning default branding')
-        return this.getDefaultBranding()
-      }
-
-      console.log('Found agency ID for location:', locationConfig.agency_ghl_id)
+      // Try comprehensive lookup
+      const lookupResult = await DatabaseService.findConfiguration(user.userId, user.locationId, authService)
       
-      // Now get the branding for this agency
-      console.log('Fetching branding for agency')
-      const { data, error } = await supabase
-        .from('agency_branding')
-        .select('*')
-        .eq('agency_ghl_id', locationConfig.agency_ghl_id)
-        .single()
-
-      if (error) {
-        console.error('Error fetching agency branding:', error)
-        return this.getDefaultBranding()
-      }
-
-      const branding = data || this.getDefaultBranding()
-      console.log('Fetched branding data:', branding)
-      
-      // Cache the result
-      this.cache.set(cacheKey, {
-        data: branding,
-        timestamp: Date.now()
+      setDebugData({
+        targetUserId: user.userId,
+        targetLocationId: user.locationId,
+        lookupResult,
+        totalConfigs: allConfigsResult.data?.length || 0,
+        matchingLocation: allConfigsResult.data?.filter(c => c.ghl_account_id === user.locationId) || [],
+        matchingUser: allConfigsResult.data?.filter(c => c.user_id === user.userId) || [],
+        databaseError: allConfigsResult.error
       })
 
-      return branding
-    } catch (error) {
-      console.error('Agency branding service error:', error)
-      return this.getDefaultBranding()
-    }
-  }
-
-  // Helper method to get Supabase client
-  async getSupabaseClient() {
-    try {
-      if (this.authService?.getSupabaseClient) {
-        const client = await this.authService.getSupabaseClient()
-        if (client) return client
-      }
-      
-      const { supabase } = await import('./supabase')
-      return supabase
-    } catch (error) {
-      console.error('Error getting Supabase client:', error)
-      throw error
-    }
-  }
-
-  // Get default branding when no agency branding is available
-  getDefaultBranding() {
-    return {
-      agency_name: 'GoHighLevel',
-      custom_app_name: 'Data Extractor',
-      primary_color: '#3B82F6',
-      secondary_color: '#1F2937',
-      accent_color: '#10B981',
-      hide_ghl_branding: false,
-      welcome_message: 'Welcome to your conversation data extractor.',
-      support_email: 'support@gohighlevel.com'
-    }
-  }
-
-  // Update agency branding (for agency users only)
-  async updateAgencyBranding(agencyId, brandingData) {
-    try {
-      console.log('Updating agency branding for agency ID:', agencyId)
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
-
-      // First check if a record exists
-      const { data: existingData, error: checkError } = await supabase
-        .from('agency_branding')
-        .select('id')
-        .eq('agency_ghl_id', agencyId)
-        .maybeSingle()
-
-      if (checkError) {
-        console.error('Error checking existing branding:', checkError)
-        throw new Error(`Failed to check existing branding: ${checkError.message}`)
+      if (lookupResult.found && onConfigurationFound) {
+        onConfigurationFound(lookupResult.data)
       }
 
-      let result;
-      
-      if (existingData) {
-        // Update existing record
-        console.log('Updating existing branding record with ID:', existingData.id)
-        const { data, error } = await supabase
-          .from('agency_branding')
-          .update({
-            ...brandingData,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingData.id)
-          .select()
-          .single()
+    } catch (error) {
+      console.error('Diagnostics error:', error)
+      setError(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
-        if (error) {
-          throw new Error(`Failed to update branding: ${error.message}`)
+  const createTestConfiguration = async () => {
+    setLoading(true)
+    try {
+      const configData = {
+        user_id: user.userId,
+        ghl_account_id: user.locationId,
+        client_id: 'test-client-id',
+        client_secret: 'test-client-secret',
+        access_token: 'test-access-token-' + Date.now(),
+        refresh_token: 'test-refresh-token-' + Date.now(),
+        token_expires_at: new Date(Date.now() + (365 * 24 * 60 * 60 * 1000)).toISOString(),
+        business_name: 'Test Configuration',
+        business_description: 'Test configuration created by debugger',
+        is_active: true,
+        created_by: user.userId
+      }
+
+      const result = await DatabaseService.createConfiguration(configData, authService)
+      
+      if (result.success) {
+        console.log('✅ Test configuration created:', result.data.id)
+        if (onConfigurationFound) {
+          onConfigurationFound(result.data)
         }
-        
-        result = data
+        // Re-run diagnostics to show the new config
+        await runDiagnostics()
       } else {
-        // Insert new record
-        console.log('Creating new branding record for agency ID:', agencyId)
-        const { data, error } = await supabase
-          .from('agency_branding')
-          .insert({
-            agency_ghl_id: agencyId,
-            ...brandingData,
-            updated_at: new Date().toISOString()
-          })
-          .select()
-          .single()
-
-        if (error) {
-          throw new Error(`Failed to create branding: ${error.message}`)
-        }
-        
-        result = data
+        throw new Error(result.error)
       }
-
-      // Clear cache for this agency
-      this.clearCacheForAgency(agencyId)
-
-      return { success: true, data: result }
     } catch (error) {
-      console.error('Error updating agency branding:', error)
-      return { success: false, error: error.message }
+      console.error('Error creating test configuration:', error)
+      setError(error.message)
+    } finally {
+      setLoading(false)
     }
   }
 
-  // Get agency permissions
-  async getAgencyPermissions(agencyId) {
+  const linkExistingConfiguration = async (configId) => {
+    setLoading(true)
     try {
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
-
-      const { data, error } = await supabase
-        .rpc('get_agency_permissions', {
-          agency_id: agencyId
-        })
-
-      if (error) {
-        console.error('Error fetching agency permissions:', error)
-        return this.getDefaultPermissions()
+      const result = await DatabaseService.linkConfigurationToUser(configId, user.userId, authService)
+      
+      if (result.success) {
+        console.log('✅ Configuration linked:', result.data.id)
+        if (onConfigurationFound) {
+          onConfigurationFound(result.data)
+        }
+        await runDiagnostics()
+      } else {
+        throw new Error(result.error)
       }
-
-      return data || this.getDefaultPermissions()
     } catch (error) {
-      console.error('Agency permissions service error:', error)
-      return this.getDefaultPermissions()
+      console.error('Error linking configuration:', error)
+      setError(error.message)
+    } finally {
+      setLoading(false)
     }
   }
 
-  // Get default permissions
-  getDefaultPermissions() {
-    return {
-      plan_type: 'basic',
-      max_locations: 10,
-      max_extractions_per_month: 1000,
-      can_use_own_openai_key: false,
-      can_customize_branding: false,
-      can_use_custom_domain: false,
-      can_access_usage_analytics: false,
-      can_manage_team_members: false
-    }
+  if (loading) {
+    return (
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="flex items-center">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+          <span className="text-blue-800">Running configuration diagnostics...</span>
+        </div>
+      </div>
+    )
   }
 
-  // Apply branding to CSS variables
-  applyBrandingToCSS(branding) {
-    if (typeof document === 'undefined') return
+  return (
+    <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+      <h3 className="text-lg font-medium text-gray-900 mb-4">Configuration Diagnostics</h3>
+      
+      {error && (
+        <div className="error-card">
+          <p className="text-red-600 text-sm font-medium">{error}</p>
+        </div>
+      )}
 
-    const root = document.documentElement
-    
-    root.style.setProperty('--primary-color', branding.primary_color || '#3B82F6')
-    root.style.setProperty('--secondary-color', branding.secondary_color || '#1F2937')
-    root.style.setProperty('--accent-color', branding.accent_color || '#10B981')
-    
-    // Update page title if custom app name is provided
-    if (branding.custom_app_name) {
-      document.title = branding.custom_app_name
-    }
-  }
+      {/* RLS Test Results */}
+      {rlsTest && (
+        <div className="bg-white border rounded-lg p-4 mb-4 shadow-sm">
+          <h4 className="font-semibold text-gray-800 mb-2">Database Access Test</h4>
+          {rlsTest.error ? (
+            <div className="text-sm text-red-600">
+              <p><strong>Error:</strong> {rlsTest.error}</p>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-600 space-y-1">
+              <p><strong>Total Configs:</strong> {rlsTest.total_configs}</p>
+              <p><strong>Accessible:</strong> {rlsTest.accessible_configs}</p>
+              <p><strong>Status:</strong> {rlsTest.test_result}</p>
+            </div>
+          )}
+        </div>
+      )}
 
-  // Clear cache for specific agency
-  clearCacheForAgency(agencyId) {
-    for (const [key] of this.cache) {
-      if (key.includes(agencyId)) {
-        this.cache.delete(key)
-      }
-    }
-  }
+      {debugData && (
+        <div className="space-y-4">
+          {/* Target Information */}
+          <div className="bg-white border rounded-lg p-4 shadow-sm">
+            <h4 className="font-semibold text-gray-800 mb-2">Target Information</h4>
+            <div className="text-sm text-gray-600 space-y-1">
+              <p><strong>User ID:</strong> {debugData.targetUserId}</p>
+              <p><strong>Location ID:</strong> {debugData.targetLocationId}</p>
+              <p><strong>Auth Service:</strong> {authService ? 'Available' : 'Not Available'}</p>
+              <p><strong>JWT:</strong> {authService?.getJWT() ? 'Available' : 'Not Available'}</p>
+            </div>
+          </div>
 
-  // Clear all cache
-  clearCache() {
-    this.cache.clear()
-  }
+          {/* Lookup Results */}
+          <div className="bg-white border rounded-lg p-4 shadow-sm">
+            <h4 className="font-semibold text-gray-800 mb-2">Lookup Results</h4>
+            <div className="text-sm text-gray-600 space-y-1">
+              <p><strong>Found:</strong> {debugData.lookupResult.found ? '✅ Yes' : '❌ No'}</p>
+              <p><strong>Strategy:</strong> {debugData.lookupResult.strategy}</p>
+              {debugData.lookupResult.data && (
+                <p><strong>Config ID:</strong> {debugData.lookupResult.data.id}</p>
+              )}
+              {debugData.lookupResult.error && (
+                <p><strong>Error:</strong> {debugData.lookupResult.error}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Database Statistics */}
+          <div className="bg-white border rounded-lg p-4 shadow-sm">
+            <h4 className="font-semibold text-gray-800 mb-2">Database Statistics</h4>
+            <div className="text-sm text-gray-600 space-y-1">
+              <p><strong>Total Configurations:</strong> {debugData.totalConfigs}</p>
+              <p><strong>Matching Location:</strong> {debugData.matchingLocation.length}</p>
+              <p><strong>Matching User:</strong> {debugData.matchingUser.length}</p>
+              {debugData.databaseError && (
+                <p><strong>Database Error:</strong> <span className="text-red-600">{debugData.databaseError}</span></p>
+              )}
+            </div>
+          </div>
+
+          {/* Available Configurations */}
+          {allConfigs.length > 0 && (
+            <div className="bg-white border rounded-lg p-4 shadow-sm">
+              <h4 className="font-semibold text-gray-800 mb-2">Available Configurations</h4>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {allConfigs.map(config => (
+                  <div key={config.id} className="text-xs bg-gray-50 p-3 rounded">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p><strong>ID:</strong> {config.id.substring(0, 8)}...</p>
+                        <p><strong>User:</strong> {config.user_id || 'null'}</p>
+                        <p><strong>Location:</strong> {config.ghl_account_id}</p>
+                        <p><strong>Name:</strong> {config.business_name}</p>
+                      </div>
+                      {config.ghl_account_id === user.locationId && config.user_id !== user.userId && (
+                        <button
+                          onClick={() => linkExistingConfiguration(config.id)}
+                          className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs"
+                          disabled={loading}
+                        >
+                          Link
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="bg-white border rounded-lg p-4 shadow-sm">
+            <h4 className="font-semibold text-gray-800 mb-2">Actions</h4>
+            <div className="space-y-2">
+              <button
+                onClick={runDiagnostics}
+                className="btn-secondary text-sm mr-2"
+                disabled={loading}
+              >
+                Re-run Diagnostics
+              </button>
+              
+              {!debugData.lookupResult.found && (
+                <button
+                  onClick={createTestConfiguration}
+                  className="btn-success text-sm"
+                  disabled={loading}
+                >
+                  Create Test Configuration
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
+
+export default ConfigurationDebugger

@@ -1,272 +1,236 @@
-export class AgencyBrandingService {
-  constructor(authService = null) {
-    this.authService = authService
-    this.cache = new Map()
-    this.cacheTimeout = 5 * 60 * 1000 // 5 minutes
+export class AuthService {
+  constructor() {
+    this.currentUser = null
+    this.isAuthenticated = false
   }
 
-  // Get agency branding for current user's location
-  async getAgencyBranding(locationId) {
-    const cacheKey = `branding-${locationId}`
-    console.log('Getting agency branding for location:', locationId)
-    
-    // Check cache first
-    if (this.cache.has(cacheKey)) {
-      const cached = this.cache.get(cacheKey)
-      if (Date.now() - cached.timestamp < this.cacheTimeout) {
-        console.log('Returning cached branding data')
-        return cached.data
-      }
-      this.cache.delete(cacheKey)
-    }
-
+  // Get user data using GHL SSO or standalone mode
+  async getUserData() {
     try {
-        console.log('User is agency type, trying to get branding directly by company ID:', companyId)
-        let supabase
-        try {
-          supabase = await this.getSupabaseClient()
-        } catch (error) {
-          console.error('Error getting Supabase client:', error)
-          return this.getDefaultBranding()
-        }
-        
-        const { data: directBranding, error: directError } = await supabase
-          .from('agency_branding')
-          .select('*')
-          .eq('agency_ghl_id', companyId)
-          .maybeSingle()
-          
-        if (!directError && directBranding) {
-          console.log('Found branding directly by company ID:', directBranding)
-          
-          // Cache the result
-          this.cache.set(cacheKey, {
-            data: directBranding,
-            timestamp: Date.now()
-          })
-          
-          return directBranding
-        }
+      console.log('Starting authentication process...')
+      
+      // Check if we have Supabase configuration
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+      if (!supabaseUrl) {
+        throw new Error('VITE_SUPABASE_URL environment variable is not set')
       }
 
-      let supabase
+      // Check if we're on the OAuth callback page - if so, skip SSO
+      if (window.location.pathname === '/oauth/callback') {
+        console.log('On OAuth callback page, skipping SSO authentication')
+        throw new Error('OAuth callback page - SSO not needed')
+      }
+
+      // Check if we just completed an OAuth installation
+      const installationData = localStorage.getItem('ghl_installation')
+      if (installationData) {
+        console.log('Found recent OAuth installation, using standalone mode')
+        return this.handleStandaloneMode(JSON.parse(installationData))
+      }
+
+      // Try to get encrypted data from parent window (for GHL SSO)
+      let encryptedUserData = null
       try {
-        supabase = await this.getSupabaseClient()
-      } catch (error) {
-        console.error('Error getting Supabase client:', error)
-        return this.getDefaultBranding()
+        encryptedUserData = await this.getEncryptedUserData()
+        console.log('Encrypted user data received from GHL SSO')
+      } catch (ssoError) {
+        console.log('GHL SSO not available:', ssoError.message)
+        throw new Error('GHL SSO authentication required')
       }
 
-      // First try to get branding by location
-      console.log('Fetching agency branding by location ID')
-      const { data: locationConfig, error: locationError } = await supabase
-        .from('ghl_configurations')
-        .select('agency_ghl_id')
-        .eq('ghl_account_id', locationId)
-        .maybeSingle()
-
-      if (locationError) {
-        console.error('Error fetching location config:', locationError)
-        return this.getDefaultBranding()
-      }
-
-      if (!locationConfig || !locationConfig.agency_ghl_id) {
-        console.log('No agency ID found for location, returning default branding')
-        return this.getDefaultBranding()
-      }
-
-      console.log('Found agency ID for location:', locationConfig.agency_ghl_id)
-      
-      // Now get the branding for this agency
-      console.log('Fetching branding for agency')
-      const { data, error } = await supabase
-        .from('agency_branding')
-        .select('*')
-        .eq('agency_ghl_id', locationConfig.agency_ghl_id)
-        .single()
-
-      if (error) {
-        console.error('Error fetching agency branding:', error)
-        return this.getDefaultBranding()
-      }
-
-      const branding = data || this.getDefaultBranding()
-      console.log('Fetched branding data:', branding)
-      
-      // Cache the result
-      this.cache.set(cacheKey, {
-        data: branding,
-        timestamp: Date.now()
+      // Use Supabase Edge Function for SSO authentication
+      const response = await fetch(`${supabaseUrl}/functions/v1/auth-user-context`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({ key: encryptedUserData })
       })
 
-      return branding
-    } catch (error) {
-      console.error('Agency branding service error:', error)
-      return this.getDefaultBranding()
-    }
-  }
+      console.log('Auth response status:', response.status)
 
-  // Helper method to get Supabase client
-  async getSupabaseClient() {
-    try {
-      if (this.authService?.getSupabaseClient) {
-        const client = await this.authService.getSupabaseClient()
-        if (client) return client
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Auth response error:', errorText)
+        throw new Error(`Authentication failed: ${response.status} - ${errorText}`)
+      }
+
+      const result = await response.json()
+      console.log('Authentication successful:', result)
+      
+      // Store the JWT for later use with Supabase
+      if (result.supabaseJWT) {
+        console.log('Storing JWT for Supabase operations...')
+        this.supabaseJWT = result.supabaseJWT
+        
+        // Set up Supabase client with the JWT
+        await this.setupSupabaseClient()
       }
       
-      const { supabase } = await import('./supabase')
-      return supabase
+      this.currentUser = result.user
+      this.isAuthenticated = true
+      
+      return result.user
     } catch (error) {
-      console.error('Error getting Supabase client:', error)
+      console.error('Failed to fetch user data:', error)
       throw error
     }
   }
 
-  // Get default branding when no agency branding is available
-  getDefaultBranding() {
-    return {
-      agency_name: 'GoHighLevel',
-      custom_app_name: 'Data Extractor',
-      primary_color: '#3B82F6',
-      secondary_color: '#1F2937',
-      accent_color: '#10B981',
-      hide_ghl_branding: false,
-      welcome_message: 'Welcome to your conversation data extractor.',
-      support_email: 'support@gohighlevel.com'
-    }
-  }
-
-  // Update agency branding (for agency users only)
-  async updateAgencyBranding(agencyId, brandingData) {
+  // Set up Supabase client with custom JWT
+  async setupSupabaseClient() {
     try {
-      console.log('Updating agency branding for agency ID:', agencyId)
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
-
-      // First check if a record exists
-      const { data: existingData, error: checkError } = await supabase
-        .from('agency_branding')
-        .select('id')
-        .eq('agency_ghl_id', agencyId)
-        .maybeSingle()
-
-      if (checkError) {
-        console.error('Error checking existing branding:', checkError)
-        throw new Error(`Failed to check existing branding: ${checkError.message}`)
-      }
-
-      let result;
+      const { createClient } = await import('@supabase/supabase-js')
       
-      if (existingData) {
-        // Update existing record
-        console.log('Updating existing branding record with ID:', existingData.id)
-        const { data, error } = await supabase
-          .from('agency_branding')
-          .update({
-            ...brandingData,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingData.id)
-          .select()
-          .single()
-
-        if (error) {
-          throw new Error(`Failed to update branding: ${error.message}`)
+      // Create a new Supabase client with the JWT as the access token
+      this.supabaseClient = createClient(
+        import.meta.env.VITE_SUPABASE_URL,
+        import.meta.env.VITE_SUPABASE_ANON_KEY,
+        {
+          global: {
+            headers: {
+              Authorization: `Bearer ${this.supabaseJWT}`
+            }
+          }
         }
-        
-        result = data
-      } else {
-        // Insert new record
-        console.log('Creating new branding record for agency ID:', agencyId)
-        const { data, error } = await supabase
-          .from('agency_branding')
-          .insert({
-            agency_ghl_id: agencyId,
-            ...brandingData,
-            updated_at: new Date().toISOString()
-          })
-          .select()
-          .single()
+      )
 
-        if (error) {
-          throw new Error(`Failed to create branding: ${error.message}`)
-        }
-        
-        result = data
-      }
-
-      // Clear cache for this agency
-      this.clearCacheForAgency(agencyId)
-
-      return { success: true, data: result }
+      console.log('Supabase client configured with custom JWT')
+      return this.supabaseClient
     } catch (error) {
-      console.error('Error updating agency branding:', error)
-      return { success: false, error: error.message }
+      console.error('Error setting up Supabase client:', error)
+      throw error
     }
   }
 
-  // Get agency permissions
-  async getAgencyPermissions(agencyId) {
+  // Get the configured Supabase client
+  getSupabaseClient() {
+    return this.supabaseClient
+  }
+
+  // Handle standalone mode for OAuth installations
+  async handleStandaloneMode(installationData) {
+    console.log('Handling standalone mode with installation data:', installationData)
+    
+    // Create a user object for standalone mode using the actual userId from OAuth
+    const standaloneUser = {
+      userId: installationData.userId || `oauth_${installationData.locationId || installationData.companyId}`,
+      email: 'oauth-user@example.com',
+      userName: 'OAuth User',
+      role: 'admin',
+      type: installationData.userType || 'location',
+      companyId: installationData.companyId,
+      locationId: installationData.locationId || installationData.companyId,
+      activeLocation: installationData.locationId,
+      standaloneMode: true,
+      installedAt: installationData.installedAt,
+      configId: installationData.configId,
+      configValidated: true,
+      tokenStatus: 'valid'
+    }
+
+    this.currentUser = standaloneUser
+    this.isAuthenticated = true
+    
+    // For standalone mode, use the regular Supabase client
+    const { createClient } = await import('@supabase/supabase-js')
+    this.supabaseClient = createClient(
+      import.meta.env.VITE_SUPABASE_URL,
+      import.meta.env.VITE_SUPABASE_ANON_KEY
+    )
+    
+    // Clear the installation data after a delay to allow for page refreshes
+    setTimeout(() => {
+      localStorage.removeItem('ghl_installation')
+    }, 60000) // Clear after 1 minute
+    
+    return standaloneUser
+  }
+
+  // Extract the encrypted user data logic into separate method
+  async getEncryptedUserData() {
+    return new Promise((resolve, reject) => {
+      console.log('Requesting user data from parent window...')
+      
+      const timeout = setTimeout(() => {
+        console.log('Timeout waiting for user data from parent window')
+        reject(new Error('Timeout waiting for user data from parent window'))
+      }, 5000)
+
+      // Request user data from parent window
+      window.parent.postMessage({ message: 'REQUEST_USER_DATA' }, '*')
+
+      // Listen for the response
+      const messageHandler = ({ data, origin }) => {
+        console.log('Received message from parent:', { message: data.message, origin })
+        
+        if (data.message === 'REQUEST_USER_DATA_RESPONSE') {
+          clearTimeout(timeout)
+          window.removeEventListener('message', messageHandler)
+          
+          if (data.payload) {
+            console.log('User data payload received')
+            resolve(data.payload)
+          } else {
+            console.error('No payload in user data response')
+            reject(new Error('No user data payload received'))
+          }
+        }
+      }
+
+      window.addEventListener('message', messageHandler)
+    })
+  }
+
+  // Verify access to a specific location
+  async verifyLocationAccess(locationId) {
     try {
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
-
-      const { data, error } = await supabase
-        .rpc('get_agency_permissions', {
-          agency_id: agencyId
-        })
-
-      if (error) {
-        console.error('Error fetching agency permissions:', error)
-        return this.getDefaultPermissions()
+      // If in standalone mode, always allow access to the installed location
+      if (this.currentUser?.standaloneMode) {
+        return this.currentUser.locationId === locationId
       }
 
-      return data || this.getDefaultPermissions()
+      let encryptedUserData = null
+      try {
+        encryptedUserData = await this.getEncryptedUserData()
+      } catch (error) {
+        console.log('Cannot verify location access without SSO data')
+        return false
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/auth-verify-location/${locationId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({ key: encryptedUserData })
+      })
+
+      if (!response.ok) {
+        throw new Error('Access verification failed')
+      }
+
+      const result = await response.json()
+      return result.hasAccess
     } catch (error) {
-      console.error('Agency permissions service error:', error)
-      return this.getDefaultPermissions()
+      console.error('Failed to verify location access:', error)
+      return false
     }
   }
 
-  // Get default permissions
-  getDefaultPermissions() {
-    return {
-      plan_type: 'basic',
-      max_locations: 10,
-      max_extractions_per_month: 1000,
-      can_use_own_openai_key: false,
-      can_customize_branding: false,
-      can_use_custom_domain: false,
-      can_access_usage_analytics: false,
-      can_manage_team_members: false
-    }
+  getCurrentUser() {
+    return this.currentUser
   }
 
-  // Apply branding to CSS variables
-  applyBrandingToCSS(branding) {
-    if (typeof document === 'undefined') return
-
-    const root = document.documentElement
-    
-    root.style.setProperty('--primary-color', branding.primary_color || '#3B82F6')
-    root.style.setProperty('--secondary-color', branding.secondary_color || '#1F2937')
-    root.style.setProperty('--accent-color', branding.accent_color || '#10B981')
-    
-    // Update page title if custom app name is provided
-    if (branding.custom_app_name) {
-      document.title = branding.custom_app_name
-    }
+  isUserAuthenticated() {
+    return this.isAuthenticated
   }
 
-  // Clear cache for specific agency
-  clearCacheForAgency(agencyId) {
-    for (const [key] of this.cache) {
-      if (key.includes(agencyId)) {
-        this.cache.delete(key)
-      }
-    }
-  }
-
-  // Clear all cache
-  clearCache() {
-    this.cache.clear()
+  getJWT() {
+    return this.supabaseJWT
   }
 }
