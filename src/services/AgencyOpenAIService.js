@@ -81,10 +81,16 @@ export class AgencyOpenAIService {
   // Add new OpenAI key for agency
   async addOpenAIKey(agencyId, keyData) {
     try {
-      // First check if agency has permission
-      const canUse = await this.canUseCustomOpenAIKey(agencyId)
-      if (!canUse) {
-        throw new Error('Agency does not have permission to use custom OpenAI keys')
+      // Skip permission check for agency users
+      const user = this.authService?.getCurrentUser()
+      const isAgency = user?.type === 'agency'
+      
+      if (!isAgency) {
+        // Only check permissions for non-agency users
+        const canUse = await this.canUseCustomOpenAIKey(agencyId)
+        if (!canUse) {
+          throw new Error('Your account does not have permission to use custom OpenAI keys')
+        }
       }
 
       const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
@@ -92,6 +98,8 @@ export class AgencyOpenAIService {
       // Encrypt the API key before storing (in production, use proper encryption)
       const encryptedKey = await this.encryptApiKey(keyData.api_key)
 
+      console.log('Adding OpenAI key for agency:', agencyId)
+      
       const { data, error } = await supabase
         .from('agency_openai_keys')
         .insert({
@@ -106,6 +114,7 @@ export class AgencyOpenAIService {
         .single()
 
       if (error) {
+        console.error('Database error adding OpenAI key:', error)
         throw new Error(`Failed to add OpenAI key: ${error.message}`)
       }
 
@@ -262,15 +271,25 @@ export class AgencyOpenAIService {
   // Simple encryption for API keys (in production, use proper encryption service)
   async encryptApiKey(apiKey) {
     // This is a placeholder - in production, use proper encryption
-    // You should use a proper encryption service or library
-    return btoa(apiKey) // Base64 encoding as placeholder
+    try {
+      return btoa(apiKey) // Base64 encoding as placeholder
+    } catch (error) {
+      console.error('Error encrypting API key:', error)
+      // Fallback for environments where btoa might not be available
+      return Buffer.from(apiKey).toString('base64')
+    }
   }
 
   // Simple decryption for API keys (in production, use proper decryption service)
   async decryptApiKey(encryptedKey) {
     // This is a placeholder - in production, use proper decryption
     try {
-      return atob(encryptedKey) // Base64 decoding as placeholder
+      try {
+        return atob(encryptedKey) // Base64 decoding as placeholder
+      } catch (error) {
+        // Fallback for environments where atob might not be available
+        return Buffer.from(encryptedKey, 'base64').toString()
+      }
     } catch (error) {
       console.error('Error decrypting API key:', error)
       return null

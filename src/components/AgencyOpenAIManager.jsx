@@ -21,39 +21,72 @@ function AgencyOpenAIManager({ user, authService }) {
       setLoading(true)
       setError(null)
 
-      // Check permissions
-      // For agency users, we'll check both methods
-      const isAgency = user.type === 'agency'
-      
-      // For agency users, always allow access regardless of database permissions
-      let canUse = isAgency
-      let isAgencyPlan = isAgency
-      
-      // Only check database permissions for non-agency users
-      if (!isAgency) {
-        canUse = await openaiService.canUseCustomOpenAIKey(user.companyId)
-        isAgencyPlan = await openaiService.isAgencyPlan()
-      }
-      
-      setPermissions({ 
-        can_use_own_openai_key: canUse,
-        is_agency_plan: isAgencyPlan
+      console.log('Loading OpenAI data for user:', {
+        userId: user.userId,
+        type: user.type,
+        companyId: user.companyId
       })
-      
-      // Only require upgrade if not agency type and can't use keys
-      setUpgradeRequired(!isAgency && !canUse)
 
-      if (canUse) {
+      // Agency users always have permission
+      const isAgency = user.type === 'agency'
+
+      if (isAgency) {
+        console.log('User is agency type, skipping permission check')
+        setPermissions({
+          can_use_own_openai_key: true,
+          is_agency_plan: true
+        })
+        setUpgradeRequired(false)
+      } else {
+        // For non-agency users, check permissions
+        try {
+          const canUse = await openaiService.canUseCustomOpenAIKey(user.companyId)
+          const isAgencyPlan = await openaiService.isAgencyPlan()
+          
+          setPermissions({
+            can_use_own_openai_key: canUse,
+            is_agency_plan: isAgencyPlan
+          })
+          
+          setUpgradeRequired(!canUse)
+        } catch (permError) {
+          console.error('Error checking permissions:', permError)
+          setPermissions({
+            can_use_own_openai_key: false,
+            is_agency_plan: false
+          })
+          setUpgradeRequired(true)
+        }
+      }
+
+      // Load keys for agency users or users with permission
+      if (isAgency || permissions?.can_use_own_openai_key) {
         // Load keys
-        const keysResult = await openaiService.getAgencyOpenAIKeys(user.companyId)
-        if (keysResult.success) {
-          setKeys(keysResult.data)
+        try {
+          console.log('Loading OpenAI keys for company ID:', user.companyId)
+          const keysResult = await openaiService.getAgencyOpenAIKeys(user.companyId)
+          if (keysResult.success) {
+            setKeys(keysResult.data)
+            console.log(`Loaded ${keysResult.data.length} OpenAI keys`)
+          } else {
+            console.warn('Failed to load OpenAI keys:', keysResult.error)
+          }
+        } catch (keysError) {
+          console.error('Error loading OpenAI keys:', keysError)
         }
 
         // Load usage statistics
-        const usageResult = await openaiService.getUsageStatistics(user.companyId, '30d')
-        if (usageResult.success) {
-          setUsage(usageResult.data)
+        try {
+          console.log('Loading usage statistics for company ID:', user.companyId)
+          const usageResult = await openaiService.getUsageStatistics(user.companyId, '30d')
+          if (usageResult.success) {
+            setUsage(usageResult.data)
+            console.log('Loaded usage statistics:', usageResult.data)
+          } else {
+            console.warn('Failed to load usage statistics:', usageResult.error)
+          }
+        } catch (usageError) {
+          console.error('Error loading usage statistics:', usageError)
         }
       }
     } catch (error) {
@@ -66,13 +99,16 @@ function AgencyOpenAIManager({ user, authService }) {
 
   const handleAddKey = async (keyData) => {
     try {
+      console.log('Adding new OpenAI key for company ID:', user.companyId)
       const result = await openaiService.addOpenAIKey(user.companyId, keyData)
       
       if (result.success) {
+        console.log('Successfully added OpenAI key')
         setKeys(prev => [result.data, ...prev])
         setShowAddForm(false)
         await loadData() // Refresh usage data
       } else {
+        console.error('Failed to add OpenAI key:', result.error)
         throw new Error(result.error)
       }
     } catch (error) {
@@ -87,11 +123,14 @@ function AgencyOpenAIManager({ user, authService }) {
     }
 
     try {
+      console.log('Deleting OpenAI key:', keyId)
       const result = await openaiService.deleteOpenAIKey(keyId, user.companyId)
       
       if (result.success) {
+        console.log('Successfully deleted OpenAI key')
         setKeys(prev => prev.filter(key => key.id !== keyId))
       } else {
+        console.error('Failed to delete OpenAI key:', result.error)
         throw new Error(result.error)
       }
     } catch (error) {
@@ -103,8 +142,8 @@ function AgencyOpenAIManager({ user, authService }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-        <span className="ml-3 text-gray-600">Loading OpenAI settings...</span>
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-2"></div>
+        <span className="text-gray-600">Loading OpenAI settings...</span>
       </div>
     )
   }
@@ -112,16 +151,21 @@ function AgencyOpenAIManager({ user, authService }) {
   if (user.type !== 'agency' && !permissions?.is_agency_plan) {
     // For non-agency users without permissions, show upgrade message
     return (
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">OpenAI API Keys</h2>
-        </div>
-        <div className="p-6">
-          <div className="info-card">
-            <h3 className="text-blue-800 font-medium">Agency Feature</h3>
-            <p className="text-blue-600 text-sm mt-1">
-              Custom OpenAI key management is only available for agency accounts.
-            </p>
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-lg p-6 mb-6">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg className="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-lg font-medium text-yellow-800">Agency Feature</h3>
+              <div className="mt-2 text-sm text-yellow-700">
+                <p>Custom OpenAI key management is only available for agency accounts or premium plans.</p>
+                <p className="mt-1">Please contact your agency administrator or upgrade your plan to use this feature.</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -201,7 +245,7 @@ function AgencyOpenAIManager({ user, authService }) {
       {/* Header */}
       <div className="bg-white rounded-lg shadow">
         <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h2 className="text-xl font-semibold text-gray-900">OpenAI API Keys</h2>
               <p className="text-sm text-gray-600 mt-1">
@@ -211,6 +255,7 @@ function AgencyOpenAIManager({ user, authService }) {
             <button
               onClick={() => setShowAddForm(true)}
               className="btn-primary"
+              disabled={loading}
             >
               Add API Key
             </button>
@@ -220,7 +265,8 @@ function AgencyOpenAIManager({ user, authService }) {
         <div className="p-6">
           {error && (
             <div className="error-card mb-6">
-              <p className="text-sm text-red-600">{error}</p>
+              <h3 className="text-red-800 font-medium">Error</h3>
+              <p className="text-sm text-red-600 mt-1">{error}</p>
             </div>
           )}
 
@@ -240,6 +286,7 @@ function AgencyOpenAIManager({ user, authService }) {
       {/* Add Key Modal */}
       {showAddForm && (
         <AddOpenAIKeyForm
+          saving={saving}
           onSubmit={handleAddKey}
           onCancel={() => setShowAddForm(false)}
         />
@@ -251,7 +298,7 @@ function AgencyOpenAIManager({ user, authService }) {
 function OpenAIKeysList({ keys, onDelete }) {
   if (keys.length === 0) {
     return (
-      <div className="text-center py-8">
+      <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
         <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
         </svg>
@@ -263,6 +310,9 @@ function OpenAIKeysList({ keys, onDelete }) {
 
   return (
     <div className="space-y-4">
+      <p className="text-sm text-gray-600 mb-2">
+        You have {keys.length} API key{keys.length !== 1 ? 's' : ''} configured.
+      </p>
       {keys.map((key) => (
         <div key={key.id} className="border border-gray-200 rounded-lg p-4">
           <div className="flex items-center justify-between">
@@ -312,26 +362,26 @@ function OpenAIKeysList({ keys, onDelete }) {
 
 function UsageStatistics({ usage }) {
   return (
-    <div className="bg-white rounded-lg shadow">
+    <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-200">
         <h3 className="text-lg font-medium text-gray-900">Usage Statistics (Last 30 Days)</h3>
       </div>
       
       <div className="p-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-          <div className="text-center">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="text-center bg-gray-50 p-4 rounded-lg">
             <div className="text-2xl font-bold text-gray-900">{usage.total_requests}</div>
             <div className="text-sm text-gray-600">Total Requests</div>
           </div>
-          <div className="text-center">
+          <div className="text-center bg-gray-50 p-4 rounded-lg">
             <div className="text-2xl font-bold text-gray-900">{usage.total_tokens.toLocaleString()}</div>
             <div className="text-sm text-gray-600">Total Tokens</div>
           </div>
-          <div className="text-center">
+          <div className="text-center bg-gray-50 p-4 rounded-lg">
             <div className="text-2xl font-bold text-gray-900">${usage.total_cost.toFixed(2)}</div>
             <div className="text-sm text-gray-600">Total Cost</div>
           </div>
-          <div className="text-center">
+          <div className="text-center bg-gray-50 p-4 rounded-lg">
             <div className="text-2xl font-bold text-gray-900">{Object.keys(usage.by_model).length}</div>
             <div className="text-sm text-gray-600">Models Used</div>
           </div>
@@ -340,7 +390,7 @@ function UsageStatistics({ usage }) {
         {/* Usage by Model */}
         {Object.keys(usage.by_model).length > 0 && (
           <div className="mb-6">
-            <h4 className="text-md font-medium text-gray-900 mb-3">Usage by Model</h4>
+            <h4 className="text-md font-medium text-gray-900 mb-3">Usage by Model Type</h4>
             <div className="space-y-2">
               {Object.entries(usage.by_model).map(([model, stats]) => (
                 <div key={model} className="flex items-center justify-between p-3 bg-gray-50 rounded">
@@ -358,18 +408,16 @@ function UsageStatistics({ usage }) {
   )
 }
 
-function AddOpenAIKeyForm({ onSubmit, onCancel }) {
+function AddOpenAIKeyForm({ onSubmit, onCancel, saving = false }) {
   const [formData, setFormData] = useState({
     key_name: '',
     api_key: '',
     org_id: '',
     usage_limit: ''
   })
-  const [saving, setSaving] = useState(false)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setSaving(true)
     
     try {
       await onSubmit({
@@ -378,8 +426,6 @@ function AddOpenAIKeyForm({ onSubmit, onCancel }) {
         org_id: formData.org_id || null,
         usage_limit: formData.usage_limit ? parseFloat(formData.usage_limit) : null
       })
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -419,6 +465,9 @@ function AddOpenAIKeyForm({ onSubmit, onCancel }) {
               <p className="text-xs text-gray-500 mt-1">
                 Your API key will be encrypted and stored securely.
               </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Example: sk-1234...
+              </p>
             </div>
 
             <div>
@@ -431,6 +480,9 @@ function AddOpenAIKeyForm({ onSubmit, onCancel }) {
                 placeholder="org-..."
                 disabled={saving}
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Optional: Only needed if you're using an organization-specific API key.
+              </p>
             </div>
 
             <div>
@@ -444,7 +496,7 @@ function AddOpenAIKeyForm({ onSubmit, onCancel }) {
                 placeholder="100.00"
                 disabled={saving}
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 mt-2">
                 Set a monthly spending limit in USD to control costs.
               </p>
             </div>
@@ -458,7 +510,7 @@ function AddOpenAIKeyForm({ onSubmit, onCancel }) {
             className="btn-secondary"
             disabled={saving}
           >
-            Cancel
+            {saving ? 'Please wait...' : 'Cancel'}
           </button>
           <button
             type="submit"
@@ -466,7 +518,14 @@ function AddOpenAIKeyForm({ onSubmit, onCancel }) {
             disabled={saving || !formData.key_name || !formData.api_key}
             className="btn-primary"
           >
-            {saving ? 'Adding...' : 'Add API Key'}
+            {saving ? (
+              <div className="flex items-center">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Adding...
+              </div>
+            ) : (
+              'Add API Key'
+            )}
           </button>
         </div>
       </div>
