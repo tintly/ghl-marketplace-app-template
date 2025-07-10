@@ -1,309 +1,780 @@
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2'
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization"
-};
-Deno.serve(async (req)=>{
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+}
+
+interface UpdateRequest {
+  ghl_contact_id: string
+  location_id: string
+  extracted_data: Record<string, any>
+  force_overwrite?: string[]
+}
+
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 200,
-      headers: corsHeaders
-    });
+      headers: corsHeaders,
+    })
   }
+
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({
-      error: "Method not allowed. Use POST."
-    }), {
-      status: 405,
-      headers: {
-        "Content-Type": "application/json",
-        ...corsHeaders
-      }
-    });
-  }
-  try {
-    console.log('=== AI EXTRACTION PAYLOAD REQUEST ===');
-    const requestBody = await req.json();
-    const conversationId = requestBody.conversation_id || requestBody.conversationId;
-    const autoExtract = requestBody.auto_extract !== false // Default to true unless explicitly set to false
-    ;
-    if (!conversationId) {
-      console.error('No conversation_id provided in request');
-      return new Response(JSON.stringify({
-        error: "conversation_id is required",
-        example: {
-          conversation_id: "abc123"
-        }
-      }), {
-        status: 400,
+    return new Response(
+      JSON.stringify({ error: "Method not allowed. Use POST." }),
+      {
+        status: 405,
         headers: {
           "Content-Type": "application/json",
-          ...corsHeaders
-        }
-      });
-    }
-    console.log('Building AI extraction payload for conversation:', conversationId);
-    console.log('Auto-extract enabled:', autoExtract);
-    // Initialize Supabase client (not strictly needed here as we're calling functions, but good for consistency)
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-    // Step 1: Get conversation history
-    console.log('Step 1: Fetching conversation history...');
-    const conversationResponse = await fetch(`${supabaseUrl}/functions/v1/get-conversation-history`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseServiceKey}`
-      },
-      body: JSON.stringify({
-        conversation_id: conversationId
-      })
-    });
-    if (!conversationResponse.ok) {
-      const errorText = await conversationResponse.text();
-      throw new Error(`Failed to get conversation history: ${conversationResponse.status} - ${errorText}`);
-    }
-    const conversationData = await conversationResponse.json();
-    console.log(`✅ Got conversation history with ${conversationData.messages.length} messages`);
-
-    if (!conversationData.location_id) {
-      throw new Error('No location_id found in conversation data');
-    }
-
-    // Step 2: Get extraction prompt
-    console.log('Step 2: Generating extraction prompt...');
-    const promptResponse = await fetch(`${supabaseUrl}/functions/v1/generate-extraction-prompt`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseServiceKey}`
-      },
-      body: JSON.stringify({
-        locationId: conversationData.location_id
-      })
-    });
-    if (!promptResponse.ok) {
-      const errorText = await promptResponse.text();
-      throw new Error(`Failed to generate extraction prompt: ${promptResponse.status} - ${errorText}`);
-    }
-    const promptData = await promptResponse.json();
-    console.log(`✅ Generated extraction prompt for ${promptData.metadata.extractionFieldsCount} fields`);
-
-    // Log the full prompt
-    console.log('=== FULL EXTRACTION PROMPT (FROM GENERATION SERVICE) ===');
-    console.log(promptData.prompt);
-    console.log('=== END FULL EXTRACTION PROMPT ===');
-
-    // Step 3: Build the structured payload
-    console.log('Step 3: Building structured payload...');
-
-    // Extract business context from prompt metadata (now properly populated)
-    const businessContext = {
-      name: promptData.metadata.businessName || `Location ${conversationData.location_id}`,
-      description: promptData.metadata.businessDescription || "A GoHighLevel location",
-      context: promptData.metadata.businessContext,
-      services: promptData.metadata.servicesOffered,
-    };
-
-    // Extract conversation metadata (including contact_id)
-    const conversationMetadata = {
-      total_messages: conversationData.total_messages,
-      location_id: conversationData.location_id,
-      contact_id: conversationData.contact_id,
-    };
-    // Include optional message if present
-    if (conversationData.message) {
-      conversationMetadata.message = conversationData.message;
-    }
-
-    // Convert fields from prompt metadata to extraction format
-    // We now mostly just pass the field definition, as the main prompt handles the instructions
-    const fieldsToExtract = promptData.metadata.fields.map((field)=>{
-      // Determine if this is a custom field (no dot in the target_ghl_key or not starting with contact.)
-      const isCustomField = !field.ghlKey.includes('.') || !field.ghlKey.startsWith('contact.');
-      
-      return {
-        id: field.id, // Keep the original ID for traceability
-        name: field.name,
-        ghl_key: field.fieldKey, // Use fieldKey as that's what the AI should output
-        is_custom_field: isCustomField, // Flag to indicate if this is a custom field
-        type: field.type,
-        description: field.description, // Pass the field's description
-        required: field.required,
-        picklistOptions: field.picklistOptions, // Pass picklist options for AI to use
-      };
-    });
-
-    // The primary instructions for the LLM are now the full prompt generated by the other function.
-    const systemPromptForLLM = promptData.prompt;
-
-    // Build the final payload
-    const payload = {
-      conversation_id: conversationId,
-      location_id: conversationData.location_id,
-      contact_id: conversationData.contact_id,
-      business_context: businessContext || { name: "Business" },
-      fields_to_extract: fieldsToExtract, // Simplified, but rich with metadata
-      conversation_history: conversationData.messages,
-      conversation_metadata: conversationMetadata,
-      metadata: promptData.metadata, // Keep the full metadata from prompt generation
-      system_prompt: systemPromptForLLM, // This is the crucial change: pass the full prompt
-      response_format: { // Still useful to pass these as separate instructions to LLM if needed
-        type: "json",
-        rules: [
-          "Key names must match exactly the `ghl_key` values defined in the system prompt.",
-          "Only include fields that have values. Do not include empty fields.",
-          "Ensure date fields use YYYY-MM-DD format.",
-          "Ensure phone and email fields are valid formats."
-        ]
+          ...corsHeaders,
+        },
       }
-    };
+    )
+  }
 
-    console.log('✅ AI extraction payload built successfully');
-    console.log(`- Conversation ID: ${payload.conversation_id || 'Not available'}`);
-    console.log(`- Location ID: ${payload.location_id}`);
-    console.log(`- Contact ID: ${payload.contact_id || 'Not available'}`);
-    console.log(`- Business: ${payload.business_context.name}`);
-    console.log(`- Fields to extract count: ${payload.fields_to_extract.length}`);
-    console.log(`- Conversation messages count: ${payload.conversation_history.length}`);
-    console.log(`- System prompt length: ${payload.system_prompt.length} characters`);
-
-    // Log field types for debugging
-    // Step 4: Auto-invoke OpenAI extraction if enabled
-    if (autoExtract) {
-      console.log('Step 4: Auto-invoking OpenAI extraction...');
-      
-      // Log the full payload being sent to OpenAI extraction
-      console.log('=== FULL PAYLOAD SENT TO OPENAI EXTRACTION ===');
-      console.log(JSON.stringify({
-        conversation_id: payload.conversation_id || 'Not available',
-        location_id: payload.location_id,
-        contact_id: payload.contact_id,
-        business_context: payload.business_context,
-        fields_to_extract: payload.fields_to_extract.length,
-        conversation_history: payload.conversation_history.length,
-        system_prompt_length: payload.system_prompt.length
-      }, null, 2));
-      
-      // Log field types for better debugging
-      console.log('Field types:');
-      payload.fields_to_extract.forEach(field => {
-        console.log(`- ${field.name} (${field.ghl_key}): ${field.is_custom_field ? 'CUSTOM' : 'STANDARD'}`);
-      });
-      
-      // Log the first few messages of conversation history
-      console.log('First few messages:', payload.conversation_history.slice(0, 2));
-      console.log('=== END FULL PAYLOAD SENT TO OPENAI EXTRACTION ===');
-      
-      try {
-        // The system prompt to be sent to OpenAI is now directly from promptData.prompt
-        console.log('=== SYSTEM PROMPT SENT TO OPENAI ===');
-        console.log(payload.system_prompt);
-        console.log('=== END SYSTEM PROMPT SENT TO OPENAI ===');
-        console.log('Calling OpenAI extraction function...');
-
-        const extractionResponse = await fetch(`${supabaseUrl}/functions/v1/openai-extraction`, {
-          method: 'POST',
+  try {
+    console.log('=== GHL CONTACT UPDATE REQUEST ===')
+    
+    const requestBody: UpdateRequest = await req.json()
+    
+    // Validate required fields
+    if (!requestBody.ghl_contact_id || !requestBody.location_id || !requestBody.extracted_data) {
+      return new Response(
+        JSON.stringify({
+          error: "ghl_contact_id, location_id, and extracted_data are required.",
+          example: {
+            ghl_contact_id: "ocQHyuzHvysMo5N5VsXc",
+            location_id: "4beIyWyWrcoPRD7PEN5G",
+            extracted_data: {
+              "contact.firstName": "John",
+              "contact.email": "john.doe@example.com",
+              "custom_field_id": "Some value"
+            }
+          }
+        }),
+        {
+          status: 400,
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`
+            "Content-Type": "application/json",
+            ...corsHeaders,
           },
-          body: JSON.stringify(payload) // Send the full payload
-        });
-        console.log('OpenAI extraction response status:', extractionResponse.status);
+        }
+      )
+    }
 
-        if (!extractionResponse.ok) {
-          const errorText = await extractionResponse.text();
-          console.error('OpenAI extraction failed:', errorText);
-          // Return payload with extraction error info, keeping status 200 for internal errors
-          return new Response(JSON.stringify({
-            success: false,
-            payload: payload,
-            extraction_error: {
-              status: extractionResponse.status,
-              message: errorText
-            },
-            message: "Payload built successfully but OpenAI extraction failed"
-          }), {
-            status: 200, // Still 200 as requested for this type of error handling
+    console.log('Processing update for contact:', {
+      ghl_contact_id: requestBody.ghl_contact_id,
+      location_id: requestBody.location_id,
+      extracted_data_keys: Object.keys(requestBody.extracted_data)
+    })
+
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+    // Step 1: Get GHL configuration
+    console.log('Step 1: Fetching GHL configuration...')
+    const ghlConfig = await getGHLConfiguration(supabase, requestBody.location_id)
+    
+    if (!ghlConfig) {
+      return new Response(
+        JSON.stringify({
+          error: "No GHL configuration found for this location",
+          locationId: requestBody.location_id
+        }),
+        {
+          status: 404,
+          headers: {
+            "Content-Type": "application/json",
+            ...corsHeaders,
+          },
+        }
+      )
+    }
+
+    // Step 2: Validate and refresh token if needed
+    console.log('Step 2: Validating access token...')
+    const tokenValidation = validateTokenExpiry(ghlConfig)
+    
+    if (tokenValidation.needsRefresh) {
+      console.log('Token needs refresh, attempting to refresh...')
+      const refreshResult = await refreshAccessToken(supabase, ghlConfig)
+      
+      if (!refreshResult.success) {
+        return new Response(
+          JSON.stringify({
+            error: "Failed to refresh access token",
+            details: refreshResult.error
+          }),
+          {
+            status: 401,
             headers: {
               "Content-Type": "application/json",
-              ...corsHeaders
-            }
-          });
+              ...corsHeaders,
+            },
+          }
+        )
+      }
+      
+      ghlConfig.access_token = refreshResult.accessToken
+    }
+
+    // Step 3: Get extraction fields configuration for this location
+    console.log('Step 3: Fetching extraction fields configuration...')
+    const extractionFields = await getExtractionFields(supabase, ghlConfig.id)
+
+    // Step 4: Get existing contact from GoHighLevel
+    console.log('Step 4: Fetching existing contact from GHL...')
+    const existingContact = await getGHLContact(ghlConfig.access_token, requestBody.ghl_contact_id)
+    
+    if (!existingContact) {
+      return new Response(
+        JSON.stringify({
+          error: `Contact with ID ${requestBody.ghl_contact_id} not found in GoHighLevel`
+        }),
+        {
+          status: 404,
+          headers: {
+            "Content-Type": "application/json",
+            ...corsHeaders,
+          },
         }
+      )
+    }
 
-        const extractionResult = await extractionResponse.json();
-        console.log('✅ OpenAI extraction completed successfully with model:', extractionResult.usage?.model);
-        console.log('Extracted fields:', Object.keys(extractionResult.extracted_data || {}));
-        console.log('Usage cost:', `$${extractionResult.usage?.cost_estimate || 0}`);
+    // Step 5: Prepare update payload
+    console.log('Step 5: Preparing update payload...')
+    const updateResult = prepareUpdatePayload(
+      existingContact,
+      requestBody.extracted_data,
+      extractionFields
+    )
 
-        // Return combined result with both payload and extraction
-        return new Response(JSON.stringify({
+    if (Object.keys(updateResult.updatePayload).length === 0) {
+      return new Response(
+        JSON.stringify({
           success: true,
-          payload: payload,
-          extraction_result: extractionResult || {},
-          message: "Payload built and extraction completed successfully"
-        }), {
+          message: "No fields were updated due to overwrite policies",
+          contact_id: requestBody.ghl_contact_id,
+          location_id: requestBody.location_id,
+          skipped_fields: updateResult.skippedFields,
+          updated_fields: []
+        }),
+        {
           status: 200,
           headers: {
             "Content-Type": "application/json",
-            ...corsHeaders
-          }
-        });
+            ...corsHeaders,
+          },
+        }
+      )
+    }
 
-      } catch (extractionError) {
-        console.error('Error during auto-extraction:', extractionError.message, extractionError.stack);
-        // Return payload with extraction error
-        return new Response(JSON.stringify({
-          success: false,
-          payload: payload,
-          extraction_error: {
-            message: extractionError.message,
-            details: extractionError.toString()
-          }, 
-          timestamp: new Date().toISOString(),
-          message: "Payload built successfully but auto-extraction failed"
-        }), {
-          status: 200, // Still 200 as requested for this type of error handling
+    // Step 6: Update the contact in GHL
+    console.log('Step 6: Sending update to GHL...')
+    console.log('Fields to update:', Object.keys(updateResult.updatePayload))
+    
+    // Log the update payload for debugging
+    console.log('Update payload:', JSON.stringify(updateResult.updatePayload, null, 2))
+    
+    const ghlUpdateResult = await updateGHLContact(
+      ghlConfig.access_token, 
+      requestBody.ghl_contact_id, 
+      updateResult.updatePayload
+    )
+
+    if (!ghlUpdateResult.success) {
+      return new Response(
+        JSON.stringify({
+          error: "Failed to update contact in GHL",
+          details: ghlUpdateResult.error,
+          ghlResponse: ghlUpdateResult.ghlResponse
+        }),
+        {
+          status: 500,
           headers: {
             "Content-Type": "application/json",
-            ...corsHeaders
-          }
-        });
-      }
-    } else {
-      // Return just the payload if auto-extract is disabled
-      console.log('Auto-extract disabled, returning payload only');
-      return new Response(JSON.stringify({
+            ...corsHeaders,
+          },
+        }
+      )
+    }
+
+    console.log('✅ Contact updated successfully')
+
+    return new Response(
+      JSON.stringify({
         success: true,
-        payload: payload,
-        message: "Payload built successfully (auto-extract disabled)",
+        contact_id: requestBody.ghl_contact_id,
+        location_id: requestBody.location_id,
+        updated_fields: updateResult.updatedFields,
+        skipped_fields: updateResult.skippedFields,
+        ghl_response: ghlUpdateResult.ghlResponse,
         timestamp: new Date().toISOString()
-      }), {
+      }),
+      {
         status: 200,
         headers: {
           "Content-Type": "application/json",
-          ...corsHeaders
-        }
-      });
-    }
-  } catch (error: any) {
-    console.error("=== AI EXTRACTION PAYLOAD ERROR ===");
-    console.error("Error message:", error.message);
-    console.error("Stack trace:", error.stack);
-    return new Response(JSON.stringify({
-      error: `Failed to build AI extraction payload: ${error.message}`,
-      details: error.toString()
-    }), {
-      status: 500, 
-      timestamp: new Date().toISOString(),
-      headers: {
-        "Content-Type": "application/json",
-        ...corsHeaders
+          ...corsHeaders,
+        },
       }
-    });
+    )
+
+  } catch (error) {
+    console.error("=== CONTACT UPDATE ERROR ===")
+    console.error("Error message:", error.message)
+    console.error("Stack trace:", error.stack)
+    
+    return new Response(
+      JSON.stringify({ 
+        error: `Contact update failed: ${error.message}`,
+        details: error.toString(),
+        timestamp: new Date().toISOString()
+      }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+          ...corsHeaders,
+        },
+      }
+    )
   }
-});
+})
+
+// Helper Functions
+
+async function getGHLConfiguration(supabase: any, locationId: string) {
+  const { data, error } = await supabase
+    .from('ghl_configurations')
+    .select(`
+      id,
+      access_token,
+      refresh_token,
+      token_expires_at,
+      ghl_account_id,
+      business_name
+    `)
+    .eq('ghl_account_id', locationId)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`Failed to fetch configuration: ${error.message}`)
+  }
+
+  return data
+}
+
+function validateTokenExpiry(config: any) {
+  if (!config.token_expires_at) {
+    return { needsRefresh: false }
+  }
+
+  const expiryDate = new Date(config.token_expires_at)
+  const now = new Date()
+  const hoursUntilExpiry = (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60)
+
+  return {
+    needsRefresh: hoursUntilExpiry <= 1,
+    hoursUntilExpiry: Math.round(hoursUntilExpiry)
+  }
+}
+
+async function refreshAccessToken(supabase: any, config: any) {
+  try {
+    const clientId = Deno.env.get('GHL_MARKETPLACE_CLIENT_ID')
+    const clientSecret = Deno.env.get('GHL_MARKETPLACE_CLIENT_SECRET')
+    const apiDomain = Deno.env.get('GHL_API_DOMAIN') || 'https://services.leadconnectorhq.com'
+
+    const params = new URLSearchParams({
+      client_id: clientId!,
+      client_secret: clientSecret!,
+      grant_type: 'refresh_token',
+      refresh_token: config.refresh_token
+    })
+
+    const response = await fetch(`${apiDomain}/oauth/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json'
+      },
+      body: params.toString()
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Token refresh failed: ${response.status} - ${errorText}`)
+    }
+
+    const tokenData = await response.json()
+    const expiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString()
+    
+    await supabase
+      .from('ghl_configurations')
+      .update({
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token,
+        token_expires_at: expiresAt,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', config.id)
+
+    return {
+      success: true,
+      accessToken: tokenData.access_token
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+}
+
+async function getExtractionFields(supabase: any, configId: string) {
+  const { data, error } = await supabase
+    .from('data_extraction_fields')
+    .select(`
+      id,
+      field_name,
+      target_ghl_key,
+      field_type,
+      overwrite_policy,
+      original_ghl_field_data
+    `)
+    .eq('config_id', configId)
+
+  if (error) {
+    throw new Error(`Failed to fetch extraction fields: ${error.message}`)
+  }
+
+  return data || []
+}
+
+async function getGHLContact(accessToken: string, contactId: string) {
+  const apiDomain = Deno.env.get('GHL_API_DOMAIN') || 'https://services.leadconnectorhq.com'
+  const url = `${apiDomain}/contacts/${contactId}`
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Version': '2021-07-28',
+      'Accept': 'application/json'
+    }
+  })
+
+  if (response.status === 404) {
+    return null
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to fetch contact: ${response.status} - ${errorText}`)
+  }
+
+  const responseData = await response.json()
+  return responseData.contact || responseData
+}
+
+// Check if a field key is a standard field
+function isStandardFieldKey(fieldKey: string): boolean {
+  // Standard fields must have a dot AND start with 'contact.'
+  return fieldKey.includes('.') && fieldKey.startsWith('contact.')
+}
+
+function prepareUpdatePayload(
+  existingContact: any, 
+  extractedData: Record<string, any>,
+  extractionFields: any[]
+) {
+  const updatePayload: any = {}
+  const updatedFields: string[] = []
+  const skippedFields: string[] = []
+
+  // Initialize customFields array if needed
+  if (!updatePayload.customFields) {
+    updatePayload.customFields = []
+  }
+
+  // Helper function to convert snake_case field keys to GHL's camelCase format
+  function getGHLStandardFieldName(inputKey: string): string {
+    // Remove 'contact.' prefix if present
+    let key = inputKey.includes('.') ? inputKey.split('.')[1] : inputKey
+    
+    // Map specific fields to their GHL API equivalents
+    switch (key) {
+      case 'date_of_birth':
+        return 'dateOfBirth'
+      case 'first_name':
+        return 'firstName'
+      case 'last_name':
+        return 'lastName'
+      case 'postal_code':
+        return 'postalCode'
+      case 'phone_raw':
+        return 'phone'
+      case 'full_address':
+        return 'address'
+      case 'address1':
+        return 'address1'
+      case 'company_name':
+        return 'companyName'
+      // For fields that don't need conversion
+      case 'name':
+      case 'email':
+      case 'city':
+      case 'state':
+      case 'country':
+      case 'website':
+        return key
+      default:
+        return key
+    }
+  }
+
+  // Create extraction fields map for metadata
+  const fieldsMap = new Map()
+  
+  // Map both standard fields and custom fields
+  extractionFields.forEach(f => {
+    if (f.target_ghl_key.includes('.')) {
+      // Standard field (e.g., contact.firstName)
+      fieldsMap.set(f.target_ghl_key, f)
+    } else {
+      // Custom field - map both the GHL ID and the fieldKey if available
+      fieldsMap.set(f.target_ghl_key, f)
+      
+      // If we have original field data with a fieldKey, map that too
+      if (f.original_ghl_field_data?.fieldKey) {
+        fieldsMap.set(f.original_ghl_field_data.fieldKey, f)
+      }
+    }
+  })
+
+  // Create custom fields map for quick lookup
+  const customFieldsMap = new Map()
+  if (existingContact.customFields) {
+    existingContact.customFields.forEach((cf: any) => {
+      customFieldsMap.set(cf.id, cf.value)
+    })
+  }
+
+  // Process each extracted field
+  for (const [fieldKey, newValue] of Object.entries(extractedData)) {
+    // Skip empty values
+    if (newValue === null || newValue === undefined || newValue === '') {
+      console.log(`Skipping empty value for field ${fieldKey}`)
+      skippedFields.push(fieldKey)
+      continue
+    }
+
+    console.log(`Processing field: ${fieldKey} with value: ${newValue}`)
+
+    // Get field configuration if available
+    const field = fieldsMap.get(fieldKey)
+    
+    // Determine if this is a standard field or custom field
+    const isStandard = isStandardFieldKey(fieldKey)
+    
+    console.log(`Field ${fieldKey} is ${isStandard ? 'standard' : 'custom'} field`)
+    
+    // If no field configuration and not a standard field format, treat as custom field
+    if (!field && !isStandard) {
+      console.log(`No field configuration found for ${fieldKey}, treating as custom field`)
+      
+      // Try to find a matching custom field in the existing contact
+      const matchingCustomField = existingContact.customFields?.find((cf: any) => 
+        cf.id === fieldKey || cf.name?.toLowerCase() === fieldKey.toLowerCase()
+      )
+      
+      if (matchingCustomField) {
+        console.log(`Found matching custom field: ${matchingCustomField.id} (${matchingCustomField.name})`)
+        updatePayload.customFields.push({
+          id: matchingCustomField.id,
+          value: newValue
+        })
+        updatedFields.push(fieldKey)
+        continue
+      } else {
+        console.log(`No matching custom field found for ${fieldKey}, skipping`)
+        skippedFields.push(fieldKey)
+        continue
+      }
+    }
+    
+    const fieldName = field?.field_name || fieldKey
+    const policy = field?.overwrite_policy || 'always'
+    
+    // Get current value and target field ID
+    let currentValue: any = null
+    let targetFieldId: string = field?.target_ghl_key || fieldKey
+    
+    if (isStandard) {
+      // Standard field (e.g., contact.firstName)
+      const ghlStandardKey = getGHLStandardFieldName(fieldKey)
+      currentValue = existingContact[ghlStandardKey]
+      
+      console.log(`Standard field ${fieldKey} -> ${ghlStandardKey}:`, {
+        currentValue,
+        newValue
+      })
+    } else {
+      // Custom field - use the GHL field ID from target_ghl_key
+      if (field) {
+        targetFieldId = field.target_ghl_key
+        currentValue = customFieldsMap.get(targetFieldId)
+      } else {
+        // If no field configuration, use the key as is (might be a direct custom field ID)
+        targetFieldId = fieldKey
+        currentValue = customFieldsMap.get(targetFieldId)
+      }
+      
+      console.log(`Custom field ${fieldKey} -> ${targetFieldId}:`, {
+        currentValue,
+        newValue
+      })
+    }
+
+    // Check if field has existing value
+    const hasExistingValue = currentValue !== null && 
+                            currentValue !== undefined && 
+                            currentValue !== '' &&
+                            !(Array.isArray(currentValue) && currentValue.length === 0)
+
+    // Apply overwrite policy
+    let shouldUpdate = false
+    let skipReason = ''
+
+    // Special handling for date fields - ensure proper format
+    if (field && field.field_type === 'DATE' && typeof newValue === 'string') {
+      // Ensure date is in YYYY-MM-DD format for GHL
+      if (newValue.includes('T')) {
+        newValue = newValue.split('T')[0]
+      }
+    }
+
+    switch (policy) {
+      case 'always':
+        shouldUpdate = true
+        break
+        
+      case 'never':
+        shouldUpdate = false
+        skipReason = 'Policy set to never overwrite'
+        break
+        
+      case 'only_empty':
+        shouldUpdate = !hasExistingValue
+        if (hasExistingValue) {
+          skipReason = 'Field has existing value and policy is only_empty'
+        }
+        break
+        
+      default:
+        // Default to always overwrite
+        shouldUpdate = true
+        break
+    }
+
+    if (shouldUpdate) {
+      if (isStandard) {
+        // For standard fields, we need to use the field name without the "contact." prefix
+        // Extract the field name part after 'contact.'
+        let ghlStandardKey
+        if (fieldKey.includes('.')) {
+          ghlStandardKey = getGHLStandardFieldName(fieldKey)
+        } else {
+          ghlStandardKey = getGHLStandardFieldName(`contact.${fieldKey}`)
+        }
+        
+        // Special handling for specific field types
+        switch (ghlStandardKey) {
+          case 'tags':
+            // Merge tags to avoid duplicates
+            const existingTags = existingContact.tags || []
+            const newTags = Array.isArray(newValue) ? newValue : [newValue]
+            updatePayload.tags = Array.from(new Set([...existingTags, ...newTags]))
+            break
+            
+          default:
+            // For standard fields, just add them directly to the update payload
+            updatePayload[ghlStandardKey] = newValue
+            break
+        }
+        
+        console.log(`✅ Will update standard field ${ghlStandardKey}: ${currentValue} → ${newValue}`)
+      } else if (targetFieldId) {
+        // Initialize customFields array if not already done
+        // For custom fields, add to the customFields array with the correct format
+        if (targetFieldId) {
+          updatePayload.customFields.push({
+            id: targetFieldId,
+            value: newValue
+          })
+          
+          console.log(`✅ Will update custom field ${targetFieldId}: ${currentValue} → ${newValue}`)
+        } else {
+          console.log(`⚠️ Cannot update custom field ${fieldKey} - no target field ID available`)
+          skippedFields.push(fieldKey)
+          continue
+        }
+      }
+      
+      updatedFields.push(fieldKey)
+    } else {
+      skippedFields.push(fieldKey)
+      console.log(`⏭️ Skipping ${fieldKey}: ${skipReason}`)
+    }
+  }
+
+  // Final validation - ensure customFields is an array
+  if (!Array.isArray(updatePayload.customFields)) {
+    updatePayload.customFields = []
+  }
+
+  // If no custom fields were added, remove the empty array
+  if (updatePayload.customFields && updatePayload.customFields.length === 0) {
+    delete updatePayload.customFields
+  }
+
+  // Log the final payload
+  console.log('=== FINAL UPDATE PAYLOAD ===')
+  console.log('Standard fields:', Object.keys(updatePayload).filter(k => k !== 'customFields'))
+  console.log('Custom fields:', updatePayload.customFields?.length || 0)
+  console.log('=== END FINAL UPDATE PAYLOAD ===')
+
+  return {
+    updatePayload,
+    updatedFields,
+    skippedFields
+  }
+}
+
+// Function to update a contact in GHL
+async function updateGHLContact(accessToken: string, contactId: string, payload: any) {
+  try {
+    const apiDomain = Deno.env.get('GHL_API_DOMAIN') || 'https://services.leadconnectorhq.com'
+    const url = `${apiDomain}/contacts/${contactId}`
+
+    // Clean payload - remove read-only fields
+    const cleanPayload = { ...payload }
+    delete cleanPayload.id 
+    delete cleanPayload.locationId
+    delete cleanPayload.dateAdded
+    delete cleanPayload.dateUpdated
+    delete cleanPayload.lastActivity
+
+    console.log('Sending update to GHL:', {
+      contactId,
+      fieldsToUpdate: Object.keys(cleanPayload),
+      customFieldsCount: cleanPayload.customFields?.length || 0
+    })
+
+    // Log the fields being updated
+    console.log('Standard fields:', Object.keys(cleanPayload).filter(k => k !== 'customFields'))
+    console.log('Custom fields:', cleanPayload.customFields?.length || 0)
+    console.log('Fields to update:', Object.keys(cleanPayload))
+
+    // Final validation to ensure we're not sending any invalid fields
+    const validStandardFields = [
+      'firstName', 'lastName', 'name', 'email', 'phone', 'dnd', 'dndSettings',
+      'companyName', 'address1', 'city', 'state', 'country', 
+      'postalCode', 'website', 'dateOfBirth', 'tags'
+    ]
+    
+    // Move any standard fields that aren't in the valid list to customFields
+    Object.keys(cleanPayload).forEach(key => {
+      if (!validStandardFields.includes(key) && key !== 'customFields' && key !== 'tags') {
+        console.log(`⚠️ Invalid standard field detected: ${key}, moving to customFields`)
+        
+        // Move to customFields
+        if (!cleanPayload.customFields) {
+          cleanPayload.customFields = []
+        }
+        
+        // Check if this might be a custom field ID
+        if (key.length > 10 && !key.includes('.')) {
+          console.log(`🔄 Moving '${key}' to customFields array with ID: ${key}`)
+          cleanPayload.customFields.push({
+            id: key,
+            value: cleanPayload[key]
+          })
+        } else {
+          console.log(`⚠️ Skipping invalid field: ${key} - not a valid standard field or custom field ID`)
+        }
+        
+        // Remove from standard fields
+        delete cleanPayload[key]
+      }
+    })
+
+    // Log the final payload being sent
+    console.log('Final update payload:', JSON.stringify(cleanPayload, null, 2))
+
+    // If we have no valid fields to update, return early
+    if (Object.keys(cleanPayload).length === 0 && 
+        (!cleanPayload.customFields || cleanPayload.customFields.length === 0)) {
+      console.log('⚠️ No valid fields to update, skipping API call')
+      return {
+        success: true,
+        ghlResponse: { message: "No valid fields to update" }
+      }
+    }
+    
+    console.log('Sending update to GHL API...')
+
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Version': '2021-07-28',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(cleanPayload)
+    });
+
+    let responseData
+    try {
+      responseData = await response.json()
+    } catch (e) {
+      responseData = { error: 'Failed to parse response' }
+    }
+    
+    if (!response.ok) {
+      console.error('GHL API error:', {
+        status: response.status,
+        response: responseData
+      })
+      
+      return {
+        success: false,
+        error: `GHL API error: ${JSON.stringify({
+          status: response.status,
+          response: responseData
+        })}`,
+        ghlResponse: responseData
+      }
+    }
+    
+    console.log('✅ Contact updated successfully in GHL')
+    
+    return {
+      success: true,
+      ghlResponse: responseData
+    }
+  } catch (error) {
+    console.error('Error updating contact:', error)
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+}
