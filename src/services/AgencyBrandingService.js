@@ -2,7 +2,7 @@ export class AgencyBrandingService {
   constructor(authService = null) {
     this.authService = authService
     this.cache = new Map()
-    this.cacheTimeout = 10 * 60 * 1000 // 10 minutes
+    this.cacheTimeout = 5 * 60 * 1000 // 5 minutes
   }
 
   // Get agency branding for current user's location
@@ -21,36 +21,41 @@ export class AgencyBrandingService {
     }
 
     try {
-      // Check if user is agency type
-      const isAgency = this.authService?.getCurrentUser()?.type === 'agency';
-      
-      // For agency users, try to get branding directly by company ID first
-      if (isAgency && this.authService?.getCurrentUser()?.companyId) {
-        const companyId = this.authService.getCurrentUser().companyId;
-        console.log('User is agency type, trying to get branding directly by company ID:', companyId);
-        
-        const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase;
+        console.log('User is agency type, trying to get branding directly by company ID:', companyId)
+        let supabase
+        try {
+          supabase = await this.getSupabaseClient()
+        } catch (error) {
+          console.error('Error getting Supabase client:', error)
+          return this.getDefaultBranding()
+        }
         
         const { data: directBranding, error: directError } = await supabase
           .from('agency_branding')
           .select('*')
           .eq('agency_ghl_id', companyId)
-          .maybeSingle();
+          .maybeSingle()
           
         if (!directError && directBranding) {
-          console.log('Found branding directly by company ID:', directBranding);
+          console.log('Found branding directly by company ID:', directBranding)
           
           // Cache the result
           this.cache.set(cacheKey, {
             data: directBranding,
             timestamp: Date.now()
-          });
+          })
           
-          return directBranding;
+          return directBranding
         }
       }
 
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+      let supabase
+      try {
+        supabase = await this.getSupabaseClient()
+      } catch (error) {
+        console.error('Error getting Supabase client:', error)
+        return this.getDefaultBranding()
+      }
 
       // First try to get branding by location
       console.log('Fetching agency branding by location ID')
@@ -58,7 +63,7 @@ export class AgencyBrandingService {
         .from('ghl_configurations')
         .select('agency_ghl_id')
         .eq('ghl_account_id', locationId)
-        .maybeSingle();
+        .maybeSingle()
 
       if (locationError) {
         console.error('Error fetching location config:', locationError)
@@ -78,7 +83,7 @@ export class AgencyBrandingService {
         .from('agency_branding')
         .select('*')
         .eq('agency_ghl_id', locationConfig.agency_ghl_id)
-        .maybeSingle()
+        .single()
 
       if (error) {
         console.error('Error fetching agency branding:', error)
@@ -98,6 +103,22 @@ export class AgencyBrandingService {
     } catch (error) {
       console.error('Agency branding service error:', error)
       return this.getDefaultBranding()
+    }
+  }
+
+  // Helper method to get Supabase client
+  async getSupabaseClient() {
+    try {
+      if (this.authService?.getSupabaseClient) {
+        const client = await this.authService.getSupabaseClient()
+        if (client) return client
+      }
+      
+      const { supabase } = await import('./supabase')
+      return supabase
+    } catch (error) {
+      console.error('Error getting Supabase client:', error)
+      throw error
     }
   }
 
