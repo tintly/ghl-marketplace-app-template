@@ -112,11 +112,14 @@ export class AuthService {
   // Get the configured Supabase client
   async getSupabaseClient() {
     if (!this.supabaseClient) {
-      console.warn('Supabase client not initialized, returning default client')
-      return (await import('./supabase')).supabase.catch(e => {
+      console.warn('Supabase client not initialized, attempting to use default client')
+      try {
+        const { supabase } = await import('./supabase')
+        return supabase
+      } catch (e) {
         console.error('Error importing default supabase client:', e)
         return null
-      })
+      }
     }
     return this.supabaseClient
   }

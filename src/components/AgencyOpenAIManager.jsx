@@ -9,6 +9,7 @@ function AgencyOpenAIManager({ user, authService }) {
   const [upgradeRequired, setUpgradeRequired] = useState(false)
   const [error, setError] = useState(null)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   const openaiService = new AgencyOpenAIService(authService)
 
@@ -99,6 +100,7 @@ function AgencyOpenAIManager({ user, authService }) {
 
   const handleAddKey = async (keyData) => {
     try {
+      setSaving(true)
       console.log('Adding new OpenAI key for company ID:', user.companyId)
       const result = await openaiService.addOpenAIKey(user.companyId, keyData)
       
@@ -114,6 +116,8 @@ function AgencyOpenAIManager({ user, authService }) {
     } catch (error) {
       console.error('Error adding OpenAI key:', error)
       setError(error.message)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -125,7 +129,7 @@ function AgencyOpenAIManager({ user, authService }) {
     try {
       console.log('Deleting OpenAI key:', keyId)
       const result = await openaiService.deleteOpenAIKey(keyId, user.companyId)
-      
+
       if (result.success) {
         console.log('Successfully deleted OpenAI key')
         setKeys(prev => prev.filter(key => key.id !== keyId))
@@ -151,7 +155,11 @@ function AgencyOpenAIManager({ user, authService }) {
   if (user.type !== 'agency' && !permissions?.is_agency_plan) {
     // For non-agency users without permissions, show upgrade message
     return (
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white rounded-lg shadow">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-900">OpenAI API Keys</h2>
+        </div>
+        <div className="p-6">
         <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-lg p-6 mb-6">
           <div className="flex items-start">
             <div className="flex-shrink-0">
@@ -167,6 +175,7 @@ function AgencyOpenAIManager({ user, authService }) {
               </div>
             </div>
           </div>
+        </div>
         </div>
       </div>
     )

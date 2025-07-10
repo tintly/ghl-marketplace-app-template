@@ -59,7 +59,11 @@ export class AgencyOpenAIService {
   // Get agency's OpenAI keys
   async getAgencyOpenAIKeys(agencyId) {
     try {
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+      const supabase = await this.getSupabaseClient()
+      
+      if (!supabase) {
+        throw new Error('Supabase client not available')
+      }
 
       const { data, error } = await supabase
         .from('agency_openai_keys')
@@ -81,6 +85,10 @@ export class AgencyOpenAIService {
   // Add new OpenAI key for agency
   async addOpenAIKey(agencyId, keyData) {
     try {
+      if (!agencyId) {
+        throw new Error('Agency ID is required')
+      }
+      
       // Skip permission check for agency users
       const user = this.authService?.getCurrentUser()
       const isAgency = user?.type === 'agency'
@@ -93,7 +101,12 @@ export class AgencyOpenAIService {
         }
       }
 
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+      const supabase = await this.getSupabaseClient()
+      
+      if (!supabase) {
+        console.error('Supabase client not available')
+        throw new Error('Database connection not available')
+      }
 
       // Encrypt the API key before storing (in production, use proper encryption)
       const encryptedKey = await this.encryptApiKey(keyData.api_key)
@@ -128,7 +141,12 @@ export class AgencyOpenAIService {
   // Update OpenAI key
   async updateOpenAIKey(keyId, agencyId, updates) {
     try {
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+      const supabase = await this.getSupabaseClient()
+      
+      if (!supabase) {
+        console.error('Supabase client not available')
+        throw new Error('Database connection not available')
+      }
 
       const updateData = { ...updates }
       
@@ -163,7 +181,12 @@ export class AgencyOpenAIService {
   // Delete OpenAI key
   async deleteOpenAIKey(keyId, agencyId) {
     try {
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+      const supabase = await this.getSupabaseClient()
+      
+      if (!supabase) {
+        console.error('Supabase client not available')
+        throw new Error('Database connection not available')
+      }
 
       const { error } = await supabase
         .from('agency_openai_keys')
@@ -185,7 +208,12 @@ export class AgencyOpenAIService {
   // Get usage statistics for agency's OpenAI keys
   async getUsageStatistics(agencyId, timeframe = '30d') {
     try {
-      const supabase = this.authService?.getSupabaseClient() || (await import('./supabase')).supabase
+      const supabase = await this.getSupabaseClient()
+      
+      if (!supabase) {
+        console.error('Supabase client not available')
+        throw new Error('Database connection not available')
+      }
 
       let dateFilter = new Date()
       switch (timeframe) {
@@ -292,6 +320,21 @@ export class AgencyOpenAIService {
       }
     } catch (error) {
       console.error('Error decrypting API key:', error)
+      return null
+    }
+  }
+  
+  // Helper method to get Supabase client
+  async getSupabaseClient() {
+    try {
+      if (this.authService?.getSupabaseClient) {
+        const client = await this.authService.getSupabaseClient()
+        if (client) return client
+      }
+      
+      return (await import('./supabase')).supabase
+    } catch (error) {
+      console.error('Error getting Supabase client:', error)
       return null
     }
   }
