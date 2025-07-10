@@ -121,8 +121,8 @@ Deno.serve(async (req)=>{
     // Convert fields from prompt metadata to extraction format
     // We now mostly just pass the field definition, as the main prompt handles the instructions
     const fieldsToExtract = promptData.metadata.fields.map((field)=>{
-      // Determine if this is a custom field (no dot in the target_ghl_key)
-      const isCustomField = !field.ghlKey.includes('.');
+      // Determine if this is a custom field (no dot in the target_ghl_key or not starting with contact.)
+      const isCustomField = !field.ghlKey.includes('.') || !field.ghlKey.startsWith('contact.');
       
       return {
         id: field.id, // Keep the original ID for traceability
@@ -144,7 +144,7 @@ Deno.serve(async (req)=>{
       conversation_id: conversationId,
       location_id: conversationData.location_id,
       contact_id: conversationData.contact_id,
-      business_context: businessContext,
+      business_context: businessContext || { name: "Business" },
       fields_to_extract: fieldsToExtract, // Simplified, but rich with metadata
       conversation_history: conversationData.messages,
       conversation_metadata: conversationMetadata,
@@ -153,7 +153,7 @@ Deno.serve(async (req)=>{
       response_format: { // Still useful to pass these as separate instructions to LLM if needed
         type: "json",
         rules: [
-          "Key names must match `ghl_key` values defined in the system prompt.",
+          "Key names must match exactly the `ghl_key` values defined in the system prompt.",
           "Only include fields that have values. Do not include empty fields.",
           "Ensure date fields use YYYY-MM-DD format.",
           "Ensure phone and email fields are valid formats."
@@ -162,7 +162,7 @@ Deno.serve(async (req)=>{
     };
 
     console.log('✅ AI extraction payload built successfully');
-    console.log(`- Conversation ID: ${payload.conversation_id}`);
+    console.log(`- Conversation ID: ${payload.conversation_id || 'Not available'}`);
     console.log(`- Location ID: ${payload.location_id}`);
     console.log(`- Contact ID: ${payload.contact_id || 'Not available'}`);
     console.log(`- Business: ${payload.business_context.name}`);
@@ -170,7 +170,7 @@ Deno.serve(async (req)=>{
     console.log(`- Conversation messages count: ${payload.conversation_history.length}`);
     console.log(`- System prompt length: ${payload.system_prompt.length} characters`);
 
-
+    // Log field types for debugging
     // Step 4: Auto-invoke OpenAI extraction if enabled
     if (autoExtract) {
       console.log('Step 4: Auto-invoking OpenAI extraction...');
@@ -178,7 +178,7 @@ Deno.serve(async (req)=>{
       // Log the full payload being sent to OpenAI extraction
       console.log('=== FULL PAYLOAD SENT TO OPENAI EXTRACTION ===');
       console.log(JSON.stringify({
-        conversation_id: payload.conversation_id,
+        conversation_id: payload.conversation_id || 'Not available',
         location_id: payload.location_id,
         contact_id: payload.contact_id,
         business_context: payload.business_context,
@@ -186,6 +186,15 @@ Deno.serve(async (req)=>{
         conversation_history: payload.conversation_history.length,
         system_prompt_length: payload.system_prompt.length
       }, null, 2));
+      
+      // Log field types for better debugging
+      console.log('Field types:');
+      payload.fields_to_extract.forEach(field => {
+        console.log(`- ${field.name} (${field.ghl_key}): ${field.is_custom_field ? 'CUSTOM' : 'STANDARD'}`);
+      });
+      
+      // Log the first few messages of conversation history
+      console.log('First few messages:', payload.conversation_history.slice(0, 2));
       console.log('=== END FULL PAYLOAD SENT TO OPENAI EXTRACTION ===');
       
       try {
@@ -193,6 +202,7 @@ Deno.serve(async (req)=>{
         console.log('=== SYSTEM PROMPT SENT TO OPENAI ===');
         console.log(payload.system_prompt);
         console.log('=== END SYSTEM PROMPT SENT TO OPENAI ===');
+        console.log('Calling OpenAI extraction function...');
 
         const extractionResponse = await fetch(`${supabaseUrl}/functions/v1/openai-extraction`, {
           method: 'POST',
@@ -202,6 +212,7 @@ Deno.serve(async (req)=>{
           },
           body: JSON.stringify(payload) // Send the full payload
         });
+        console.log('OpenAI extraction response status:', extractionResponse.status);
 
         if (!extractionResponse.ok) {
           const errorText = await extractionResponse.text();
@@ -225,7 +236,7 @@ Deno.serve(async (req)=>{
         }
 
         const extractionResult = await extractionResponse.json();
-        console.log('✅ OpenAI extraction completed successfully');
+        console.log('✅ OpenAI extraction completed successfully with model:', extractionResult.usage?.model);
         console.log('Extracted fields:', Object.keys(extractionResult.extracted_data || {}));
         console.log('Usage cost:', `$${extractionResult.usage?.cost_estimate || 0}`);
 
@@ -233,7 +244,7 @@ Deno.serve(async (req)=>{
         return new Response(JSON.stringify({
           success: true,
           payload: payload,
-          extraction_result: extractionResult,
+          extraction_result: extractionResult || {},
           message: "Payload built and extraction completed successfully"
         }), {
           status: 200,
@@ -244,7 +255,7 @@ Deno.serve(async (req)=>{
         });
 
       } catch (extractionError) {
-        console.error('Error during auto-extraction:', extractionError);
+        console.error('Error during auto-extraction:', extractionError.message, extractionError.stack);
         // Return payload with extraction error
         return new Response(JSON.stringify({
           success: false,
@@ -252,7 +263,8 @@ Deno.serve(async (req)=>{
           extraction_error: {
             message: extractionError.message,
             details: extractionError.toString()
-          },
+          }, 
+          timestamp: new Date().toISOString(),
           message: "Payload built successfully but auto-extraction failed"
         }), {
           status: 200, // Still 200 as requested for this type of error handling
@@ -268,7 +280,8 @@ Deno.serve(async (req)=>{
       return new Response(JSON.stringify({
         success: true,
         payload: payload,
-        message: "Payload built successfully (auto-extract disabled)"
+        message: "Payload built successfully (auto-extract disabled)",
+        timestamp: new Date().toISOString()
       }), {
         status: 200,
         headers: {
@@ -277,7 +290,7 @@ Deno.serve(async (req)=>{
         }
       });
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("=== AI EXTRACTION PAYLOAD ERROR ===");
     console.error("Error message:", error.message);
     console.error("Stack trace:", error.stack);
@@ -285,7 +298,8 @@ Deno.serve(async (req)=>{
       error: `Failed to build AI extraction payload: ${error.message}`,
       details: error.toString()
     }), {
-      status: 500,
+      status: 500, 
+      timestamp: new Date().toISOString(),
       headers: {
         "Content-Type": "application/json",
         ...corsHeaders

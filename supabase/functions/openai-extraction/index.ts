@@ -144,7 +144,7 @@ Deno.serve(async (req: Request) => {
   try {
     console.log('=== OPENAI EXTRACTION REQUEST ===')
     
-    const payload: ExtractionPayload = await req.json()
+    const payload = await req.json()
     
     // Validate required fields
     if (!payload.conversation_id || !payload.location_id) {
@@ -199,6 +199,9 @@ Deno.serve(async (req: Request) => {
     }
 
     // Build the system prompt
+    console.log('Building system prompt...')
+    console.log('System prompt from payload:', payload.system_prompt ? 'Present' : 'Missing')
+    
     const systemPrompt = buildSystemPrompt(payload)
     console.log('System prompt length:', systemPrompt.length, 'characters')
     console.log('=== SYSTEM PROMPT SENT TO OPENAI ===')
@@ -206,6 +209,7 @@ Deno.serve(async (req: Request) => {
     console.log('=== END SYSTEM PROMPT SENT TO OPENAI ===')
 
     // Build conversation context
+    console.log('Building conversation context...')
     const conversationContext = buildConversationContext(payload.conversation_history)
     console.log('Conversation context length:', conversationContext.length, 'characters')
 
@@ -223,6 +227,7 @@ Deno.serve(async (req: Request) => {
     
     // Log the full messages being sent to OpenAI
     console.log('=== FULL MESSAGES SENT TO OPENAI ===')
+    console.log('Number of messages:', messages.length)
     console.log(JSON.stringify(messages, null, 2))
     console.log('=== END FULL MESSAGES SENT TO OPENAI ===')
 
@@ -230,6 +235,7 @@ Deno.serve(async (req: Request) => {
     const model = 'gpt-4o-mini'
     
     console.log('Calling OpenAI API with model:', model)
+    console.log('Using API key:', openaiApiKey ? `${openaiApiKey.substring(0, 3)}...${openaiApiKey.substring(openaiApiKey.length - 4)}` : 'Not available')
 
     // Call OpenAI API
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -246,6 +252,7 @@ Deno.serve(async (req: Request) => {
         response_format: { type: "json_object" } // Ensure JSON response
       })
     })
+    console.log('OpenAI API response status:', openaiResponse.status)
 
     if (!openaiResponse.ok) {
       const errorText = await openaiResponse.text()
@@ -253,6 +260,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const openaiData: OpenAIResponse = await openaiResponse.json()
+    console.log('OpenAI response received successfully')
     console.log('OpenAI response received:', {
       model: openaiData.model,
       usage: openaiData.usage,
@@ -266,6 +274,7 @@ Deno.serve(async (req: Request) => {
     const costEstimate = calculateCost(model, openaiData.usage)
 
     // Calculate customer cost based on subscription plan
+    console.log('Calculating customer cost...')
     const customerCostEstimate = await calculateCustomerCost(supabase, payload.location_id)
 
     // Increment message usage
@@ -278,6 +287,7 @@ Deno.serve(async (req: Request) => {
     )
 
     // Log usage to database
+    console.log('Logging usage to database...')
     usageLogId = await logUsage(supabase, {
       location_id: payload.location_id,
       model: openaiData.model,
@@ -294,6 +304,7 @@ Deno.serve(async (req: Request) => {
     })
 
     // Parse the extracted data
+    console.log('Parsing extracted data from OpenAI response...')
     let extractedData
     try {
       extractedData = JSON.parse(openaiData.choices[0].message.content)
@@ -301,6 +312,7 @@ Deno.serve(async (req: Request) => {
     } catch (parseError) {
       console.error('Failed to parse OpenAI response as JSON:', parseError)
       console.error('Raw response:', openaiData.choices[0].message.content)
+      console.log('Attempting to clean and parse response...')
       throw new Error('OpenAI returned invalid JSON response')
     }
 
@@ -313,6 +325,7 @@ Deno.serve(async (req: Request) => {
     // Step 5: Automatically call update-ghl-contact if we have contact_id and extracted data
     let contactUpdateResult = null
     if (payload.contact_id && Object.keys(extractedData).length > 0) {
+      console.log('Contact ID found, proceeding with contact update...')
       console.log('Step 5: Auto-calling update-ghl-contact...')
      
      // Log the extracted data for debugging
@@ -321,7 +334,7 @@ Deno.serve(async (req: Request) => {
        console.log(`- ${key}: ${value}`)
        
        // Check if this is a custom field (doesn't have a dot in the key)
-       const isCustomField = !key.includes('.');
+       const isCustomField = !key.includes('.') || !key.startsWith('contact.');
        if (isCustomField) {
          console.log(`  ⚠️ This appears to be a custom field but doesn't have the contact. prefix`)
        }
@@ -329,6 +342,7 @@ Deno.serve(async (req: Request) => {
       
       try {
         const contactUpdateResponse = await fetch(`${supabaseUrl}/functions/v1/update-ghl-contact`, {
+          method: 'POST',
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -340,6 +354,7 @@ Deno.serve(async (req: Request) => {
             extracted_data: extractedData
           })
         })
+        console.log('Contact update response status:', contactUpdateResponse.status)
 
         if (!contactUpdateResponse.ok) {
           const errorText = await contactUpdateResponse.text()
@@ -352,6 +367,7 @@ Deno.serve(async (req: Request) => {
           contactUpdateResult = await contactUpdateResponse.json()
           console.log('✅ Contact updated successfully in GHL')
           console.log('Updated fields:', contactUpdateResult.updated_fields)
+          console.log('Skipped fields:', contactUpdateResult.skipped_fields)
         }
       } catch (contactUpdateError) {
         console.error('Error calling update-ghl-contact:', contactUpdateError)
@@ -362,6 +378,7 @@ Deno.serve(async (req: Request) => {
       }
     } else {
       console.log('Skipping contact update - missing contact_id or no extracted data')
+      console.log('Contact ID:', payload.contact_id)
       if (!payload.contact_id) {
         console.log('- No contact_id provided in payload')
       }
@@ -370,7 +387,11 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // Log the agency ID for this location
+    console.log('Checking for agency OpenAI key for location:', payload.location_id)
+
     // Return the extraction result with contact update info
+    console.log('Returning successful response with extracted data')
     return new Response(
       JSON.stringify({
         success: true,
@@ -400,7 +421,7 @@ Deno.serve(async (req: Request) => {
       }
     )
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("=== OPENAI EXTRACTION ERROR ===")
     console.error("Error message:", error.message)
     console.error("Stack trace:", error.stack)
@@ -408,7 +429,7 @@ Deno.serve(async (req: Request) => {
     const responseTime = Date.now() - startTime
 
     // Log failed usage if we have the required info
-    if (usageLogId === null) { 
+    if (usageLogId === null) {
       try {
         const payload = await req.json().catch(() => ({}))
         if (payload.location_id) {
@@ -416,6 +437,7 @@ Deno.serve(async (req: Request) => {
           const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
           const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+          console.log('Logging error usage for location:', payload.location_id)
           await logUsage(supabase, {
             location_id: payload.location_id,
             model: 'gpt-4o-mini',
@@ -432,6 +454,7 @@ Deno.serve(async (req: Request) => {
           })
         }
       } catch (logError) {
+        console.log('Failed to log error usage')
         console.error('Failed to log error usage:', logError)
       }
     }
@@ -439,7 +462,8 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({ 
         error: `OpenAI extraction failed: ${error.message}`,
-        details: error.toString(),
+        details: error.toString(), 
+        stack: error.stack,
         timestamp: new Date().toISOString()
       }),
       {
@@ -454,7 +478,7 @@ Deno.serve(async (req: Request) => {
 })
 
 function buildSystemPrompt(payload: ExtractionPayload): string {
-  let prompt = `You are a data extraction AI analyzing a conversation between a customer and ${payload.business_context.name}. `
+  let prompt = `You are a data extraction AI analyzing a conversation between a customer and ${payload.business_context?.name || 'a business'}. `
   prompt += `Extract structured data from the conversation and return it as valid JSON.\n\n`
   
   prompt += `EXTRACTION FIELDS:\n`
@@ -466,7 +490,7 @@ function buildSystemPrompt(payload: ExtractionPayload): string {
   })
   
   prompt += `\nINSTRUCTIONS:\n`
-  prompt += `- ${payload.instructions}\n`
+  prompt += `- ${payload.instructions || 'Extract all relevant information from the conversation'}\n`
   prompt += `- Only include fields that have extractable values\n`
   prompt += `- Use exact field keys as JSON property names\n`
   prompt += `- Format dates as YYYY-MM-DD\n`
@@ -474,7 +498,7 @@ function buildSystemPrompt(payload: ExtractionPayload): string {
   prompt += `- Return only valid JSON, no explanations\n`
   prompt += `- Be thorough but only extract data that is clearly present\n`
   
-  if (payload.response_format?.rules) {
+  if (payload.response_format && payload.response_format.rules) {
     prompt += `\nFORMAT RULES:\n`
     payload.response_format.rules.forEach(rule => {
       prompt += `- ${rule}\n`
@@ -486,7 +510,7 @@ function buildSystemPrompt(payload: ExtractionPayload): string {
 
 function buildConversationContext(messages: any[]): string {
   if (!messages || messages.length === 0) {
-    return "No conversation messages available."
+    return "No conversation messages available.\n"
   }
   
   let context = "CONVERSATION:\n"
@@ -494,7 +518,7 @@ function buildConversationContext(messages: any[]): string {
     const speaker = msg.role === 'user' ? 'Customer' : 'Business'
     const timestamp = new Date(msg.timestamp).toLocaleString()
     context += `${index + 1}. [${speaker}] (${timestamp}): ${msg.content}\n`
-  })
+  });
   
   return context
 }
@@ -502,7 +526,7 @@ function buildConversationContext(messages: any[]): string {
 function calculateCost(model: string, usage: any): number {
   const pricing = MODEL_PRICING[model as keyof typeof MODEL_PRICING]
   if (!pricing) {
-    console.warn(`No pricing info for model: ${model}, using gpt-4o-mini pricing as fallback`)
+    console.warn(`No pricing info for model: ${model}, using gpt-4o-mini pricing as fallback`);
     // Use gpt-4o-mini pricing as fallback
     const fallbackPricing = MODEL_PRICING['gpt-4o-mini']
     const inputCost = (usage.prompt_tokens / 1000) * fallbackPricing.input
@@ -512,7 +536,7 @@ function calculateCost(model: string, usage: any): number {
   
   const inputCost = (usage.prompt_tokens / 1000) * pricing.input
   const outputCost = (usage.completion_tokens / 1000) * pricing.output
-  
+  console.log(`Cost calculation: (${usage.prompt_tokens}/1000 * ${pricing.input}) + (${usage.completion_tokens}/1000 * ${pricing.output}) = ${inputCost + outputCost}`)
   return Math.round((inputCost + outputCost) * 1000000) / 1000000 // Round to 6 decimal places
 }
 
@@ -520,6 +544,7 @@ function calculateCost(model: string, usage: any): number {
 async function calculateCustomerCost(supabase: any, locationId: string): Promise<number> {
   try {
     // Get location's subscription plan
+    console.log('Getting subscription plan for location:', locationId)
     const { data, error } = await supabase
       .rpc('get_location_subscription_plan', {
         p_location_id: locationId
@@ -530,6 +555,7 @@ async function calculateCustomerCost(supabase: any, locationId: string): Promise
       return 0
     }
     
+    console.log('Subscription plan:', data?.plan_name, 'Overage price:', data?.overage_price)
     // Get overage price from plan
     const overagePrice = data?.overage_price || 0.08 // Default to $0.08 if not found
     
@@ -544,6 +570,7 @@ async function calculateCustomerCost(supabase: any, locationId: string): Promise
 
 async function logUsage(supabase: any, usageData: any): Promise<string> {
   try {
+    console.log('Logging AI usage to database:', usageData.model, usageData.total_tokens, 'tokens')
     const { data, error } = await supabase
       .from('ai_usage_logs')
       .insert(usageData)
@@ -556,7 +583,7 @@ async function logUsage(supabase: any, usageData: any): Promise<string> {
     }
 
     console.log('Usage logged successfully:', data.id)
-    return data.id
+    return data.id || 'unknown'
   } catch (error) {
     console.error('Error logging usage:', error)
     throw error

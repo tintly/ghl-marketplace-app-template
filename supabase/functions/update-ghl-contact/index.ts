@@ -384,8 +384,9 @@ async function getGHLContact(accessToken: string, contactId: string) {
 }
 
 // Check if a field key is a standard field
-function isStandardFieldKey(fieldKey) {
-  return fieldKey.includes('.') && fieldKey.startsWith('contact.');
+function isStandardFieldKey(fieldKey: string): boolean {
+  // Standard fields must have a dot AND start with 'contact.'
+  return fieldKey.includes('.') && fieldKey.startsWith('contact.')
 }
 
 function prepareUpdatePayload(
@@ -397,8 +398,10 @@ function prepareUpdatePayload(
   const updatedFields: string[] = []
   const skippedFields: string[] = []
 
-  // Initialize customFields array
-  updatePayload.customFields = []
+  // Initialize customFields array if needed
+  if (!updatePayload.customFields) {
+    updatePayload.customFields = []
+  }
 
   // Helper function to convert snake_case field keys to GHL's camelCase format
   function getGHLStandardFieldName(inputKey: string): string {
@@ -472,17 +475,18 @@ function prepareUpdatePayload(
       continue
     }
 
+    console.log(`Processing field: ${fieldKey} with value: ${newValue}`)
+
     // Get field configuration if available
     const field = fieldsMap.get(fieldKey)
     
     // Determine if this is a standard field or custom field
-    // A field is standard if it has a dot in the key AND starts with 'contact.'
-    // OR if we have a field configuration that indicates it's a standard field
-    const isStandardField = isStandardFieldKey(fieldKey) || 
-                           (field && field.target_ghl_key && field.target_ghl_key.includes('.'))
+    const isStandard = isStandardFieldKey(fieldKey)
+    
+    console.log(`Field ${fieldKey} is ${isStandard ? 'standard' : 'custom'} field`)
     
     // If no field configuration and not a standard field format, treat as custom field
-    if (!field && !isStandardField) {
+    if (!field && !isStandard) {
       console.log(`No field configuration found for ${fieldKey}, treating as custom field`)
       
       // Try to find a matching custom field in the existing contact
@@ -508,11 +512,11 @@ function prepareUpdatePayload(
     const fieldName = field?.field_name || fieldKey
     const policy = field?.overwrite_policy || 'always'
     
-    // Get current value
+    // Get current value and target field ID
     let currentValue: any = null
     let targetFieldId: string = field?.target_ghl_key || fieldKey
     
-    if (isStandardField) {
+    if (isStandard) {
       // Standard field (e.g., contact.firstName)
       const ghlStandardKey = getGHLStandardFieldName(fieldKey)
       currentValue = existingContact[ghlStandardKey]
@@ -521,18 +525,21 @@ function prepareUpdatePayload(
         currentValue,
         newValue
       })
-    } else if (field) {
+    } else {
       // Custom field - use the GHL field ID from target_ghl_key
-      currentValue = customFieldsMap.get(targetFieldId)
+      if (field) {
+        targetFieldId = field.target_ghl_key
+        currentValue = customFieldsMap.get(targetFieldId)
+      } else {
+        // If no field configuration, use the key as is (might be a direct custom field ID)
+        targetFieldId = fieldKey
+        currentValue = customFieldsMap.get(targetFieldId)
+      }
       
       console.log(`Custom field ${fieldKey} -> ${targetFieldId}:`, {
         currentValue,
         newValue
       })
-    } else {
-      console.log(`Unrecognized field ${fieldKey}, skipping`)
-      skippedFields.push(fieldKey)
-      continue
     }
 
     // Check if field has existing value
@@ -577,7 +584,7 @@ function prepareUpdatePayload(
     }
 
     if (shouldUpdate) {
-      if (isStandardField) {
+      if (isStandard) {
         // For standard fields, we need to use the field name without the "contact." prefix
         // Extract the field name part after 'contact.'
         let ghlStandardKey
@@ -603,7 +610,7 @@ function prepareUpdatePayload(
         }
         
         console.log(`✅ Will update standard field ${ghlStandardKey}: ${currentValue} → ${newValue}`)
-      } else {
+      } else if (targetFieldId) {
         // Initialize customFields array if not already done
         // For custom fields, add to the customFields array with the correct format
         if (targetFieldId) {
@@ -613,6 +620,10 @@ function prepareUpdatePayload(
           })
           
           console.log(`✅ Will update custom field ${targetFieldId}: ${currentValue} → ${newValue}`)
+        } else {
+          console.log(`⚠️ Cannot update custom field ${fieldKey} - no target field ID available`)
+          skippedFields.push(fieldKey)
+          continue
         }
       }
       
@@ -623,10 +634,21 @@ function prepareUpdatePayload(
     }
   }
 
+  // Final validation - ensure customFields is an array
+  if (!Array.isArray(updatePayload.customFields)) {
+    updatePayload.customFields = []
+  }
+
   // If no custom fields were added, remove the empty array
   if (updatePayload.customFields && updatePayload.customFields.length === 0) {
     delete updatePayload.customFields
   }
+
+  // Log the final payload
+  console.log('=== FINAL UPDATE PAYLOAD ===')
+  console.log('Standard fields:', Object.keys(updatePayload).filter(k => k !== 'customFields'))
+  console.log('Custom fields:', updatePayload.customFields?.length || 0)
+  console.log('=== END FINAL UPDATE PAYLOAD ===')
 
   return {
     updatePayload,
@@ -635,6 +657,7 @@ function prepareUpdatePayload(
   }
 }
 
+// Function to update a contact in GHL
 async function updateGHLContact(accessToken: string, contactId: string, payload: any) {
   try {
     const apiDomain = Deno.env.get('GHL_API_DOMAIN') || 'https://services.leadconnectorhq.com'
@@ -642,7 +665,7 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
 
     // Clean payload - remove read-only fields
     const cleanPayload = { ...payload }
-    delete cleanPayload.id
+    delete cleanPayload.id 
     delete cleanPayload.locationId
     delete cleanPayload.dateAdded
     delete cleanPayload.dateUpdated
@@ -654,9 +677,6 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
       customFieldsCount: cleanPayload.customFields?.length || 0
     })
 
-    // Log the exact payload being sent
-    console.log('Update payload:', JSON.stringify(cleanPayload, null, 2))
-
     // Log the fields being updated
     console.log('Standard fields:', Object.keys(cleanPayload).filter(k => k !== 'customFields'))
     console.log('Custom fields:', cleanPayload.customFields?.length || 0)
@@ -664,7 +684,7 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
 
     // Final validation to ensure we're not sending any invalid fields
     const validStandardFields = [
-      'firstName', 'lastName', 'name', 'email', 'phone', 
+      'firstName', 'lastName', 'name', 'email', 'phone', 'dnd', 'dndSettings',
       'companyName', 'address1', 'city', 'state', 'country', 
       'postalCode', 'website', 'dateOfBirth', 'tags'
     ]
@@ -672,7 +692,7 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
     // Move any standard fields that aren't in the valid list to customFields
     Object.keys(cleanPayload).forEach(key => {
       if (!validStandardFields.includes(key) && key !== 'customFields' && key !== 'tags') {
-        console.log(`⚠️ Invalid standard field detected: ${key}`)
+        console.log(`⚠️ Invalid standard field detected: ${key}, moving to customFields`)
         
         // Move to customFields
         if (!cleanPayload.customFields) {
@@ -681,7 +701,7 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
         
         // Check if this might be a custom field ID
         if (key.length > 10 && !key.includes('.')) {
-          console.log(`🔄 Moving '${key}' to customFields array as a custom field ID`)
+          console.log(`🔄 Moving '${key}' to customFields array with ID: ${key}`)
           cleanPayload.customFields.push({
             id: key,
             value: cleanPayload[key]
@@ -695,6 +715,9 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
       }
     })
 
+    // Log the final payload being sent
+    console.log('Final update payload:', JSON.stringify(cleanPayload, null, 2))
+
     // If we have no valid fields to update, return early
     if (Object.keys(cleanPayload).length === 0 && 
         (!cleanPayload.customFields || cleanPayload.customFields.length === 0)) {
@@ -704,6 +727,8 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
         ghlResponse: { message: "No valid fields to update" }
       }
     }
+    
+    console.log('Sending update to GHL API...')
 
     const response = await fetch(url, {
       method: 'PUT',
@@ -714,7 +739,7 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
         'Accept': 'application/json'
       },
       body: JSON.stringify(cleanPayload)
-    })
+    });
 
     let responseData
     try {
@@ -722,7 +747,7 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
     } catch (e) {
       responseData = { error: 'Failed to parse response' }
     }
-
+    
     if (!response.ok) {
       console.error('GHL API error:', {
         status: response.status,
@@ -738,7 +763,7 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
         ghlResponse: responseData
       }
     }
-
+    
     console.log('✅ Contact updated successfully in GHL')
     
     return {
