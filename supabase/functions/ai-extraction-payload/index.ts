@@ -121,10 +121,14 @@ Deno.serve(async (req)=>{
     // Convert fields from prompt metadata to extraction format
     // We now mostly just pass the field definition, as the main prompt handles the instructions
     const fieldsToExtract = promptData.metadata.fields.map((field)=>{
+      // Determine if this is a custom field (no dot in the target_ghl_key)
+      const isCustomField = !field.ghlKey.includes('.');
+      
       return {
         id: field.id, // Keep the original ID for traceability
         name: field.name,
         ghl_key: field.fieldKey, // Use fieldKey as that's what the AI should output
+        is_custom_field: isCustomField, // Flag to indicate if this is a custom field
         type: field.type,
         description: field.description, // Pass the field's description
         required: field.required,

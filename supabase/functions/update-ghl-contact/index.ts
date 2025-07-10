@@ -397,6 +397,9 @@ function prepareUpdatePayload(
   const updatedFields: string[] = []
   const skippedFields: string[] = []
 
+  // Initialize customFields array
+  updatePayload.customFields = []
+
   // Helper function to convert snake_case field keys to GHL's camelCase format
   function getGHLStandardFieldName(inputKey: string): string {
     // Remove 'contact.' prefix if present
@@ -460,9 +463,6 @@ function prepareUpdatePayload(
     })
   }
 
-  // Initialize customFields array if we'll need it
-  updatePayload.customFields = []
-
   // Process each extracted field
   for (const [fieldKey, newValue] of Object.entries(extractedData)) {
     // Skip empty values
@@ -475,13 +475,34 @@ function prepareUpdatePayload(
     // Get field configuration if available
     const field = fieldsMap.get(fieldKey)
     
-    // Determine if this is a standard field
-    const isStandardField = isStandardFieldKey(fieldKey)
+    // Determine if this is a standard field or custom field
+    // A field is standard if it has a dot in the key AND starts with 'contact.'
+    // OR if we have a field configuration that indicates it's a standard field
+    const isStandardField = isStandardFieldKey(fieldKey) || 
+                           (field && field.target_ghl_key && field.target_ghl_key.includes('.'))
     
+    // If no field configuration and not a standard field format, treat as custom field
     if (!field && !isStandardField) {
-      console.log(`No field configuration found for ${fieldKey}, skipping`)
-      skippedFields.push(fieldKey)
-      continue
+      console.log(`No field configuration found for ${fieldKey}, treating as custom field`)
+      
+      // Try to find a matching custom field in the existing contact
+      const matchingCustomField = existingContact.customFields?.find((cf: any) => 
+        cf.id === fieldKey || cf.name?.toLowerCase() === fieldKey.toLowerCase()
+      )
+      
+      if (matchingCustomField) {
+        console.log(`Found matching custom field: ${matchingCustomField.id} (${matchingCustomField.name})`)
+        updatePayload.customFields.push({
+          id: matchingCustomField.id,
+          value: newValue
+        })
+        updatedFields.push(fieldKey)
+        continue
+      } else {
+        console.log(`No matching custom field found for ${fieldKey}, skipping`)
+        skippedFields.push(fieldKey)
+        continue
+      }
     }
     
     const fieldName = field?.field_name || fieldKey
@@ -500,7 +521,7 @@ function prepareUpdatePayload(
         currentValue,
         newValue
       })
-    } else {
+    } else if (field) {
       // Custom field - use the GHL field ID from target_ghl_key
       currentValue = customFieldsMap.get(targetFieldId)
       
@@ -508,6 +529,10 @@ function prepareUpdatePayload(
         currentValue,
         newValue
       })
+    } else {
+      console.log(`Unrecognized field ${fieldKey}, skipping`)
+      skippedFields.push(fieldKey)
+      continue
     }
 
     // Check if field has existing value
@@ -554,7 +579,13 @@ function prepareUpdatePayload(
     if (shouldUpdate) {
       if (isStandardField) {
         // For standard fields, we need to use the field name without the "contact." prefix
-        const ghlStandardKey = getGHLStandardFieldName(fieldKey)
+        // Extract the field name part after 'contact.'
+        let ghlStandardKey
+        if (fieldKey.includes('.')) {
+          ghlStandardKey = getGHLStandardFieldName(fieldKey)
+        } else {
+          ghlStandardKey = getGHLStandardFieldName(`contact.${fieldKey}`)
+        }
         
         // Special handling for specific field types
         switch (ghlStandardKey) {
@@ -574,10 +605,6 @@ function prepareUpdatePayload(
         console.log(`✅ Will update standard field ${ghlStandardKey}: ${currentValue} → ${newValue}`)
       } else {
         // Initialize customFields array if not already done
-        if (!updatePayload.customFields) {
-          updatePayload.customFields = []
-        }
-
         // For custom fields, add to the customFields array with the correct format
         if (targetFieldId) {
           updatePayload.customFields.push({
@@ -642,28 +669,41 @@ async function updateGHLContact(accessToken: string, contactId: string, payload:
       'postalCode', 'website', 'dateOfBirth', 'tags'
     ]
     
-    // Remove any standard fields that aren't in the valid list
+    // Move any standard fields that aren't in the valid list to customFields
     Object.keys(cleanPayload).forEach(key => {
       if (!validStandardFields.includes(key) && key !== 'customFields' && key !== 'tags') {
-        console.log(`⚠️ Removing invalid standard field: ${key}`)
+        console.log(`⚠️ Invalid standard field detected: ${key}`)
         
-        // Instead of deleting, move to customFields
+        // Move to customFields
         if (!cleanPayload.customFields) {
           cleanPayload.customFields = []
         }
         
-        // Add as custom field
-        cleanPayload.customFields.push({
-          id: key,
-          value: cleanPayload[key]
-        })
+        // Check if this might be a custom field ID
+        if (key.length > 10 && !key.includes('.')) {
+          console.log(`🔄 Moving '${key}' to customFields array as a custom field ID`)
+          cleanPayload.customFields.push({
+            id: key,
+            value: cleanPayload[key]
+          })
+        } else {
+          console.log(`⚠️ Skipping invalid field: ${key} - not a valid standard field or custom field ID`)
+        }
         
         // Remove from standard fields
         delete cleanPayload[key]
-        
-        console.log(`🔄 Moved '${key}' to customFields array`)
       }
     })
+
+    // If we have no valid fields to update, return early
+    if (Object.keys(cleanPayload).length === 0 && 
+        (!cleanPayload.customFields || cleanPayload.customFields.length === 0)) {
+      console.log('⚠️ No valid fields to update, skipping API call')
+      return {
+        success: true,
+        ghlResponse: { message: "No valid fields to update" }
+      }
+    }
 
     const response = await fetch(url, {
       method: 'PUT',

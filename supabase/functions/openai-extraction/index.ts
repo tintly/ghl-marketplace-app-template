@@ -314,6 +314,18 @@ Deno.serve(async (req: Request) => {
     let contactUpdateResult = null
     if (payload.contact_id && Object.keys(extractedData).length > 0) {
       console.log('Step 5: Auto-calling update-ghl-contact...')
+     
+     // Log the extracted data for debugging
+     console.log('Extracted data before sending to update-ghl-contact:')
+     Object.entries(extractedData).forEach(([key, value]) => {
+       console.log(`- ${key}: ${value}`)
+       
+       // Check if this is a custom field (doesn't have a dot in the key)
+       const isCustomField = !key.includes('.');
+       if (isCustomField) {
+         console.log(`  ⚠️ This appears to be a custom field but doesn't have the contact. prefix`)
+       }
+     })
       
       try {
         const contactUpdateResponse = await fetch(`${supabaseUrl}/functions/v1/update-ghl-contact`, {
