@@ -165,6 +165,15 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
         throw new Error(`Invalid field type: ${formData.field_type}. Must be one of: ${validFieldTypes.join(', ')}`)
       }
 
+     // Add field_key from original_ghl_field_data if available
+     if (customField && customField.fieldKey) {
+       formData.field_key = customField.fieldKey
+     } else if (customField && customField.key) {
+       formData.field_key = customField.key
+     } else if (formData.original_ghl_field_data && formData.original_ghl_field_data.fieldKey) {
+       formData.field_key = formData.original_ghl_field_data.fieldKey
+     }
+
       await onSubmit(formData)
     } catch (error) {
       console.error('Form submission error:', error)

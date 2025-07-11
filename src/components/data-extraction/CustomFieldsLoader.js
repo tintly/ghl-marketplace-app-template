@@ -101,6 +101,7 @@ export default class CustomFieldsLoader {
             // Update both the stored field data AND the field name if it changed
             const updateData = {
               original_ghl_field_data: completeFieldData,
+             field_key: freshField.fieldKey,
               updated_at: new Date().toISOString()
             }
 

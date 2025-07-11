@@ -452,9 +452,11 @@ function prepareUpdatePayload(
       // Custom field - map both the GHL ID and the fieldKey if available
       fieldsMap.set(f.target_ghl_key, f)
       
-      // If we have original field data with a fieldKey, map that too
-      if (f.original_ghl_field_data?.fieldKey) {
-        fieldsMap.set(f.original_ghl_field_data.fieldKey, f)
+     // If we have field_key or original field data with a fieldKey, map that too
+     if (f.field_key) {
+       fieldsMap.set(f.field_key, f)
+     } else if (f.original_ghl_field_data?.fieldKey) {
+       fieldsMap.set(f.original_ghl_field_data.fieldKey, f)
       }
     }
   })
