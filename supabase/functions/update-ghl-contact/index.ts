@@ -455,14 +455,22 @@ function prepareUpdatePayload(
       
       // If we have field_key, map that too
       if (f.field_key) {
-        console.log(`Mapping field_key ${f.field_key} to field ${f.field_name}`)
-        fieldsMap.set(f.field_key, f)
+        // Map both with and without the contact. prefix for backward compatibility
+        const simpleKey = f.field_key
+        const prefixedKey = `contact.${f.field_key}`
+        console.log(`Mapping field_key ${simpleKey} and ${prefixedKey} to field ${f.field_name}`)
+        fieldsMap.set(simpleKey, f)
+        fieldsMap.set(prefixedKey, f)
       } 
       
       // Also map the fieldKey from original_ghl_field_data if available
       if (f.original_ghl_field_data?.fieldKey && f.original_ghl_field_data.fieldKey !== f.field_key) {
-        console.log(`Mapping original fieldKey ${f.original_ghl_field_data.fieldKey} to field ${f.field_name}`)
-        fieldsMap.set(f.original_ghl_field_data.fieldKey, f)
+        // Map both with and without the contact. prefix for backward compatibility
+        const simpleOrigKey = f.original_ghl_field_data.fieldKey.replace(/^contact\./, '')
+        const prefixedOrigKey = `contact.${simpleOrigKey}`
+        console.log(`Mapping original fieldKey ${simpleOrigKey} and ${prefixedOrigKey} to field ${f.field_name}`)
+        fieldsMap.set(simpleOrigKey, f)
+        fieldsMap.set(prefixedOrigKey, f)
       }
     }
   })

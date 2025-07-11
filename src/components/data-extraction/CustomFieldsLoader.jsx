@@ -87,8 +87,8 @@ export default class CustomFieldsLoader {
             // Ensure we preserve ALL field metadata including parentId
             const completeFieldData = {
               ...freshField,
-              // Ensure fieldKey is included
-              fieldKey: freshField.fieldKey || null,
+              // Ensure fieldKey is included - store WITHOUT the contact. prefix
+              fieldKey: freshField.fieldKey ? freshField.fieldKey.replace(/^contact\./, '') : null,
               // Ensure critical folder placement data is preserved
               parentId: freshField.parentId || null,
               position: freshField.position || 0,
@@ -98,12 +98,12 @@ export default class CustomFieldsLoader {
             }
 
             console.log('🗂️ CRITICAL: Preserving parentId in stored data:', completeFieldData.parentId)
-            console.log('🔑 CRITICAL: Preserving fieldKey in stored data:', completeFieldData.fieldKey)
+            console.log('🔑 CRITICAL: Preserving simplified fieldKey in stored data:', completeFieldData.fieldKey)
 
             // Update both the stored field data AND the field name if it changed
             const updateData = {
               original_ghl_field_data: completeFieldData,
-              field_key: freshField.fieldKey || null,
+              field_key: freshField.fieldKey ? freshField.fieldKey.replace(/^contact\./, '') : null,
               updated_at: new Date().toISOString()
             }
 

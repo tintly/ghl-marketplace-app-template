@@ -167,16 +167,16 @@ function ExtractionFieldForm({ customField, editingField, onSubmit, onCancel }) 
 
       // Add field_key from original_ghl_field_data if available
       if (customField && customField.fieldKey) {
-        formData.field_key = customField.fieldKey
+        formData.field_key = customField.fieldKey.replace(/^contact\./, '')
       } else if (customField && customField.key) {
-        formData.field_key = customField.key
+        formData.field_key = customField.key.replace(/^contact\./, '')
       } else if (formData.original_ghl_field_data && formData.original_ghl_field_data.fieldKey) {
-        formData.field_key = formData.original_ghl_field_data.fieldKey
+        formData.field_key = formData.original_ghl_field_data.fieldKey.replace(/^contact\./, '')
       } else if (customField && !isStandardFieldForm) {
         // For custom fields without a fieldKey, generate one from the name
         const fieldName = formData.field_name || customField.name
-        formData.field_key = `contact.${fieldName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')}`
-        console.log(`Generated field_key for custom field: ${formData.field_key}`)
+        formData.field_key = fieldName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
+        console.log(`Generated simplified field_key for custom field: ${formData.field_key}`)
       }
 
       await onSubmit(formData)
