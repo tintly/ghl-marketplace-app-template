@@ -141,16 +141,6 @@ export default class CustomFieldsLoader {
             } else {
               console.log(`✅ Preserved stored data for deleted field: ${extractionField.field_name}`)
               console.log(`🗂️ Preserved parentId: ${extractionField.original_ghl_field_data.parentId}`)
-            console.log(`⚠️ Invalid standard field format: ${field.target_ghl_key}, using field_key if available`)
-            
-            // Try to use field_key if available
-            if (field.field_key) {
-              const standardFieldName = getGHLStandardFieldName(field.field_key)
-              updatePayload[standardFieldName] = newValue
-              console.log(`✅ Using field_key to update standard field ${standardFieldName}: ${JSON.stringify(currentValue)} → ${JSON.stringify(newValue)}`)
-              updatedFields.push(fieldKey)
-            } else {
-              skippedFields.push(fieldKey)
             }
           }
         } catch (error) {
