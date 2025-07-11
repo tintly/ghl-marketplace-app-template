@@ -344,6 +344,7 @@ async function getExtractionFields(supabase: any, configId: string) {
       id,
       field_name,
       target_ghl_key,
+      field_key,
       field_type,
       overwrite_policy,
       original_ghl_field_data
@@ -452,11 +453,16 @@ function prepareUpdatePayload(
       // Custom field - map both the GHL ID and the fieldKey if available
       fieldsMap.set(f.target_ghl_key, f)
       
-     // If we have field_key or original field data with a fieldKey, map that too
-     if (f.field_key) {
-       fieldsMap.set(f.field_key, f)
-     } else if (f.original_ghl_field_data?.fieldKey) {
-       fieldsMap.set(f.original_ghl_field_data.fieldKey, f)
+      // If we have field_key, map that too
+      if (f.field_key) {
+        console.log(`Mapping field_key ${f.field_key} to field ${f.field_name}`)
+        fieldsMap.set(f.field_key, f)
+      } 
+      
+      // Also map the fieldKey from original_ghl_field_data if available
+      if (f.original_ghl_field_data?.fieldKey && f.original_ghl_field_data.fieldKey !== f.field_key) {
+        console.log(`Mapping original fieldKey ${f.original_ghl_field_data.fieldKey} to field ${f.field_name}`)
+        fieldsMap.set(f.original_ghl_field_data.fieldKey, f)
       }
     }
   })

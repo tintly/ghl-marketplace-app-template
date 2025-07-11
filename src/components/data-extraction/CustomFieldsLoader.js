@@ -46,7 +46,7 @@ export default class CustomFieldsLoader {
       // Get all extraction fields for this configuration
       const { data: extractionFields, error: fetchError } = await supabase
         .from('data_extraction_fields')
-        .select('id, target_ghl_key, field_name, original_ghl_field_data')
+        .select('id, target_ghl_key, field_name, original_ghl_field_data, field_key')
         .eq('config_id', configId)
 
       if (fetchError) {
@@ -87,21 +87,23 @@ export default class CustomFieldsLoader {
             // Ensure we preserve ALL field metadata including parentId
             const completeFieldData = {
               ...freshField,
+              // Ensure fieldKey is included
+              fieldKey: freshField.fieldKey || null,
               // Ensure critical folder placement data is preserved
               parentId: freshField.parentId || null,
               position: freshField.position || 0,
-              fieldKey: freshField.fieldKey,
               model: freshField.model || 'contact',
               objectId: freshField.objectId || null,
               objectSchemaId: freshField.objectSchemaId || null
             }
 
             console.log('🗂️ CRITICAL: Preserving parentId in stored data:', completeFieldData.parentId)
+            console.log('🔑 CRITICAL: Preserving fieldKey in stored data:', completeFieldData.fieldKey)
 
             // Update both the stored field data AND the field name if it changed
             const updateData = {
               original_ghl_field_data: completeFieldData,
-             field_key: freshField.fieldKey,
+              field_key: freshField.fieldKey || null,
               updated_at: new Date().toISOString()
             }
 
@@ -109,6 +111,11 @@ export default class CustomFieldsLoader {
             if (nameChanged) {
               updateData.field_name = freshField.name
               console.log(`📝 UPDATING FIELD NAME: "${extractionField.field_name}" → "${freshField.name}"`)
+              
+              // If field_key is missing but we have it in the fresh data, update it
+              if (!extractionField.field_key && freshField.fieldKey) {
+                console.log(`🔑 ADDING MISSING FIELD_KEY: "${freshField.fieldKey}"`)
+              }
             }
 
             const { error: updateError } = await supabase
@@ -134,6 +141,16 @@ export default class CustomFieldsLoader {
             } else {
               console.log(`✅ Preserved stored data for deleted field: ${extractionField.field_name}`)
               console.log(`🗂️ Preserved parentId: ${extractionField.original_ghl_field_data.parentId}`)
+            console.log(`⚠️ Invalid standard field format: ${field.target_ghl_key}, using field_key if available`)
+            
+            // Try to use field_key if available
+            if (field.field_key) {
+              const standardFieldName = getGHLStandardFieldName(field.field_key)
+              updatePayload[standardFieldName] = newValue
+              console.log(`✅ Using field_key to update standard field ${standardFieldName}: ${JSON.stringify(currentValue)} → ${JSON.stringify(newValue)}`)
+              updatedFields.push(fieldKey)
+            } else {
+              skippedFields.push(fieldKey)
             }
           }
         } catch (error) {
