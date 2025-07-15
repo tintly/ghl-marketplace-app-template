@@ -10,6 +10,16 @@ function LogViewer() {
   const [loadingContacts, setLoadingContacts] = useState(false)
   const [contactsError, setContactsError] = useState(null)
 
+  const [fetchingRecent, setFetchingRecent] = useState(false)
+  
+  const fetchRecentLogs = () => {
+    setFetchingRecent(true)
+    setContactId('')
+    setConversationId('')
+    fetchLogs()
+    setFetchingRecent(false)
+  }
+  
   useEffect(() => {
     // Make recent contacts loading optional and non-blocking
     fetchRecentContacts()
@@ -54,14 +64,32 @@ function LogViewer() {
   }
 
   const fetchLogs = async () => {
-    if (!contactId && !conversationId) {
-      setError('Please enter either a Contact ID or Conversation ID')
+    // Allow fetching recent logs without any ID
+    if (!contactId && !conversationId && !fetchingRecent) {
+      setError('Please enter either a Contact ID or Conversation ID, or use "View Recent Logs"')
       return
     }
 
     try {
       setLoading(true)
       setError(null)
+      
+      let queryParams = {
+        limit: 50 // Increase limit to show more logs
+      }
+      
+      if (contactId) {
+        queryParams.contact_id = contactId
+      }
+      
+      if (conversationId) {
+        queryParams.conversation_id = conversationId
+      }
+      
+      if (fetchingRecent) {
+        queryParams.recent = true
+        queryParams.limit = 20
+      }
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
       const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -71,8 +99,7 @@ function LogViewer() {
       }
 
      console.log('Fetching logs for:', {
-       contact_id: contactId || undefined,
-       conversation_id: conversationId || undefined
+       ...queryParams
      })
 
       const response = await fetch(`${supabaseUrl}/functions/v1/view-extraction-logs`, {
@@ -81,11 +108,7 @@ function LogViewer() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${supabaseAnonKey}`
         },
-        body: JSON.stringify({
-          contact_id: contactId || undefined,
-          conversation_id: conversationId || undefined,
-         limit: 50 // Increase limit to show more logs
-        })
+        body: JSON.stringify(queryParams)
       })
 
       if (!response.ok) {
@@ -166,6 +189,13 @@ function LogViewer() {
                   ) : (
                     'View Logs'
                   )}
+                </button>
+                <button
+                  onClick={fetchRecentLogs}
+                  disabled={loading}
+                  className="btn-secondary ml-2"
+                >
+                  View Recent Logs
                 </button>
               </div>
             </div>

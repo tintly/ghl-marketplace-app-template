@@ -33,14 +33,16 @@ Deno.serve(async (req: Request) => {
     const requestBody = await req.json()
     const contactId = requestBody.contact_id
     const conversationId = requestBody.conversation_id
+    const fetchRecent = requestBody.recent === true
     const limit = requestBody.limit || 10
     
-    if (!contactId && !conversationId) {
+    if (!contactId && !conversationId && !fetchRecent) {
       return new Response(
         JSON.stringify({ 
           error: "Either contact_id or conversation_id is required",
           example: { 
             contact_id: "3eEkzpdKeXk19ndqBHNd",
+            recent: true,
             limit: 10
           }
         }),
@@ -57,6 +59,7 @@ Deno.serve(async (req: Request) => {
     console.log('Fetching extraction logs for:', {
       contactId: contactId || 'Not provided',
       conversationId: conversationId || 'Not provided',
+      fetchRecent: fetchRecent,
       limit
     })
 
@@ -73,6 +76,23 @@ Deno.serve(async (req: Request) => {
       .order('date_added', { ascending: false })
       .limit(limit)
     
+    // If fetching recent logs without specific IDs
+    if (fetchRecent) {
+      console.log('Fetching recent logs without filtering by ID')
+      // Just use the limit and order
+    }
+    // Otherwise filter by the provided IDs
+    else {
+      if (contactId) {
+        conversationQuery = conversationQuery.eq('contact_id', contactId)
+      }
+      
+      if (conversationId) {
+        conversationQuery = conversationQuery.eq('conversation_id', conversationId)
+      }
+    }
+    
+    // Apply the query
     if (contactId) {
       conversationQuery = conversationQuery.eq('contact_id', contactId)
     }

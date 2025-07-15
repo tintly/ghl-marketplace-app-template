@@ -157,7 +157,7 @@ Deno.serve(async (req: Request) => {
     const extractionPayload = {
       conversation_id: conversationId,
       location_id: conversationData.location_id,
-      agency_ghl_id: ghlConfig.agency_ghl_id,
+      agency_ghl_id: ghlConfig.agency_ghl_id || null,
       contact_id: conversationData.contact_id,
       business_context: businessContext,
       fields_to_extract: fieldsToExtract,
@@ -186,6 +186,7 @@ Deno.serve(async (req: Request) => {
 
     // Step 7: Call OpenAI extraction function
     console.log('Step 7: Calling OpenAI extraction function...')
+    console.log('Passing conversation_id to extraction function:', conversationId)
     const extractionResponse = await fetch(`${supabaseUrl}/functions/v1/openai-extraction`, {
       method: 'POST',
       headers: {
