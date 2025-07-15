@@ -47,6 +47,7 @@ Deno.serve(async (req: Request) => {
           example: {
             ghl_contact_id: "ocQHyuzHvysMo5N5VsXc",
             location_id: "4beIyWyWrcoPRD7PEN5G",
+            conversation_id: "s5QLyA8BsRzGman0LYAw", // Add conversation_id to example
             extracted_data: {
               "contact.firstName": "John",
               "contact.email": "john.doe@example.com",
@@ -67,6 +68,7 @@ Deno.serve(async (req: Request) => {
     console.log('Processing update for contact:', {
       ghl_contact_id: requestBody.ghl_contact_id,
       location_id: requestBody.location_id,
+      conversation_id: requestBody.conversation_id || 'Not provided',
       extracted_data_keys: Object.keys(requestBody.extracted_data)
     })
 
@@ -176,6 +178,28 @@ Deno.serve(async (req: Request) => {
     // Step 6: Update the contact in GHL
     console.log('Step 6: Sending update to GHL...')
     console.log('Fields to update:', Object.keys(updateResult.updatePayload))
+    
+    // Mark conversation as processed in database if conversation_id is provided
+    if (requestBody.conversation_id) {
+      try {
+        console.log('Marking conversation as processed:', requestBody.conversation_id)
+        const { error: markError } = await supabase
+          .from('ghl_conversations')
+          .update({ 
+            processed: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('conversation_id', requestBody.conversation_id)
+        
+        if (markError) {
+          console.warn('Failed to mark conversation as processed:', markError)
+        } else {
+          console.log('✅ Conversation marked as processed successfully')
+        }
+      } catch (markError) {
+        console.warn('Error marking conversation as processed:', markError)
+      }
+    }
     
     // Log the update payload for debugging
     console.log('Update payload:', JSON.stringify(updateResult.updatePayload, null, 2))

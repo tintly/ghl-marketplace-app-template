@@ -70,6 +70,11 @@ function LogViewer() {
         throw new Error('Supabase environment variables not configured')
       }
 
+     console.log('Fetching logs for:', {
+       contact_id: contactId || undefined,
+       conversation_id: conversationId || undefined
+     })
+
       const response = await fetch(`${supabaseUrl}/functions/v1/view-extraction-logs`, {
         method: 'POST',
         headers: {
@@ -79,7 +84,7 @@ function LogViewer() {
         body: JSON.stringify({
           contact_id: contactId || undefined,
           conversation_id: conversationId || undefined,
-          limit: 20
+         limit: 50 // Increase limit to show more logs
         })
       })
 
@@ -272,7 +277,9 @@ function LogViewer() {
                             {conv.processed ? (
                               <span className="field-badge bg-green-100 text-green-800">Processed</span>
                             ) : (
-                              <span className="field-badge bg-yellow-100 text-yellow-800">Pending</span>
+                             <span className="field-badge bg-yellow-100 text-yellow-800">
+                               {conv.processing_error ? 'Failed' : 'Pending'}
+                             </span>
                             )}
                             {conv.processing_error && (
                               <div className="text-red-600 mt-1">Error: {conv.processing_error}</div>

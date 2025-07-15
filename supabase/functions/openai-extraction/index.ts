@@ -319,7 +319,7 @@ Deno.serve(async (req: Request) => {
     console.log('Logging usage to database...')
     usageLogId = await logUsage(supabase, {
       location_id: payload.location_id,
-      agency_ghl_id: payload.agency_ghl_id,
+      agency_ghl_id: payload.agency_ghl_id || locationConfig?.agency_ghl_id,
       model: openaiData.model,
       input_tokens: openaiData.usage.prompt_tokens,
       output_tokens: openaiData.usage.completion_tokens, 
@@ -356,7 +356,7 @@ Deno.serve(async (req: Request) => {
     // Step 5: Automatically call update-ghl-contact if we have contact_id and extracted data
     let contactUpdateResult = null
     if (payload.contact_id && Object.keys(extractedData).length > 0) {
-      console.log('Contact ID found, proceeding with contact update...')
+      console.log('Contact ID found, proceeding with contact update:', payload.contact_id)
       console.log('Step 5: Auto-calling update-ghl-contact...')
      
      // Log the extracted data for debugging
@@ -382,7 +382,8 @@ Deno.serve(async (req: Request) => {
           body: JSON.stringify({
             ghl_contact_id: payload.contact_id,
             location_id: payload.location_id,
-            extracted_data: extractedData
+            extracted_data: extractedData,
+            conversation_id: payload.conversation_id // Add conversation_id to ensure proper logging
           })
         })
         console.log('Contact update response status:', contactUpdateResponse.status)
@@ -421,12 +422,17 @@ Deno.serve(async (req: Request) => {
     // Log the agency ID for this location
     console.log('Checking for agency OpenAI key for location:', payload.location_id)
     
-    // Get the agency ID for this location
-    const { data: locationConfig, error: locationError } = await supabase
-      .from('ghl_configurations')
-      .select('agency_ghl_id')
-      .eq('ghl_account_id', payload.location_id)
-      .maybeSingle()
+    let locationConfig = null
+    if (!payload.agency_ghl_id) {
+      // Get the agency ID for this location if not already provided
+      const { data: config, error: locationError } = await supabase
+        .from('ghl_configurations')
+        .select('agency_ghl_id')
+        .eq('ghl_account_id', payload.location_id)
+        .maybeSingle()
+      
+      locationConfig = config
+    }
     
     if (!locationError && locationConfig?.agency_ghl_id) {
       console.log('Found agency ID for location:', locationConfig.agency_ghl_id)
@@ -443,6 +449,7 @@ Deno.serve(async (req: Request) => {
         conversation_id: payload.conversation_id,
         location_id: payload.location_id,
         contact_id: payload.contact_id,
+        agency_ghl_id: payload.agency_ghl_id || locationConfig?.agency_ghl_id,
         extracted_data: extractedData,
         usage: {
           model: openaiData.model,
