@@ -157,6 +157,7 @@ Deno.serve(async (req: Request) => {
     const extractionPayload = {
       conversation_id: conversationId,
       location_id: conversationData.location_id,
+      agency_ghl_id: ghlConfig.agency_ghl_id,
       contact_id: conversationData.contact_id,
       business_context: businessContext,
       fields_to_extract: fieldsToExtract,

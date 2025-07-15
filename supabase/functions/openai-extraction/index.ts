@@ -194,6 +194,34 @@ Deno.serve(async (req: Request) => {
 
     // Get OpenAI API key from environment
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY')
+    
+    // Check if this location has a custom OpenAI key
+    console.log('Checking for agency OpenAI key for location:', payload.location_id)
+    const { data: agencyKey, error: keyError } = await supabase
+      .from('agency_openai_keys')
+      .select('encrypted_openai_api_key, key_name')
+      .eq('agency_ghl_id', payload.agency_ghl_id || '')
+      .eq('is_active', true)
+      .maybeSingle()
+    
+    let keyToUse = openaiApiKey
+    let keySource = 'default'
+    
+    if (agencyKey && agencyKey.encrypted_openai_api_key) {
+      try {
+        // In production, this would use proper decryption
+        // For now, we're using the encrypted value directly
+        keyToUse = agencyKey.encrypted_openai_api_key
+        keySource = agencyKey.key_name || 'agency'
+        console.log(`Using agency's custom OpenAI key: ${keySource}`)
+      } catch (decryptError) {
+        console.error('Error decrypting agency OpenAI key:', decryptError)
+        console.log('Falling back to default OpenAI key')
+      }
+    } else {
+      console.log('No custom OpenAI key found, using default key')
+    }
+    
     if (!openaiApiKey) {
       throw new Error('OPENAI_API_KEY environment variable is not set')
     }
@@ -235,13 +263,14 @@ Deno.serve(async (req: Request) => {
     const model = 'gpt-4o-mini'
     
     console.log('Calling OpenAI API with model:', model)
-    console.log('Using API key:', openaiApiKey ? `${openaiApiKey.substring(0, 3)}...${openaiApiKey.substring(openaiApiKey.length - 4)}` : 'Not available')
+    console.log('Using API key:', keyToUse ? `${keyToUse.substring(0, 3)}...${keyToUse.substring(keyToUse.length - 4)}` : 'Not available')
+    console.log('Key source:', keySource)
 
     // Call OpenAI API
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
+        'Authorization': `Bearer ${keyToUse}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -290,6 +319,7 @@ Deno.serve(async (req: Request) => {
     console.log('Logging usage to database...')
     usageLogId = await logUsage(supabase, {
       location_id: payload.location_id,
+      agency_ghl_id: payload.agency_ghl_id,
       model: openaiData.model,
       input_tokens: openaiData.usage.prompt_tokens,
       output_tokens: openaiData.usage.completion_tokens, 
@@ -299,6 +329,7 @@ Deno.serve(async (req: Request) => {
       customer_cost_calculated: true,
       conversation_id: payload.conversation_id,
       extraction_type: 'data_extraction',
+      openai_key_used: keySource,
       success: true,
       response_time_ms: responseTime
     })
@@ -389,6 +420,20 @@ Deno.serve(async (req: Request) => {
 
     // Log the agency ID for this location
     console.log('Checking for agency OpenAI key for location:', payload.location_id)
+    
+    // Get the agency ID for this location
+    const { data: locationConfig, error: locationError } = await supabase
+      .from('ghl_configurations')
+      .select('agency_ghl_id')
+      .eq('ghl_account_id', payload.location_id)
+      .maybeSingle()
+    
+    if (!locationError && locationConfig?.agency_ghl_id) {
+      console.log('Found agency ID for location:', locationConfig.agency_ghl_id)
+      payload.agency_ghl_id = locationConfig.agency_ghl_id
+    } else {
+      console.log('No agency ID found for location')
+    }
 
     // Return the extraction result with contact update info
     console.log('Returning successful response with extracted data')
