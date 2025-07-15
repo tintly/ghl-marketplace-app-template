@@ -5,6 +5,7 @@ function LogViewer() {
   const [conversationId, setConversationId] = useState('')
   const [logs, setLogs] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [refreshInterval, setRefreshInterval] = useState(null)
   const [error, setError] = useState(null)
   const [recentContacts, setRecentContacts] = useState([])
   const [loadingContacts, setLoadingContacts] = useState(false)
@@ -19,6 +20,18 @@ function LogViewer() {
     fetchLogs()
     setFetchingRecent(false)
   }
+
+  // Auto-refresh logs when enabled
+  useEffect(() => {
+    if (refreshInterval) {
+      const timer = setInterval(() => {
+        console.log('Auto-refreshing logs...')
+        fetchLogs(true) // Pass true to indicate this is an auto-refresh
+      }, refreshInterval * 1000)
+      
+      return () => clearInterval(timer)
+    }
+  }, [refreshInterval, contactId, conversationId])
   
   useEffect(() => {
     // Make recent contacts loading optional and non-blocking
@@ -63,7 +76,7 @@ function LogViewer() {
     }
   }
 
-  const fetchLogs = async () => {
+  const fetchLogs = async (isAutoRefresh = false) => {
     // Allow fetching recent logs without any ID
     if (!contactId && !conversationId && !fetchingRecent) {
       setError('Please enter either a Contact ID or Conversation ID, or use "View Recent Logs"')
@@ -71,7 +84,7 @@ function LogViewer() {
     }
 
     try {
-      setLoading(true)
+      if (!isAutoRefresh) setLoading(true)
       setError(null)
       
       let queryParams = {
@@ -122,7 +135,7 @@ function LogViewer() {
       console.error('Error fetching logs:', error)
       setError(error.message)
     } finally {
-      setLoading(false)
+      if (!isAutoRefresh) setLoading(false)
     }
   }
 
@@ -154,6 +167,7 @@ function LogViewer() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div>
             <h4 className="text-md font-medium text-gray-800 mb-3">Search by ID</h4>
+            <h4 className="text-md font-medium text-gray-800 mb-3">Search by ID</h4>
             <div className="space-y-4">
               <div>
                 <label className="form-label">Contact ID</label>
@@ -180,6 +194,7 @@ function LogViewer() {
                   onClick={fetchLogs}
                   disabled={loading}
                   className="btn-primary"
+                  className="btn-primary"
                 >
                   {loading ? (
                     <>
@@ -192,11 +207,33 @@ function LogViewer() {
                 </button>
                 <button
                   onClick={fetchRecentLogs}
-                  disabled={loading}
+                  disabled={loading || fetchingRecent}
+                  className="btn-secondary ml-2"
                   className="btn-secondary ml-2"
                 >
                   View Recent Logs
                 </button>
+                
+                {/* Auto-refresh controls */}
+                <div className="mt-4 flex items-center">
+                  <label className="text-sm text-gray-700 mr-2">Auto-refresh:</label>
+                  <select
+                    value={refreshInterval || ''}
+                    onChange={(e) => setRefreshInterval(e.target.value ? parseInt(e.target.value) : null)}
+                    className="form-select text-sm py-1 px-2 w-auto"
+                  >
+                    <option value="">Disabled</option>
+                    <option value="5">Every 5 seconds</option>
+                    <option value="10">Every 10 seconds</option>
+                    <option value="30">Every 30 seconds</option>
+                    <option value="60">Every minute</option>
+                  </select>
+                  {refreshInterval && (
+                    <span className="ml-2 text-xs text-green-600">
+                      Auto-refreshing every {refreshInterval} seconds
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -272,7 +309,7 @@ function LogViewer() {
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
-                      <tr>
+                      <tr className="text-left">
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Direction</th>
@@ -335,7 +372,7 @@ function LogViewer() {
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
-                      <tr>
+                      <tr className="text-left">
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tokens</th>
