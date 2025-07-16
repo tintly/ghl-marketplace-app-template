@@ -67,7 +67,7 @@ export class AgencyOpenAIService {
 
       const { data, error } = await supabase
         .from('agency_openai_keys')
-        .select('id, key_name, openai_org_id, usage_limit_monthly, current_usage_monthly, is_active, created_at')
+        .select('id, key_name, openai_org_id, usage_limit_monthly, current_usage_monthly, is_active, created_at, openai_model')
         .eq('agency_ghl_id', agencyId)
         .order('created_at', { ascending: false })
 
@@ -120,10 +120,11 @@ export class AgencyOpenAIService {
           encrypted_openai_api_key: encryptedKey,
           key_name: keyData.key_name || 'Default Key',
           openai_org_id: keyData.org_id || null,
+          openai_model: keyData.openai_model || 'gpt-4o-mini',
           usage_limit_monthly: keyData.usage_limit || null,
           is_active: true
         })
-        .select('id, key_name, openai_org_id, usage_limit_monthly, is_active, created_at')
+        .select('id, key_name, openai_org_id, usage_limit_monthly, is_active, created_at, openai_model')
         .single()
 
       if (error) {
@@ -164,7 +165,7 @@ export class AgencyOpenAIService {
         })
         .eq('id', keyId)
         .eq('agency_ghl_id', agencyId)
-        .select('id, key_name, openai_org_id, usage_limit_monthly, is_active, created_at')
+        .select('id, key_name, openai_org_id, usage_limit_monthly, is_active, created_at, openai_model')
         .single()
 
       if (error) {

@@ -1,6 +1,20 @@
 import React, { useState, useEffect } from 'react'
 import { AgencyOpenAIService } from '../services/AgencyOpenAIService'
 
+// Available OpenAI models
+const OPENAI_MODELS = [
+  { id: 'gpt-4o-mini', name: 'GPT-4o mini - Fast, affordable small model' },
+  { id: 'gpt-4o', name: 'GPT-4o - Fast, intelligent, flexible GPT model' },
+  { id: 'gpt-4.1', name: 'GPT-4.1 - Flagship GPT model for complex tasks' },
+  { id: 'gpt-4.1-mini', name: 'GPT-4.1 mini - Balanced for intelligence, speed, and cost' },
+  { id: 'gpt-4.1-nano', name: 'GPT-4.1 nano - Fastest, most cost-effective GPT-4.1 model' },
+  { id: 'o4-mini', name: 'o4-mini - Faster, more affordable reasoning model' },
+  { id: 'o3', name: 'o3 - Most powerful reasoning model' },
+  { id: 'o3-pro', name: 'o3-pro - Version of o3 with more compute' },
+  { id: 'o3-mini', name: 'o3-mini - A small model alternative to o3' },
+  { id: 'o1', name: 'o1 - Previous full o-series reasoning model' }
+]
+
 function AgencyOpenAIManager({ user, authService }) {
   const [keys, setKeys] = useState([])
   const [permissions, setPermissions] = useState(null)
@@ -331,6 +345,9 @@ function OpenAIKeysList({ keys, onDelete }) {
                 <span className={`field-badge ${key.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                   {key.is_active ? 'Active' : 'Inactive'}
                 </span>
+                <span className="field-badge bg-blue-100 text-blue-800">
+                  {key.openai_model || 'gpt-4o-mini'}
+                </span>
               </div>
               
               <div className="text-sm text-gray-600 space-y-1">
@@ -447,7 +464,8 @@ function AddOpenAIKeyForm({ onSubmit, onCancel, saving = false }) {
     key_name: '',
     api_key: '',
     org_id: '',
-    usage_limit: ''
+    usage_limit: '',
+    openai_model: 'gpt-4o-mini'
   })
 
   const handleSubmit = async (e) => {
@@ -458,7 +476,8 @@ function AddOpenAIKeyForm({ onSubmit, onCancel, saving = false }) {
         key_name: formData.key_name,
         api_key: formData.api_key,
         org_id: formData.org_id || null,
-        usage_limit: formData.usage_limit ? parseFloat(formData.usage_limit) : null
+        usage_limit: formData.usage_limit ? parseFloat(formData.usage_limit) : null,
+        openai_model: formData.openai_model
       })
     } catch (error) {
       console.error('Error submitting form:', error)
@@ -534,6 +553,25 @@ function AddOpenAIKeyForm({ onSubmit, onCancel, saving = false }) {
               />
               <p className="text-xs text-gray-500 mt-2">
                 Set a monthly spending limit in USD to control costs.
+              </p>
+            </div>
+
+            <div>
+              <label className="form-label">OpenAI Model</label>
+              <select
+                value={formData.openai_model}
+                onChange={(e) => setFormData(prev => ({ ...prev, openai_model: e.target.value }))}
+                className="form-select"
+                disabled={saving}
+              >
+                {OPENAI_MODELS.map(model => (
+                  <option key={model.id} value={model.id}>
+                    {model.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Select the OpenAI model to use with this API key.
               </p>
             </div>
           </form>
