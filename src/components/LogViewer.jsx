@@ -172,7 +172,6 @@ function LogViewer() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div>
             <h4 className="text-md font-medium text-gray-800 mb-3">Search by ID</h4>
-            <h4 className="text-md font-medium text-gray-800 mb-3">Search by ID</h4>
             <div className="space-y-4">
               <div>
                 <label className="form-label">Contact ID</label>
