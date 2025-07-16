@@ -58,16 +58,19 @@ Deno.serve(async (req)=>{
     // Determine OpenAI API key to use
     let openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     let openaiOrgId = Deno.env.get('OPENAI_ORG_ID');
+    let openaiModel = 'gpt-4o-mini'; // Default model
     let useAgencyKey = false;
     if (agency_ghl_id) {
       console.log('Checking for agency-specific OpenAI key...');
-      const { data: agencyKeyData, error: agencyKeyError } = await supabaseClient.from('agency_openai_keys').select('encrypted_openai_api_key, openai_org_id').eq('agency_ghl_id', agency_ghl_id).eq('is_active', true).maybeSingle();
+      const { data: agencyKeyData, error: agencyKeyError } = await supabaseClient.from('agency_openai_keys').select('encrypted_openai_api_key, openai_org_id, openai_model').eq('agency_ghl_id', agency_ghl_id).eq('is_active', true).maybeSingle();
       if (agencyKeyError) {
         console.warn('Error fetching agency OpenAI key:', agencyKeyError.message);
       } else if (agencyKeyData && agencyKeyData.encrypted_openai_api_key) {
         console.log('Using agency-specific OpenAI key.');
         openaiApiKey = await decryptApiKey(agencyKeyData.encrypted_openai_api_key);
         openaiOrgId = agencyKeyData.openai_org_id;
+        openaiModel = agencyKeyData.openai_model || openaiModel;
+        console.log(`Using agency-selected model: ${openaiModel}`);
         useAgencyKey = true;
         openaiKeyUsed = agencyKeyData.encrypted_openai_api_key.substring(0, 10) + '...' // Log a snippet
         ;
@@ -97,8 +100,8 @@ Deno.serve(async (req)=>{
     const { data: logData, error: logError } = await supabaseClient.from('ai_usage_logs').insert({
       location_id: location_id,
       agency_ghl_id: agency_ghl_id,
-      conversation_id: conversation_id,
-      model: 'unknown',
+      conversation_id: conversation_id, 
+      model: openaiModel,
       input_tokens: 0,
       output_tokens: 0,
       total_tokens: 0,
@@ -118,7 +121,7 @@ Deno.serve(async (req)=>{
     // Call OpenAI API
     console.log('Calling OpenAI Chat Completions API...');
     const chatCompletion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: openaiModel,
       messages: messages,
       response_format: {
         type: "json_object"
