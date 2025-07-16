@@ -121,6 +121,7 @@ export class AgencyOpenAIService {
           key_name: keyData.key_name || 'Default Key',
           openai_org_id: keyData.org_id || null,
           openai_model: keyData.openai_model || 'gpt-4o-mini',
+          openai_model: keyData.openai_model || 'gpt-4o-mini',
           usage_limit_monthly: keyData.usage_limit || null,
           is_active: true
         })
