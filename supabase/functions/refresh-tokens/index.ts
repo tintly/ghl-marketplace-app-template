@@ -6,12 +6,23 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 }
 
+interface TokenData {
+  companyId?: string;
+  locationId?: string;
+  userType?: string;
+  userId?: string;
+}
+
 interface RefreshTokenResponse {
   access_token: string
   token_type: string
   expires_in: number
   refresh_token: string
   scope: string
+  companyId?: string
+  locationId?: string
+  userType?: string
+  userId?: string
 }
 
 interface ConfigurationToRefresh {
@@ -312,6 +323,17 @@ async function refreshTokenForConfiguration(config: ConfigurationToRefresh): Pro
     console.log(`Token refresh successful for ${config.business_name}`)
     console.log(`New token expires in ${tokenData.expires_in} seconds`)
     
+    // Log company and user data if available
+    if (tokenData.companyId) {
+      console.log(`Company ID from token response: ${tokenData.companyId}`)
+    }
+    if (tokenData.userType) {
+      console.log(`User type from token response: ${tokenData.userType}`)
+    }
+    if (tokenData.userId) {
+      console.log(`User ID from token response: ${tokenData.userId}`)
+    }
+    
     return {
       success: true,
       tokenData
@@ -336,14 +358,34 @@ async function updateConfigurationTokens(
   // Calculate new expiry time
   const expiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString()
   
+  // Prepare update data
+  const updateData: any = {
+    access_token: tokenData.access_token,
+    refresh_token: tokenData.refresh_token,
+    token_expires_at: expiresAt,
+    updated_at: new Date().toISOString()
+  }
+  
+  // Add company and user data if available
+  if (tokenData.companyId) {
+    updateData.ghl_company_id = tokenData.companyId
+    updateData.agency_ghl_id = tokenData.companyId
+    console.log(`Adding company ID to update: ${tokenData.companyId}`)
+  }
+  
+  if (tokenData.userType) {
+    updateData.ghl_user_type = tokenData.userType
+    console.log(`Adding user type to update: ${tokenData.userType}`)
+  }
+  
+  if (tokenData.userId) {
+    updateData.user_id = tokenData.userId
+    console.log(`Adding user ID to update: ${tokenData.userId}`)
+  }
+  
   const { error } = await supabase
     .from('ghl_configurations')
-    .update({
-      access_token: tokenData.access_token,
-      refresh_token: tokenData.refresh_token,
-      token_expires_at: expiresAt,
-      updated_at: new Date().toISOString()
-    })
+    .update(updateData)
     .eq('id', configId)
 
   if (error) {
