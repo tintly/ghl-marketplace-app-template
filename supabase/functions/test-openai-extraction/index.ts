@@ -92,6 +92,31 @@ Deno.serve(async (req: Request) => {
       console.error('Failed to fetch usage logs:', usageError)
     }
 
+   // Step 4: Check if usage is being recorded properly
+   console.log('Step 4: Verifying usage tracking...')
+   const { data: usageTracking, error: trackingError } = await supabase
+     .from('usage_tracking')
+     .select('*')
+     .eq('location_id', payload.location_id)
+     .order('updated_at', { ascending: false })
+     .limit(1)
+     .single()
+
+   if (trackingError && trackingError.code !== 'PGRST116') {
+     console.error('Failed to fetch usage tracking:', trackingError)
+   }
+
+   if (usageTracking) {
+     console.log('✅ Usage tracking record found:', {
+       month_year: usageTracking.month_year,
+       messages_used: usageTracking.messages_used,
+       tokens_used: usageTracking.tokens_used,
+       cost_estimate: usageTracking.cost_estimate,
+       custom_key_used: usageTracking.custom_key_used
+     })
+   } else {
+     console.log('⚠️ No usage tracking record found for this location')
+   }
     // Compile test results
     const testResults = {
       success: true,
@@ -118,9 +143,18 @@ Deno.serve(async (req: Request) => {
           usage_log_id: extractionResult.usage_log_id,
           recent_logs_count: usageLogs?.length || 0
         }
+       usage_tracking: {
+         success: !!usageTracking,
+         month_year: usageTracking?.month_year,
+         messages_used: usageTracking?.messages_used,
+         tokens_used: usageTracking?.tokens_used,
+         cost_estimate: usageTracking?.cost_estimate,
+         custom_key_used: usageTracking?.custom_key_used
+       }
       },
       extracted_data: extractionResult.extracted_data,
       recent_usage_logs: usageLogs || [],
+     usage_tracking: usageTracking || null,
       timestamp: new Date().toISOString()
     }
 

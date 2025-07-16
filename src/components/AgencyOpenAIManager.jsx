@@ -377,6 +377,28 @@ function UsageStatistics({ usage }) {
       </div>
       
       <div className="p-6">
+       {usage.total_requests === 0 ? (
+         <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
+           <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+           </svg>
+           <p className="text-gray-600 font-medium">No usage data yet</p>
+           <p className="text-sm text-gray-500 mt-1">
+             Usage statistics will appear here once you start processing conversations with your custom OpenAI key.
+           </p>
+           <div className="mt-4 info-card mx-auto max-w-md">
+             <p className="text-sm text-blue-800">
+               <strong>Troubleshooting:</strong> If you're sending messages but not seeing usage data:
+             </p>
+             <ul className="text-xs text-blue-700 mt-2 space-y-1 list-disc pl-5">
+               <li>Make sure your OpenAI key has proper permissions</li>
+               <li>Check that conversations are being processed (see Logs section)</li>
+               <li>Try sending a test message to trigger extraction</li>
+               <li>Verify your subscription plan allows custom keys</li>
+             </ul>
+           </div>
+         </div>
+       ) : (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="text-center bg-gray-50 p-4 rounded-lg">
             <div className="text-2xl font-bold text-gray-900">{usage.total_requests}</div>
@@ -412,6 +434,7 @@ function UsageStatistics({ usage }) {
             </div>
           </div>
         )}
+       )}
       </div>
     </div>
   )

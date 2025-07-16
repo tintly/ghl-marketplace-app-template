@@ -61,6 +61,8 @@ function UsageLimitBanner({ user, authService }) {
   const isNearLimit = usagePercentage >= 90
   const isOverLimit = usageData.limit_reached || false
 
+  // Check if using custom OpenAI key
+  const usingCustomKey = usageData.custom_key_used || false
   return (
     <div className={`rounded-lg p-4 mb-6 ${
       isOverLimit 
@@ -101,6 +103,7 @@ function UsageLimitBanner({ user, authService }) {
                 ? 'Approaching Message Limit'
                 : 'Message Usage Update'
             }
+           {usingCustomKey && ' (Using Custom OpenAI Key)'}
           </h3>
           <div className={`mt-2 text-sm ${
             isOverLimit 
@@ -114,6 +117,7 @@ function UsageLimitBanner({ user, authService }) {
                 ? `You've reached your monthly limit of ${messagesIncluded.toLocaleString()} messages.` 
                 : `You've used ${messagesUsed.toLocaleString()} of ${messagesIncluded.toLocaleString()} messages (${Math.round(usagePercentage)}%) for this month.`
               }
+             {usingCustomKey && ' Usage is being tracked with your custom OpenAI key.'}
             </p>
             {isOverLimit && (
               <p className="mt-1">

@@ -131,6 +131,11 @@ function LogViewer() {
 
       const data = await response.json()
       setLogs(data)
+     
+     // Check if we have usage logs but they're not showing up in the UI
+     if (data.usage_logs.length === 0 && data.conversations.length > 0) {
+       console.log('⚠️ Found conversations but no usage logs. This might indicate a tracking issue.')
+     }
     } catch (error) {
       console.error('Error fetching logs:', error)
       setError(error.message)

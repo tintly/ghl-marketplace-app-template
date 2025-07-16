@@ -215,86 +215,39 @@ export class AgencyOpenAIService {
         throw new Error('Database connection not available')
       }
 
-      let dateFilter = new Date()
-      switch (timeframe) {
-        case '7d':
-          dateFilter.setDate(dateFilter.getDate() - 7)
-          break
-        case '30d':
-          dateFilter.setDate(dateFilter.getDate() - 30)
-          break
-        case '90d':
-          dateFilter.setDate(dateFilter.getDate() - 90)
-          break
-        default:
-          dateFilter.setDate(dateFilter.getDate() - 30)
-      }
-
+      // Use the new database function to get usage statistics
       const { data, error } = await supabase
-        .from('ai_usage_logs')
-        .select('model, total_tokens, cost_estimate, created_at, openai_key_used')
-        .eq('agency_ghl_id', agencyId)
-        .gte('created_at', dateFilter.toISOString())
-        .order('created_at', { ascending: false })
+        .rpc('get_agency_usage_statistics', {
+          agency_id: agencyId,
+          timeframe: timeframe
+        })
 
       if (error) {
         throw new Error(`Failed to fetch usage statistics: ${error.message}`)
       }
 
-      // Process the data to create summary statistics
-      const stats = this.processUsageData(data || [])
+      // If no data, return empty stats
+      if (!data) {
+        return { 
+          success: true, 
+          data: {
+            total_requests: 0,
+            total_tokens: 0,
+            total_cost: 0,
+            by_model: {},
+            by_key: {},
+            daily_usage: {}
+          } 
+        }
+      }
 
-      return { success: true, data: stats }
+      return { success: true, data }
     } catch (error) {
       console.error('Error fetching usage statistics:', error)
       return { success: false, error: error.message, data: null }
     }
   }
 
-  // Process usage data into summary statistics
-  processUsageData(usageData) {
-    const summary = {
-      total_requests: usageData.length,
-      total_tokens: 0,
-      total_cost: 0,
-      by_model: {},
-      by_key: {},
-      daily_usage: {}
-    }
-
-    usageData.forEach(log => {
-      summary.total_tokens += log.total_tokens || 0
-      summary.total_cost += parseFloat(log.cost_estimate || 0)
-
-      // By model
-      if (!summary.by_model[log.model]) {
-        summary.by_model[log.model] = { requests: 0, tokens: 0, cost: 0 }
-      }
-      summary.by_model[log.model].requests++
-      summary.by_model[log.model].tokens += log.total_tokens || 0
-      summary.by_model[log.model].cost += parseFloat(log.cost_estimate || 0)
-
-      // By key
-      const keyUsed = log.openai_key_used || 'default'
-      if (!summary.by_key[keyUsed]) {
-        summary.by_key[keyUsed] = { requests: 0, tokens: 0, cost: 0 }
-      }
-      summary.by_key[keyUsed].requests++
-      summary.by_key[keyUsed].tokens += log.total_tokens || 0
-      summary.by_key[keyUsed].cost += parseFloat(log.cost_estimate || 0)
-
-      // Daily usage
-      const date = new Date(log.created_at).toISOString().split('T')[0]
-      if (!summary.daily_usage[date]) {
-        summary.daily_usage[date] = { requests: 0, tokens: 0, cost: 0 }
-      }
-      summary.daily_usage[date].requests++
-      summary.daily_usage[date].tokens += log.total_tokens || 0
-      summary.daily_usage[date].cost += parseFloat(log.cost_estimate || 0)
-    })
-
-    return summary
-  }
 
   // Simple encryption for API keys (in production, use proper encryption service)
   async encryptApiKey(apiKey) {
