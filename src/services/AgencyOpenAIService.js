@@ -123,7 +123,8 @@ export class AgencyOpenAIService {
           openai_model: keyData.openai_model || 'gpt-4o-mini',
           openai_model: keyData.openai_model || 'gpt-4o-mini',
           usage_limit_monthly: keyData.usage_limit || null,
-          is_active: true
+          is_active: true,
+          openai_model: keyData.openai_model || 'gpt-4o-mini'
         })
         .select('id, key_name, openai_org_id, usage_limit_monthly, is_active, created_at, openai_model')
         .single()
