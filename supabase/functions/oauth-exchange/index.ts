@@ -192,6 +192,9 @@ async function saveGHLConfiguration(supabase: any, tokenData: TokenResponse, sta
   const configData = {
     user_id: userId, // Use the userId from GHL token response
     ghl_account_id: resourceId,
+    ghl_company_id: tokenData.companyId,
+    ghl_user_type: tokenData.userType,
+    agency_ghl_id: tokenData.companyId,
     client_id: Deno.env.get('GHL_MARKETPLACE_CLIENT_ID'),
     access_token: tokenData.access_token,
     refresh_token: tokenData.refresh_token,
@@ -233,6 +236,9 @@ async function saveGHLConfiguration(supabase: any, tokenData: TokenResponse, sta
       .update({
         user_id: userId, // Always update with the userId from token
         access_token: tokenData.access_token,
+        ghl_company_id: tokenData.companyId,
+        ghl_user_type: tokenData.userType,
+        agency_ghl_id: tokenData.companyId,
         refresh_token: tokenData.refresh_token,
         token_expires_at: expiresAt,
         client_id: Deno.env.get('GHL_MARKETPLACE_CLIENT_ID'),
