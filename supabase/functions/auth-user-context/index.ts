@@ -2,13 +2,14 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 import { md5 } from "../_shared/md5.ts"
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": "https://eloquent-moonbeam-8a5386.netlify.app",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
+    console.log('Handling CORS preflight request')
     return new Response(null, {
       status: 200,
       headers: corsHeaders,
@@ -31,6 +32,15 @@ Deno.serve(async (req: Request) => {
   try {
     console.log('=== AUTH REQUEST START ===')
     
+    // Get origin for CORS
+    const origin = req.headers.get('Origin') || 'https://eloquent-moonbeam-8a5386.netlify.app'
+    const responseHeaders = {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    }
+    
     const { key } = await req.json()
     
     if (!key) {
@@ -40,8 +50,7 @@ Deno.serve(async (req: Request) => {
         {
           status: 400,
           headers: {
-            "Content-Type": "application/json",
-            ...corsHeaders,
+            ...responseHeaders,
           },
         }
       )
@@ -95,14 +104,16 @@ Deno.serve(async (req: Request) => {
       {
         status: 200,
         headers: {
-          "Content-Type": "application/json",
-          ...corsHeaders,
+          ...responseHeaders,
         },
       }
     )
   } catch (error) {
     console.error("=== AUTH REQUEST ERROR ===")
     console.error("Error message:", error.message)
+    
+    // Get origin for CORS
+    const origin = req.headers.get('Origin') || 'https://eloquent-moonbeam-8a5386.netlify.app'
     
     return new Response(
       JSON.stringify({ 
@@ -113,7 +124,9 @@ Deno.serve(async (req: Request) => {
         status: 400,
         headers: {
           "Content-Type": "application/json",
-          ...corsHeaders,
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
         },
       }
     )

@@ -7,13 +7,17 @@ export class AuthService {
   // Get user data using GHL SSO or standalone mode
   async getUserData() {
     try {
-      console.log('Starting authentication process...', window.location.pathname)
+      console.log('Starting authentication process...', window.location.pathname, window.location.origin)
       
       // Check if we have Supabase configuration
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
       if (!supabaseUrl) {
         throw new Error('VITE_SUPABASE_URL environment variable is not set')
       }
+
+      // Check if we're running on Netlify
+      const isNetlify = window.location.origin.includes('netlify.app')
+      console.log('Running on Netlify:', isNetlify)
 
       // Check if we're on the OAuth callback page - if so, skip SSO
       if (window.location.pathname === '/oauth/callback') {
@@ -57,39 +61,53 @@ export class AuthService {
       }
 
       // Use Supabase Edge Function for SSO authentication
-      const response = await fetch(`${supabaseUrl}/functions/v1/auth-user-context`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-        },
-        body: JSON.stringify({ key: encryptedUserData })
-      })
+      try {
+        console.log('Calling auth-user-context function...')
+        const response = await fetch(`${supabaseUrl}/functions/v1/auth-user-context`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Origin': window.location.origin
+          },
+          body: JSON.stringify({ key: encryptedUserData })
+        })
 
-      console.log('Auth response status:', response.status)
+        console.log('Auth response status:', response.status)
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('Auth response error:', errorText)
-        throw new Error(`Authentication failed: ${response.status} - ${errorText}`)
-      }
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error('Auth response error:', errorText)
+          throw new Error(`Authentication failed: ${response.status} - ${errorText}`)
+        }
 
-      const result = await response.json()
-      console.log('Authentication successful:', result)
-      
-      // Store the JWT for later use with Supabase
-      if (result.supabaseJWT) {
-        console.log('Storing JWT for Supabase operations...')
-        this.supabaseJWT = result.supabaseJWT
+        const result = await response.json()
+        console.log('Authentication successful:', result)
         
-        // Set up Supabase client with the JWT
-        await this.setupSupabaseClient()
+        // Store the JWT for later use with Supabase
+        if (result.supabaseJWT) {
+          console.log('Storing JWT for Supabase operations...')
+          this.supabaseJWT = result.supabaseJWT
+          
+          // Set up Supabase client with the JWT
+          await this.setupSupabaseClient()
+        }
+        
+        this.currentUser = result.user
+        this.isAuthenticated = true
+        
+        return result.user
+      } catch (authError) {
+        console.error('Error calling auth-user-context function:', authError)
+        console.log('Falling back to standalone mode due to auth function error')
+        
+        // If we have encrypted data but the auth function fails, use standalone mode
+        return this.handleStandaloneMode({
+          locationId: 'auth_fallback',
+          userId: 'auth_fallback_user',
+          installedAt: new Date().toISOString()
+        })
       }
-      
-      this.currentUser = result.user
-      this.isAuthenticated = true
-      
-      return result.user
     } catch (error) {
       console.error('Failed to fetch user data:', error)
       throw error
@@ -169,7 +187,7 @@ export class AuthService {
   // Extract the encrypted user data logic into separate method
   async getEncryptedUserData() {
     return new Promise((resolve, reject) => {
-      console.log('Requesting user data from parent window...', window.parent)
+      console.log('Requesting user data from parent window...', typeof window.parent)
       
       const timeout = setTimeout(() => {
         console.log('Timeout waiting for user data from parent window')
@@ -189,7 +207,7 @@ export class AuthService {
 
       // Listen for the response
       const messageHandler = ({ data, origin }) => {
-        console.log('Received message from parent:', { message: data.message, origin })
+        console.log('Received message from parent:', { data, origin })
 
         // Check if we're in standalone mode
         if (data === 'STANDALONE_MODE') {
@@ -198,7 +216,7 @@ export class AuthService {
           resolve(data)
           return
         }
-        
+
         if (data.message === 'REQUEST_USER_DATA_RESPONSE') {
           clearTimeout(timeout)
           window.removeEventListener('message', messageHandler)
