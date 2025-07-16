@@ -7,7 +7,7 @@ export class AuthService {
   // Get user data using GHL SSO or standalone mode
   async getUserData() {
     try {
-      console.log('Starting authentication process...')
+      console.log('Starting authentication process...', window.location.pathname)
       
       // Check if we have Supabase configuration
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
@@ -18,7 +18,11 @@ export class AuthService {
       // Check if we're on the OAuth callback page - if so, skip SSO
       if (window.location.pathname === '/oauth/callback') {
         console.log('On OAuth callback page, skipping SSO authentication')
-        throw new Error('OAuth callback page - SSO not needed')
+        return this.handleStandaloneMode({
+          locationId: new URLSearchParams(window.location.search).get('locationId') || 'callback',
+          userId: 'oauth_user',
+          installedAt: new Date().toISOString()
+        })
       }
 
       // Check if we just completed an OAuth installation
@@ -31,11 +35,25 @@ export class AuthService {
       // Try to get encrypted data from parent window (for GHL SSO)
       let encryptedUserData = null
       try {
-        encryptedUserData = await this.getEncryptedUserData()
-        console.log('Encrypted user data received from GHL SSO')
+        encryptedUserData = await this.getEncryptedUserData() 
+        if (encryptedUserData === 'STANDALONE_MODE') {
+          console.log('Using standalone mode from timeout fallback')
+          return this.handleStandaloneMode({
+            locationId: 'standalone',
+            userId: 'standalone_user',
+            installedAt: new Date().toISOString()
+          })
+        }
+        console.log('Encrypted user data received from GHL SSO')  
       } catch (ssoError) {
         console.log('GHL SSO not available:', ssoError.message)
-        throw new Error('GHL SSO authentication required')
+        // Instead of throwing an error, let's try standalone mode
+        console.log('Falling back to standalone mode')
+        return this.handleStandaloneMode({
+          locationId: 'standalone_fallback',
+          userId: 'standalone_user',
+          installedAt: new Date().toISOString()
+        })
       }
 
       // Use Supabase Edge Function for SSO authentication
@@ -151,11 +169,19 @@ export class AuthService {
   // Extract the encrypted user data logic into separate method
   async getEncryptedUserData() {
     return new Promise((resolve, reject) => {
-      console.log('Requesting user data from parent window...')
+      console.log('Requesting user data from parent window...', window.parent)
       
       const timeout = setTimeout(() => {
         console.log('Timeout waiting for user data from parent window')
-        reject(new Error('Timeout waiting for user data from parent window'))
+        // Instead of rejecting, let's try to use standalone mode
+        console.log('Falling back to standalone mode due to timeout')
+        const installationData = localStorage.getItem('ghl_installation')
+        if (installationData) {
+          console.log('Found installation data in localStorage, using standalone mode')
+          resolve('STANDALONE_MODE')
+        } else {
+          reject(new Error('Timeout waiting for user data from parent window'))
+        }
       }, 5000)
 
       // Request user data from parent window
@@ -164,6 +190,14 @@ export class AuthService {
       // Listen for the response
       const messageHandler = ({ data, origin }) => {
         console.log('Received message from parent:', { message: data.message, origin })
+
+        // Check if we're in standalone mode
+        if (data === 'STANDALONE_MODE') {
+          clearTimeout(timeout)
+          window.removeEventListener('message', messageHandler)
+          resolve(data)
+          return
+        }
         
         if (data.message === 'REQUEST_USER_DATA_RESPONSE') {
           clearTimeout(timeout)

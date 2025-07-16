@@ -36,8 +36,8 @@ function AgencyOpenAIManager({ user, authService }) {
   const loadData = async () => {
     try {
       setLoading(true)
-      setError(null)
       setUsage(null)
+      setError(null)
 
       console.log('Loading OpenAI data for user:', {
         userId: user.userId,
@@ -456,7 +456,7 @@ function UsageStatistics({ usage }) {
       </div>
       
       <div className="p-6">
-       {!usage || !usage.total_requests ? (
+       {!usage || !usage.total_requests || usage.total_requests === 0 ? (
          <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
            <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

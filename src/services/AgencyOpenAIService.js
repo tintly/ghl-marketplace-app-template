@@ -211,26 +211,8 @@ export class AgencyOpenAIService {
   // Get usage statistics for agency's OpenAI keys
   async getUsageStatistics(agencyId, timeframe = '30d') {
     try {
-      const supabase = await this.getSupabaseClient()
-      
-      if (!supabase) {
-        console.error('Supabase client not available')
-        throw new Error('Database connection not available')
-      }
-
-      // Use the new database function to get usage statistics
-      const { data, error } = await supabase
-        .rpc('get_agency_usage_statistics', {
-          agency_id: agencyId,
-          timeframe: timeframe
-        })
-
-      if (error) {
-        throw new Error(`Failed to fetch usage statistics: ${error.message}`)
-      }
-
-      // If no data, return empty stats
-      if (!data) {
+      if (!agencyId) {
+        console.log('No agency ID provided for usage statistics')
         return { 
           success: true, 
           data: {
@@ -243,8 +225,68 @@ export class AgencyOpenAIService {
           } 
         }
       }
+      
+      const supabase = await this.getSupabaseClient()
+      
+      if (!supabase) {
+        console.error('Supabase client not available')
+        throw new Error('Database connection not available')
+      }
 
-      return { success: true, data }
+      // Use the new database function to get usage statistics
+      // Instead of using the RPC function, let's query the tables directly
+      const { data: usageLogs, error: logsError } = await supabase
+        .from('ai_usage_logs')
+        .select('model, input_tokens, output_tokens, total_tokens, cost_estimate, created_at')
+        .eq('agency_ghl_id', agencyId)
+        .gte('created_at', new Date(Date.now() - (30 * 24 * 60 * 60 * 1000)).toISOString())
+        .order('created_at', { ascending: false })
+
+      if (logsError) {
+        throw new Error(`Failed to fetch usage logs: ${logsError.message}`)
+      }
+
+      // If no logs, return empty stats
+      if (!usageLogs || usageLogs.length === 0) {
+        return { 
+          success: true, 
+          data: {
+            total_requests: 0,
+            total_tokens: 0,
+            total_cost: 0,
+            by_model: {},
+            by_key: {},
+            daily_usage: {}
+          } 
+        }
+      }
+      
+      // Process the logs to calculate statistics
+      const stats = {
+        total_requests: usageLogs.length,
+        total_tokens: usageLogs.reduce((sum, log) => sum + (log.total_tokens || 0), 0),
+        total_cost: usageLogs.reduce((sum, log) => sum + (log.cost_estimate || 0), 0),
+        by_model: {},
+        by_key: {},
+        daily_usage: {}
+      }
+      
+      // Calculate usage by model
+      usageLogs.forEach(log => {
+        const model = log.model || 'unknown'
+        if (!stats.by_model[model]) {
+          stats.by_model[model] = {
+            requests: 0,
+            tokens: 0,
+            cost: 0
+          }
+        }
+        stats.by_model[model].requests++
+        stats.by_model[model].tokens += (log.total_tokens || 0)
+        stats.by_model[model].cost += (log.cost_estimate || 0)
+      })
+
+      return { success: true, data: stats }
     } catch (error) {
       console.error('Error fetching usage statistics:', error)
       return { success: false, error: error.message, data: null }
