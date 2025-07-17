@@ -231,6 +231,21 @@ function CreateCustomFieldForm({ onSubmit, onCancel, customFields = [] }) {
             <div>
               <label className="form-label">
                 Folder (Optional)
+              </label>
+              <select
+                value={formData.parentId || ''}
+                onChange={(e) => handleChange('parentId', e.target.value || null)}
+                className="form-input"
+                disabled={loading}
+              >
+                <option value="">📄 Root Level</option>
+                {availableFolders.map((folder) => (
+                  <option key={folder.id} value={folder.id}>
+                    📁 {folder.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             {/* Placeholder Text */}
             <div>
