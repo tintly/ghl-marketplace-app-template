@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 
-function LogViewer() {
+function LogViewer({ user }) {
   const [contactId, setContactId] = useState('')
   const [conversationId, setConversationId] = useState('')
   const [logs, setLogs] = useState(null)
@@ -380,7 +380,9 @@ function LogViewer() {
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tokens</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Message Cost</th>
+                        {user?.type === 'agency' && (
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Message Cost</th>
+                        )}
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                       </tr>
                     </thead>
@@ -400,9 +402,11 @@ function LogViewer() {
                             <div>Output: {log.output_tokens}</div>
                             <div className="font-medium">Total: {log.total_tokens}</div>
                           </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-xs font-medium">
-                            {formatCost(log.customer_cost_estimate || log.cost_estimate)}
-                          </td>
+                          {user?.type === 'agency' && (
+                            <td className="px-3 py-2 whitespace-nowrap text-xs font-medium">
+                              {formatCost(log.customer_cost_estimate || log.cost_estimate)}
+                            </td>
+                          )}
                           <td className="px-3 py-2 whitespace-nowrap text-xs">
                             {log.success ? (
                               <span className="field-badge bg-green-100 text-green-800">Success</span>

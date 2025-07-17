@@ -150,7 +150,7 @@ function DataExtractorAppContent({ user, authService }) {
                 <p className="text-gray-600">Please complete the OAuth installation first.</p>
               </div>
             ) : (
-              <LogViewer />
+              <LogViewer user={user} />
             )
           } />
           <Route path="/branding" element={
