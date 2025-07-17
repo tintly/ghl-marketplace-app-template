@@ -216,7 +216,7 @@ function DashboardHome({ user, authService, needsOAuth, getWelcomeMessage, getAg
               <p className="text-gray-600 mb-4">Create and configure custom fields for data extraction</p>
               <a
                 href="/data-extraction"
-                className="btn-primary inline-block"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md transition-colors font-medium inline-block"
               >
                 Configure
               </a>
@@ -228,7 +228,7 @@ function DashboardHome({ user, authService, needsOAuth, getWelcomeMessage, getAg
               <p className="text-gray-600 mb-4">Configure extraction for built-in contact fields</p>
               <a
                 href="/standard-fields"
-                className="btn-success inline-block"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md transition-colors font-medium inline-block"
               >
                 Configure
               </a>
@@ -240,7 +240,7 @@ function DashboardHome({ user, authService, needsOAuth, getWelcomeMessage, getAg
               <p className="text-gray-600 mb-4">Manage your plan and view usage statistics</p>
               <a
                 href="/subscription"
-                className="btn-primary inline-block"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md transition-colors font-medium inline-block"
               >
                 Manage Plan
               </a>
@@ -252,7 +252,7 @@ function DashboardHome({ user, authService, needsOAuth, getWelcomeMessage, getAg
               <p className="text-gray-600 mb-4">View extraction history and message processing</p>
               <a
                 href="/logs"
-                className="btn-secondary inline-block"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md transition-colors font-medium inline-block"
               >
                 View Logs
               </a>
@@ -266,7 +266,7 @@ function DashboardHome({ user, authService, needsOAuth, getWelcomeMessage, getAg
                   <p className="text-gray-600 mb-4">Customize your white-label experience</p>
                   <a
                     href="/branding"
-                    className="btn-primary inline-block"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md transition-colors font-medium inline-block"
                   >
                     Manage Branding
                   </a>
@@ -278,7 +278,7 @@ function DashboardHome({ user, authService, needsOAuth, getWelcomeMessage, getAg
                   <p className="text-gray-600 mb-4">Manage your agency's AI API keys</p>
                   <a
                     href="/openai-keys"
-                    className="btn-success inline-block"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md transition-colors font-medium inline-block"
                   >
                     Manage Keys
                   </a>
