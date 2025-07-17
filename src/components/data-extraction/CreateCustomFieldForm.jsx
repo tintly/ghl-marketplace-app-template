@@ -231,24 +231,6 @@ function CreateCustomFieldForm({ onSubmit, onCancel, customFields = [] }) {
             <div>
               <label className="form-label">
                 Folder (Optional)
-              </label>
-              <select
-                value={formData.parentId || ''}
-                onChange={(e) => handleChange('parentId', e.target.value || null)}
-                className="form-select"
-                disabled={loading}
-              >
-                <option value="">Root Level (No Folder)</option>
-                {availableFolders.map((folder) => (
-                  <option key={folder.id} value={folder.id}>
-                    📁 {folder.name}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-500 mt-1">
-                Choose a folder to organize your custom field, or leave at root level.
-              </p>
-            </div>
 
             {/* Placeholder Text */}
             <div>

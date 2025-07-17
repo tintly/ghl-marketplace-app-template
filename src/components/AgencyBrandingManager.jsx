@@ -143,44 +143,6 @@ const AgencyBrandingManager = ({ user, authService, onBrandingUpdate }) => {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Primary Color
-              </label>
-              <input
-                type="color"
-                value={branding.primary_color || '#3B82F6'}
-                onChange={(e) => handleInputChange('primary_color', e.target.value)}
-                className="w-full h-10 border border-gray-300 rounded-md"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Secondary Color
-              </label>
-              <input
-                type="color"
-                value={branding.secondary_color || '#1F2937'}
-                onChange={(e) => handleInputChange('secondary_color', e.target.value)}
-                className="w-full h-10 border border-gray-300 rounded-md"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Accent Color
-              </label>
-              <input
-                type="color"
-                value={branding.accent_color || '#10B981'}
-                onChange={(e) => handleInputChange('accent_color', e.target.value)}
-                className="w-full h-10 border border-gray-300 rounded-md"
-              />
-            </div>
-          </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Agency Logo URL

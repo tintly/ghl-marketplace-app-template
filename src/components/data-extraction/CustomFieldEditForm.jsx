@@ -196,24 +196,6 @@ function CustomFieldEditForm({ customField, onSubmit, onCancel, onDelete }) {
               />
             </div>
 
-            {/* Position */}
-            <div>
-              <label className="form-label">
-                Position
-              </label>
-              <input
-                type="number"
-                value={formData.position}
-                onChange={(e) => handleChange('position', parseInt(e.target.value) || 0)}
-                className="form-input"
-                min="0"
-                step="50"
-                disabled={loading || deleting}
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Lower numbers appear first. Use increments of 50.
-              </p>
-            </div>
 
             {/* Options for Choice Fields */}
             {needsPicklistOptions && (

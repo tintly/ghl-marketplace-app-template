@@ -8,10 +8,10 @@
   font-weight: 400;
   color-scheme: light;
   
-  /* White-label CSS variables */
-  --primary-color: #3B82F6;
-  --secondary-color: #1F2937;
-  --accent-color: #10B981;
+  /* GHL-style CSS variables */
+  --primary-color: #4F46E5;
+  --secondary-color: #6B7280;
+  --accent-color: #059669;
 }
 
 body {
@@ -30,22 +30,19 @@ body {
 }
 
 .btn-primary {
-  background-color: var(--primary-color);
-  @apply hover:opacity-90 text-white px-4 py-2 rounded-md transition-all;
+  @apply bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md transition-colors font-medium;
 }
 
 .btn-secondary {
-  background-color: var(--secondary-color);
-  @apply hover:opacity-90 text-white px-4 py-2 rounded-md transition-all;
+  @apply bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md transition-colors font-medium;
 }
 
 .btn-danger {
-  @apply bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md transition-colors;
+  @apply bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md transition-colors font-medium;
 }
 
 .btn-success {
-  background-color: var(--accent-color);
-  @apply hover:opacity-90 text-white px-4 py-2 rounded-md transition-all;
+  @apply bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md transition-colors font-medium;
 }
 
 .field-badge {

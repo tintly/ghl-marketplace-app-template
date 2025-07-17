@@ -134,9 +134,9 @@ export class AgencyBrandingService {
     return {
       agency_name: 'GoHighLevel',
       custom_app_name: 'Data Extractor',
-      primary_color: '#3B82F6',
-      secondary_color: '#1F2937',
-      accent_color: '#10B981',
+      primary_color: '#4F46E5',
+      secondary_color: '#6B7280',
+      accent_color: '#059669',
       hide_ghl_branding: false,
       welcome_message: 'Welcome to your conversation data extractor.',
       support_email: 'support@gohighlevel.com'
@@ -265,9 +265,9 @@ export class AgencyBrandingService {
 
     const root = document.documentElement
     
-    root.style.setProperty('--primary-color', branding.primary_color || '#3B82F6')
-    root.style.setProperty('--secondary-color', branding.secondary_color || '#1F2937')
-    root.style.setProperty('--accent-color', branding.accent_color || '#10B981')
+    root.style.setProperty('--primary-color', branding.primary_color || '#4F46E5')
+    root.style.setProperty('--secondary-color', branding.secondary_color || '#6B7280')
+    root.style.setProperty('--accent-color', branding.accent_color || '#059669')
     
     // Update page title if custom app name is provided
     if (branding.custom_app_name) {
