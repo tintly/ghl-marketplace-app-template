@@ -94,6 +94,7 @@ function DataExtractorAppContent({ user, authService }) {
         
         <Routes>
           <Route path="/" element={<DashboardHome user={user} authService={authService} needsOAuth={needsOAuthInstallation()} getWelcomeMessage={getWelcomeMessage} getAgencyName={getAgencyName} />} />
+          <Route path="/" element={<DashboardHome user={user} authService={authService} needsOAuth={needsOAuthInstallation()} getWelcomeMessage={getWelcomeMessage} getAgencyName={getAgencyName} canAccessSubscription={canAccessSubscription} />} />
           <Route path="/subscription" element={
             needsOAuthInstallation() ? (
               <div className="text-center py-8">
@@ -177,7 +178,7 @@ function DataExtractorAppContent({ user, authService }) {
   )
 }
 
-function DashboardHome({ user, authService, needsOAuth, getWelcomeMessage, getAgencyName }) {
+function DashboardHome({ user, authService, needsOAuth, getWelcomeMessage, getAgencyName, canAccessSubscription }) {
   if (needsOAuth) {
     return (
       <div className="space-y-8">
