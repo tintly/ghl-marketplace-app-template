@@ -155,7 +155,7 @@ Deno.serve(async (req: Request) => {
 
 function getDefaultBranding() {
   return {
-    agency_name: 'GoHighLevel',
+    agency_name: '',
     custom_app_name: 'Data Extractor',
     primary_color: '#3B82F6',
     secondary_color: '#1F2937',

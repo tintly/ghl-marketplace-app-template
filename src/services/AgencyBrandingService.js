@@ -132,7 +132,7 @@ export class AgencyBrandingService {
   // Get default branding when no agency branding is available
   getDefaultBranding() {
     return {
-      agency_name: 'GoHighLevel',
+      agency_name: '',
       custom_app_name: 'Data Extractor',
       primary_color: '#4F46E5',
       secondary_color: '#6B7280',
