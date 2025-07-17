@@ -34,6 +34,11 @@ function DataExtractorAppContent({ user, authService }) {
     return null
   }
 
+  // Helper function to check if user can access subscription management
+  const canAccessSubscription = () => {
+    return user?.type === 'agency' && user?.role === 'admin'
+  }
+
   const handleLinkingComplete = () => {
     window.location.reload()
   }
@@ -93,6 +98,29 @@ function DataExtractorAppContent({ user, authService }) {
             needsOAuthInstallation() ? (
               <div className="text-center py-8">
                 <p className="text-gray-600">Please complete the OAuth installation first.</p>
+              </div>
+            ) : !canAccessSubscription() ? (
+              <div className="bg-white rounded-lg shadow p-8 text-center">
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                  <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Access Restricted</h3>
+                <p className="text-gray-600 mb-4">
+                  Subscription management is only available to agency administrators.
+                </p>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-left">
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">Current User Details:</h4>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li><strong>Type:</strong> {user?.type || 'Unknown'}</li>
+                    <li><strong>Role:</strong> {user?.role || 'Unknown'}</li>
+                    <li><strong>Required:</strong> Agency Admin</li>
+                  </ul>
+                </div>
+                <p className="text-sm text-gray-500 mt-4">
+                  Contact your agency administrator to manage subscription settings.
+                </p>
               </div>
             ) : (
               <SubscriptionManager user={user} authService={authService} />
@@ -238,12 +266,25 @@ function DashboardHome({ user, authService, needsOAuth, getWelcomeMessage, getAg
               <div className="text-4xl mb-4">💰</div>
               <h4 className="text-lg font-semibold text-gray-900 mb-2">Subscription</h4>
               <p className="text-gray-600 mb-4">Manage your plan and view usage statistics</p>
-              <a
-                href="/subscription"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md transition-colors font-medium inline-block"
-              >
-                Manage Plan
-              </a>
+              {canAccessSubscription() ? (
+                <a
+                  href="/subscription"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md transition-colors font-medium inline-block"
+                >
+                  Manage Plan
+                </a>
+              ) : (
+                <div className="text-center">
+                  <button
+                    disabled
+                    className="bg-gray-300 text-gray-500 px-4 py-2 rounded-md font-medium cursor-not-allowed inline-block"
+                    title="Only available to agency administrators"
+                  >
+                    Manage Plan
+                  </button>
+                  <p className="text-xs text-gray-500 mt-2">Agency Admin Only</p>
+                </div>
+              )}
             </div>
             
             <div className="text-center p-6 border border-gray-200 rounded-lg card-hover">

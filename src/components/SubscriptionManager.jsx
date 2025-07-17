@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { SubscriptionService } from '../services/SubscriptionService'
 
 const SubscriptionManager = ({ user, authService }) => {
+  // Check if user has permission to manage subscriptions
+  const canManageSubscription = user?.type === 'agency' && user?.role === 'admin'
+  
   const [loading, setLoading] = useState(true)
   const [subscription, setSubscription] = useState(null)
   const [plans, setPlans] = useState([])
@@ -85,6 +88,12 @@ const SubscriptionManager = ({ user, authService }) => {
   }
 
   const handlePlanChange = async (planId) => {
+    // Double-check permissions before allowing plan changes
+    if (!canManageSubscription) {
+      setError('You do not have permission to change subscription plans')
+      return
+    }
+    
     try {
       setLoading(true)
       
@@ -110,6 +119,34 @@ const SubscriptionManager = ({ user, authService }) => {
     return (
       <div className="flex justify-center items-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+
+  // Show access denied message for non-agency admins
+  if (!canManageSubscription) {
+    return (
+      <div className="bg-white shadow rounded-lg p-8 text-center">
+        <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+          <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">Access Restricted</h3>
+        <p className="text-gray-600 mb-4">
+          Subscription management is only available to agency administrators.
+        </p>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-left max-w-md mx-auto">
+          <h4 className="text-sm font-medium text-gray-900 mb-2">Current User Details:</h4>
+          <ul className="text-sm text-gray-600 space-y-1">
+            <li><strong>Type:</strong> {user?.type || 'Unknown'}</li>
+            <li><strong>Role:</strong> {user?.role || 'Unknown'}</li>
+            <li><strong>Required:</strong> Agency Admin</li>
+          </ul>
+        </div>
+        <p className="text-sm text-gray-500 mt-4">
+          Contact your agency administrator to manage subscription settings.
+        </p>
       </div>
     )
   }
@@ -260,8 +297,8 @@ const SubscriptionManager = ({ user, authService }) => {
                       {subscription?.plan_id !== plan.id && (
                         <button
                           onClick={() => handlePlanChange(plan.id)}
-                          className="mt-4 w-full bg-blue-600 text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
-                          disabled={loading}
+                          className="mt-4 w-full bg-blue-600 text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={loading || !canManageSubscription}
                         >
                           {loading ? 'Processing...' : 'Select Plan'}
                         </button>
