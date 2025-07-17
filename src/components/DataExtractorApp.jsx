@@ -93,7 +93,6 @@ function DataExtractorAppContent({ user, authService }) {
         {!needsOAuthInstallation() && <Navigation user={user} />}
         
         <Routes>
-          <Route path="/" element={<DashboardHome user={user} authService={authService} needsOAuth={needsOAuthInstallation()} getWelcomeMessage={getWelcomeMessage} getAgencyName={getAgencyName} />} />
           <Route path="/" element={<DashboardHome user={user} authService={authService} needsOAuth={needsOAuthInstallation()} getWelcomeMessage={getWelcomeMessage} getAgencyName={getAgencyName} canAccessSubscription={canAccessSubscription} />} />
           <Route path="/subscription" element={
             needsOAuthInstallation() ? (
