@@ -93,7 +93,7 @@ function DataExtractorAppContent({ user, authService }) {
         {!needsOAuthInstallation() && <Navigation user={user} />}
         
         <Routes>
-          <Route path="/" element={<DashboardHome user={user} authService={authService} needsOAuth={needsOAuthInstallation()} getWelcomeMessage={getWelcomeMessage} getAgencyName={getAgencyName} canAccessSubscription={canAccessSubscription} />} />
+          <Route path="/" element={<DashboardHome user={user} authService={authService} needsOAuth={needsOAuthInstallation()} getWelcomeMessage={getWelcomeMessage} getAgencyName={getAgencyName} canAccessSubscription={canAccessSubscription()} />} />
           <Route path="/subscription" element={
             needsOAuthInstallation() ? (
               <div className="text-center py-8">
@@ -266,7 +266,7 @@ function DashboardHome({ user, authService, needsOAuth, getWelcomeMessage, getAg
               <div className="text-4xl mb-4">💰</div>
               <h4 className="text-lg font-semibold text-gray-900 mb-2">Subscription</h4>
               <p className="text-gray-600 mb-4">Manage your plan and view usage statistics</p>
-              {canAccessSubscription() ? (
+              {canAccessSubscription ? (
                 <a
                   href="/subscription"
                   className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md transition-colors font-medium inline-block"
