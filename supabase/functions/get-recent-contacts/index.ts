@@ -34,9 +34,26 @@ Deno.serve(async (req: Request) => {
     const limit = requestBody.limit || 10
     const locationId = requestBody.location_id
     
+    // SECURITY: location_id is now REQUIRED to prevent cross-agency data access
+    if (!locationId) {
+      return new Response(
+        JSON.stringify({ 
+          error: "location_id is required for security",
+          message: "Must specify location_id to prevent cross-agency data access"
+        }),
+        {
+          status: 400,
+          headers: {
+            "Content-Type": "application/json",
+            ...corsHeaders,
+          },
+        }
+      )
+    }
+    
     console.log('Fetching recent contacts:', {
       limit,
-      locationId: locationId || 'All locations'
+      locationId
     })
 
     // Initialize Supabase client
@@ -45,17 +62,14 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     // Query to get distinct contact IDs from recent conversations
-    let query = supabase
+    // SECURITY: Always filter by location_id to prevent cross-agency access
+    const query = supabase
       .from('ghl_conversations')
       .select('contact_id, location_id, date_added')
       .not('contact_id', 'is', null)
+      .eq('location_id', locationId)
       .order('date_added', { ascending: false })
       .limit(100) // Get more than we need to ensure we have enough unique contacts
-    
-    // Filter by location if provided
-    if (locationId) {
-      query = query.eq('location_id', locationId)
-    }
     
     const { data: conversations, error: conversationsError } = await query
     

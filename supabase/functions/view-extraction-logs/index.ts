@@ -35,13 +35,32 @@ Deno.serve(async (req: Request) => {
     const conversationId = requestBody.conversation_id
     const fetchRecent = requestBody.recent === true
     const limit = requestBody.limit || 10
+    const locationId = requestBody.location_id
+    
+    // SECURITY: location_id is now REQUIRED to prevent cross-agency data access
+    if (!locationId) {
+      return new Response(
+        JSON.stringify({ 
+          error: "location_id is required for security",
+          message: "Must specify location_id to prevent cross-agency data access"
+        }),
+        {
+          status: 400,
+          headers: {
+            "Content-Type": "application/json",
+            ...corsHeaders,
+          },
+        }
+      )
+    }
     
     if (!contactId && !conversationId && !fetchRecent) {
       return new Response(
         JSON.stringify({ 
-          error: "Either contact_id or conversation_id is required",
+          error: "Either contact_id, conversation_id, or recent=true is required",
           example: { 
             contact_id: "3eEkzpdKeXk19ndqBHNd",
+            location_id: "4beIyWyWrcoPRD7PEN5G",
             recent: true,
             limit: 10
           }
@@ -60,6 +79,7 @@ Deno.serve(async (req: Request) => {
       contactId: contactId || 'Not provided',
       conversationId: conversationId || 'Not provided',
       fetchRecent: fetchRecent,
+      locationId,
       limit
     })
 
@@ -70,29 +90,15 @@ Deno.serve(async (req: Request) => {
 
     // Step 1: Get conversation records
     console.log('Step 1: Fetching conversation records...')
+    // SECURITY: Always filter by location_id to prevent cross-agency access
     let conversationQuery = supabase
       .from('ghl_conversations')
       .select('*')
+      .eq('location_id', locationId)
       .order('date_added', { ascending: false })
       .limit(limit)
     
-    // If fetching recent logs without specific IDs
-    if (fetchRecent) {
-      console.log('Fetching recent logs without filtering by ID')
-      // Just use the limit and order
-    }
-    // Otherwise filter by the provided IDs
-    else {
-      if (contactId) {
-        conversationQuery = conversationQuery.eq('contact_id', contactId)
-      }
-      
-      if (conversationId) {
-        conversationQuery = conversationQuery.eq('conversation_id', conversationId)
-      }
-    }
-    
-    // Apply the query
+    // Apply additional filters if provided
     if (contactId) {
       conversationQuery = conversationQuery.eq('contact_id', contactId)
     }

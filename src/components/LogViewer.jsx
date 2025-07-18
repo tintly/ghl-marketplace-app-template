@@ -51,13 +51,24 @@ function LogViewer({ user }) {
         return
       }
 
+      // SECURITY: Always pass location_id to prevent cross-agency data access
+      if (!user?.locationId) {
+        console.error('No location ID available for user')
+        setContactsError('User location not available')
+        setRecentContacts([])
+        return
+      }
+
       const response = await fetch(`${supabaseUrl}/functions/v1/get-recent-contacts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${supabaseAnonKey}`
         },
-        body: JSON.stringify({ limit: 10 })
+        body: JSON.stringify({ 
+          limit: 10,
+          location_id: user.locationId
+        })
       })
 
       if (!response.ok) {
@@ -77,18 +88,24 @@ function LogViewer({ user }) {
   }
 
   const fetchLogs = async (isAutoRefresh = false) => {
+    // SECURITY: Always require location_id
+    if (!user?.locationId) {
+      setError('User location not available. Please reload the page.')
+      return
+    }
+
     // Allow fetching recent logs without any ID
     if (!contactId && !conversationId && !fetchingRecent) {
       setError('Please enter either a Contact ID or Conversation ID, or use "View Recent Logs"')
       return
     }
-
     try {
       if (!isAutoRefresh) setLoading(true)
       setError(null)
       
       let queryParams = {
-        limit: 50 // Increase limit to show more logs
+        limit: 50, // Increase limit to show more logs
+        location_id: user.locationId // SECURITY: Always include location_id
       }
       
       if (contactId) {
