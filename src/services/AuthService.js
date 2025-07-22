@@ -42,22 +42,12 @@ export class AuthService {
         encryptedUserData = await this.getEncryptedUserData() 
         if (encryptedUserData === 'STANDALONE_MODE') {
           console.log('Using standalone mode from timeout fallback')
-          return this.handleStandaloneMode({
-            locationId: 'standalone',
-            userId: 'standalone_user',
-            installedAt: new Date().toISOString()
-          })
+          throw new Error('This application must be accessed from within GoHighLevel. Please install and access the app through your GHL dashboard.')
         }
         console.log('Encrypted user data received from GHL SSO')  
       } catch (ssoError) {
         console.log('GHL SSO not available:', ssoError.message)
-        // Instead of throwing an error, let's try standalone mode
-        console.log('Falling back to standalone mode')
-        return this.handleStandaloneMode({
-          locationId: 'standalone_fallback',
-          userId: 'standalone_user',
-          installedAt: new Date().toISOString()
-        })
+        throw new Error('This application must be accessed from within GoHighLevel. Please install and access the app through your GHL dashboard.')
       }
 
       // Use Supabase Edge Function for SSO authentication
@@ -99,14 +89,7 @@ export class AuthService {
         return result.user
       } catch (authError) {
         console.error('Error calling auth-user-context function:', authError)
-        console.log('Falling back to standalone mode due to auth function error')
-        
-        // If we have encrypted data but the auth function fails, use standalone mode
-        return this.handleStandaloneMode({
-          locationId: 'auth_fallback',
-          userId: 'auth_fallback_user',
-          installedAt: new Date().toISOString()
-        })
+        throw new Error('Authentication failed. Please ensure you are accessing this app from within GoHighLevel and that your account has proper permissions.')
       }
     } catch (error) {
       console.error('Failed to fetch user data:', error)

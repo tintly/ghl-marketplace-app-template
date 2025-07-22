@@ -36,18 +36,8 @@ function AppContent() {
         console.log('User authenticated successfully:', userData)
       } catch (authError) {
         console.error('Authentication error, using fallback mode:', authError)
-        // Use fallback mode with minimal permissions
-        setUser({
-          userId: 'fallback_user',
-          email: 'fallback@example.com',
-          userName: 'Fallback User',
-          role: 'viewer',
-          type: 'location',
-          companyId: 'fallback_company',
-          locationId: 'fallback_location',
-          standaloneMode: true,
-          installedAt: new Date().toISOString()
-        })
+        // Don't create fallback users - require proper authentication
+        throw authError
       }
     } catch (error) {
       console.error('Authentication error:', error)
@@ -85,23 +75,37 @@ function AppContent() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
         <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6 text-center">
-          <h2 className="text-xl font-semibold text-red-600 mb-4">Access Error</h2>
+          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+            <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-semibold text-red-600 mb-4">Authentication Required</h2>
           <p className="text-gray-700 mb-4">{error}</p>
           <div className="bg-gray-50 p-4 rounded-lg mb-4 text-left">
-            <h3 className="font-semibold text-gray-800 mb-2">Troubleshooting Steps:</h3>
+            <h3 className="font-semibold text-gray-800 mb-2">How to Access This App:</h3>
             <ul className="text-sm text-gray-600 space-y-1">
-              <li>• Ensure you are accessing this app from within GoHighLevel</li>
-              <li>• Check that the app is properly installed in your location</li>
-              <li>• Verify that your browser allows iframe communication</li>
-              <li>• Try refreshing the page</li>
+              <li>• Install this app from the GoHighLevel Marketplace</li>
+              <li>• Access the app from within your GHL dashboard</li>
+              <li>• Do not access this URL directly in your browser</li>
+              <li>• Ensure your browser allows iframe communication</li>
             </ul>
+          </div>
+          <div className="bg-blue-50 p-4 rounded-lg mb-4 text-left">
+            <h3 className="font-semibold text-blue-800 mb-2">For GoHighLevel Users:</h3>
+            <p className="text-sm text-blue-700">
+              This app is designed to work within the GoHighLevel platform. Please access it through your GHL dashboard after installation.
+            </p>
           </div>
           <button 
             onClick={retryAuth}
-            className="btn-primary"
+            className="btn-primary mb-2"
           >
             Retry Authentication
           </button>
+          <p className="text-xs text-gray-500">
+            If you continue to have issues, please contact support.
+          </p>
         </div>
       </div>
     )
