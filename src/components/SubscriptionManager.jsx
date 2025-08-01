@@ -254,10 +254,9 @@ const SubscriptionManager = ({ user, authService }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {plans.map((plan) => {
                 // Filter out unwanted plans
-                const unwantedPlans = ['free', 'solo', 'business', 'agency', 'starter'];
+               const unwantedPlans = ['free', 'solo', 'business', 'agency', 'starter', 'tier_2'];
                 if (unwantedPlans.includes(plan.code) || 
-                    (plan.code?.startsWith('agency') && user.type !== 'agency') ||
-                    plan.price_monthly === 499) { // Remove $499 agency plan
+                   plan.price_monthly === 499) { // Remove $499 agency plan
                   return null;
                 }
                 
@@ -284,14 +283,14 @@ const SubscriptionManager = ({ user, authService }) => {
                       {/* Plan Features */}
                       <div className="mt-3 space-y-2 text-sm text-gray-600">
                         {/* Agency Tier Specific Information */}
-                        {plan.name === 'Agency Tier 1' && (
+                       {(plan.name === 'Agency Tier 1' || plan.code === 'agency_tier_1') && (
                           <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-3">
                             <div className="text-blue-800 font-medium">Up to 3 sub-accounts included</div>
                             <div className="text-blue-700 text-xs mt-1">1,000 free AI extractions per sub-account/month</div>
                             <div className="text-blue-700 text-xs">$0.002 per extraction after 1,000</div>
                           </div>
                         )}
-                        {(plan.name === 'Agency Tier 2' || plan.name === 'Agency Pro') && (
+                       {(plan.name === 'Agency Pro' || plan.code === 'agency_pro') && (
                           <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-3">
                             <div className="text-blue-800 font-medium">Up to 10 sub-accounts included</div>
                             <div className="text-blue-700 text-xs mt-1">$10/month for each additional sub-account</div>
@@ -299,7 +298,7 @@ const SubscriptionManager = ({ user, authService }) => {
                             <div className="text-blue-700 text-xs">$0.002 per extraction after 1,000</div>
                           </div>
                         )}
-                        {plan.name === 'Agency Enterprise' && (
+                       {(plan.name === 'Agency Enterprise' || plan.code === 'agency_enterprise') && (
                           <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded p-3 mb-3">
                             <div className="text-purple-800 font-medium">100 sub-accounts included</div>
                             <div className="text-purple-700 text-xs mt-1">Only $5/month for each additional sub-account</div>
@@ -309,14 +308,14 @@ const SubscriptionManager = ({ user, authService }) => {
                         )}
                         
                         <div>
-                          {plan.name === 'Agency Enterprise' ? (
+                         {(plan.name === 'Agency Enterprise' || plan.code === 'agency_enterprise') ? (
                             <strong>Unlimited</strong> AI extractions (with custom OpenAI key)
                           ) : (
                             <strong>1,000</strong> AI extractions per sub-account/month
                           )}
                         </div>
                         <div>
-                          {plan.name === 'Agency Enterprise' ? (
+                         {(plan.name === 'Agency Enterprise' || plan.code === 'agency_enterprise') ? (
                             <span className="text-green-600">No overage charges with custom OpenAI key</span>
                           ) : (
                             <>Overage: <strong>$0.002</strong> per extraction</>
@@ -327,12 +326,12 @@ const SubscriptionManager = ({ user, authService }) => {
                         </div>
                         <div className="text-green-600">✓ AI Summary Field</div>
                         <div className="text-blue-600">✓ Custom OpenAI Keys</div>
-                        {plan.name === 'Agency Enterprise' && (
+                       {(plan.name === 'Agency Enterprise' || plan.code === 'agency_enterprise') && (
                           <div className="text-purple-600">✓ Truly Unlimited Usage</div>
                         )}
                         <div className="text-purple-600">✓ White Label Branding</div>
                         <div className="text-indigo-600">✓ Priority Support</div>
-                        {plan.name === 'Agency Enterprise' && (
+                       {(plan.name === 'Agency Enterprise' || plan.code === 'agency_enterprise') && (
                           <div className="text-purple-600">✓ Dedicated Account Manager</div>
                         )}
                       </div>
