@@ -254,7 +254,7 @@ const SubscriptionManager = ({ user, authService }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {plans.map((plan) => {
                 // Don't show agency plan for non-agency users
-                if (plan.code === 'agency' && user.type !== 'agency') {
+                if (plan.code?.startsWith('agency') && user.type !== 'agency') {
                   return null;
                 }
                 
@@ -274,25 +274,45 @@ const SubscriptionManager = ({ user, authService }) => {
                           ${plan.price_monthly}
                         </span> 
                         <span className="text-gray-600">
-                          {plan.code !== 'free' ? '/month' : ''}
+                          {plan.code !== 'starter' && plan.code !== 'free' ? '/month' : ''}
                         </span>
                       </div>
-                      <div className="mt-2 text-sm text-gray-600">
-                        {plan.code === 'agency' ? 'Unlimited' : plan.messages_included} messages included
-                      </div>
-                      <div className="mt-2 text-xs text-gray-500">
-                        {plan.code !== 'agency' ? `$${plan.overage_price} per additional message` : 'No overage charges'}
-                      </div>
                       
-                      <div className="mt-4 space-y-1 text-xs text-gray-600">
-                        <div>Max {plan.max_users} users</div>
+                      {/* Plan Features */}
+                      <div className="mt-3 space-y-2 text-sm text-gray-600">
+                        <div>
+                          <strong>{plan.messages_included >= 999999 ? 'Unlimited' : plan.messages_included.toLocaleString()}</strong> messages/month
+                        </div>
+                        {plan.daily_cap_messages && plan.daily_cap_messages < 999999 && (
+                          <div>Daily cap: {plan.daily_cap_messages} messages</div>
+                        )}
+                        <div>
+                          Custom fields: {plan.custom_fields_limit >= 999999 ? 'Unlimited' : plan.custom_fields_limit}
+                        </div>
+                        {plan.ai_summary_included && (
+                          <div className="text-green-600">✓ AI Summary Field</div>
+                        )}
                         {plan.can_use_own_openai_key && (
-                          <div>✓ Custom OpenAI keys</div>
+                          <div className="text-blue-600">✓ Custom OpenAI Keys</div>
                         )}
                         {plan.can_white_label && (
-                          <div>✓ White label branding</div>
+                          <div className="text-purple-600">✓ White Label</div>
                         )}
                       </div>
+                      
+                      {/* Pricing Details */}
+                      <div className="mt-3 text-xs text-gray-500 space-y-1">
+                        {plan.overage_price > 0 && (
+                          <div>Overage: ${plan.overage_price}/message</div>
+                        )}
+                        {plan.call_extraction_rate_per_minute > 0 && (
+                          <div>Calls: ${plan.call_extraction_rate_per_minute}/minute</div>
+                        )}
+                        {plan.call_package_1_minutes > 0 && (
+                          <div>Call Package: {plan.call_package_1_minutes} min for ${plan.call_package_1_price}</div>
+                        )}
+                      </div>
+                      
 
                       {subscription?.plan_id !== plan.id && (
                         <button

@@ -84,6 +84,9 @@ Deno.serve(async (req: Request) => {
     // Validate configuration
     const configResult = await validateConfiguration(supabase, userContext)
 
+    // Check license status for agency-managed locations
+    const licenseStatus = await checkLocationLicense(supabase, userContext)
+
     // Generate Supabase JWT for the user
     console.log('Generating Supabase JWT...')
     const jwtToken = await generateSupabaseJWT(userContext)
@@ -97,7 +100,12 @@ Deno.serve(async (req: Request) => {
           configValidated: !!configResult,
           configId: configResult?.id || null,
           tokenStatus: configResult?.tokenStatus || 'unknown',
-          tokenValidation: configResult?.tokenValidation || null
+          tokenValidation: configResult?.tokenValidation || null,
+          isLicensed: licenseStatus?.isLicensed !== false,
+          licenseError: licenseStatus?.licenseError || null,
+          agencyTier: licenseStatus?.agencyTier || null,
+          maxLocations: licenseStatus?.maxLocations || null,
+          currentLicensedCount: licenseStatus?.currentLicensedCount || null
         },
         supabaseJWT: jwtToken
       }),
@@ -132,6 +140,98 @@ Deno.serve(async (req: Request) => {
     )
   }
 })
+
+async function checkLocationLicense(supabase: any, userContext: any) {
+  try {
+    console.log('=== CHECKING LOCATION LICENSE ===')
+    console.log('User context:', {
+      userId: userContext.userId,
+      locationId: userContext.locationId,
+      type: userContext.type
+    })
+    
+    // Get the configuration to find the agency_ghl_id
+    const { data: config, error: configError } = await supabase
+      .from('ghl_configurations')
+      .select('agency_ghl_id, ghl_company_id')
+      .eq('ghl_account_id', userContext.locationId)
+      .maybeSingle()
+
+    if (configError) {
+      console.error('Error fetching config for license check:', configError)
+      return { isLicensed: true } // Default to licensed if we can't check
+    }
+
+    const agencyGhlId = config?.agency_ghl_id || config?.ghl_company_id
+    
+    // If no agency ID, this is a direct location install (always licensed)
+    if (!agencyGhlId) {
+      console.log('No agency ID found - direct location install, always licensed')
+      return { isLicensed: true }
+    }
+
+    // If user is agency type, get their permissions and licensed location count
+    if (userContext.type === 'agency') {
+      console.log('User is agency type, fetching agency permissions')
+      
+      const { data: agencyPerms, error: agencyError } = await supabase
+        .from('agency_permissions')
+        .select('agency_tier, max_locations')
+        .eq('agency_ghl_id', agencyGhlId)
+        .maybeSingle()
+
+      if (agencyError) {
+        console.error('Error fetching agency permissions:', agencyError)
+        return { isLicensed: true } // Default to licensed for agency users
+      }
+
+      // Get current licensed location count
+      const { count: licensedCount, error: countError } = await supabase
+        .from('agency_licensed_locations')
+        .select('*', { count: 'exact', head: true })
+        .eq('agency_ghl_id', agencyGhlId)
+        .eq('is_active', true)
+
+      return {
+        isLicensed: true, // Agency users are always licensed to access their dashboard
+        agencyTier: agencyPerms?.agency_tier || 'Tier 1',
+        maxLocations: agencyPerms?.max_locations || 3,
+        currentLicensedCount: licensedCount || 0
+      }
+    }
+
+    // For location users, check if their location is licensed by the agency
+    console.log('Checking if location is licensed by agency:', agencyGhlId)
+    
+    const { data: license, error: licenseError } = await supabase
+      .from('agency_licensed_locations')
+      .select('is_active')
+      .eq('agency_ghl_id', agencyGhlId)
+      .eq('location_ghl_id', userContext.locationId)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    if (licenseError) {
+      console.error('Error checking license status:', licenseError)
+      return { isLicensed: true } // Default to licensed if we can't check
+    }
+
+    if (!license) {
+      console.log('Location is not licensed by agency')
+      return {
+        isLicensed: false,
+        licenseError: 'This location is not licensed. Please contact your agency admin.'
+      }
+    }
+
+    console.log('Location is properly licensed')
+    return { isLicensed: true }
+    
+  } catch (error) {
+    console.error('Error in license check:', error)
+    return { isLicensed: true } // Default to licensed on error
+  }
+}
 
 // Helper function to convert string to UUID format
 function stringToUUID(str: string): string {

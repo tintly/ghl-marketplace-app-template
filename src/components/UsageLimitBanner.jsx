@@ -42,8 +42,8 @@ function UsageLimitBanner({ user, authService }) {
     return null
   }
 
-  // Don't show for unlimited plans
-  if (usageData.messages_included >= 999999) {
+  // Don't show for unlimited plans unless there's call usage
+  if (usageData.messages_included >= 999999 && !usageData.call_minutes_used_monthly) {
     return null
   }
 
@@ -51,9 +51,17 @@ function UsageLimitBanner({ user, authService }) {
   const messagesUsed = usageData.messages_used || 0
   const messagesIncluded = usageData.messages_included || 100
   const usagePercentage = Math.min(100, usageData.usage_percentage || (messagesUsed / messagesIncluded) * 100)
+  
+  // Calculate call usage
+  const callMinutesUsed = usageData.call_minutes_used_monthly || 0
+  const callCostEstimate = usageData.call_cost_estimate_monthly || 0
+  const dailyMessagesUsed = usageData.daily_messages_used || 0
+  const dailyCallMinutes = usageData.daily_call_minutes_used || 0
 
-  // Only show warning if usage is over 70%
-  if (usagePercentage < 70) {
+  // Show if message usage is over 70% OR if there's any call usage OR daily caps are approaching
+  const shouldShow = usagePercentage >= 70 || callMinutesUsed > 0 || dailyMessagesUsed > 0 || dailyCallMinutes > 0
+  
+  if (!shouldShow) {
     return null
   }
 
@@ -63,6 +71,7 @@ function UsageLimitBanner({ user, authService }) {
 
   // Check if using custom OpenAI key
   const usingCustomKey = usageData.custom_key_used || false
+  
   return (
     <div className={`rounded-lg p-4 mb-6 ${
       isOverLimit 
@@ -97,12 +106,7 @@ function UsageLimitBanner({ user, authService }) {
                 ? 'text-yellow-800'
                 : 'text-blue-800'
           }`}>
-            {isOverLimit 
-              ? 'Message Limit Reached' 
-              : isNearLimit 
-                ? 'Approaching Message Limit'
-                : 'Message Usage Update'
-            }
+            Usage Summary
            {usingCustomKey && ' (Using Custom OpenAI Key)'}
           </h3>
           <div className={`mt-2 text-sm ${
@@ -112,33 +116,55 @@ function UsageLimitBanner({ user, authService }) {
                 ? 'text-yellow-700'
                 : 'text-blue-700'
           }`}>
-            <p>
-              {isOverLimit 
-                ? `You've reached your monthly limit of ${messagesIncluded.toLocaleString()} messages.` 
-                : `You've used ${messagesUsed.toLocaleString()} of ${messagesIncluded.toLocaleString()} messages (${Math.round(usagePercentage)}%) for this month.`
-              }
-             {usingCustomKey && ' Usage is being tracked with your custom OpenAI key.'}
-            </p>
+            {/* Message Usage */}
+            {messagesIncluded < 999999 && (
+              <div className="mb-2">
+                <strong>Messages:</strong> {messagesUsed.toLocaleString()} of {messagesIncluded.toLocaleString()} 
+                ({Math.round(usagePercentage)}%) this month
+                {dailyMessagesUsed > 0 && (
+                  <span className="ml-2 text-xs">({dailyMessagesUsed} today)</span>
+                )}
+              </div>
+            )}
+            
+            {/* Call Usage */}
+            {callMinutesUsed > 0 && (
+              <div className="mb-2">
+                <strong>Call Minutes:</strong> {callMinutesUsed.toFixed(1)} minutes this month
+                {callCostEstimate > 0 && (
+                  <span className="ml-2">(${callCostEstimate.toFixed(2)})</span>
+                )}
+                {dailyCallMinutes > 0 && (
+                  <span className="ml-2 text-xs">({dailyCallMinutes.toFixed(1)} min today)</span>
+                )}
+              </div>
+            )}
+            
             {isOverLimit && (
               <p className="mt-1">
                 Additional messages will be charged at the overage rate, or you can upgrade your plan for more included messages.
               </p>
             )}
           </div>
-          <div className="mt-3">
-            <div className="w-full bg-gray-200 rounded-full h-2.5">
-              <div 
-                className={`h-2.5 rounded-full ${
-                  isOverLimit 
-                    ? 'bg-red-600' 
-                    : isNearLimit 
-                      ? 'bg-yellow-500'
-                      : 'bg-blue-600'
-                }`}
-                style={{ width: `${usagePercentage}%` }}
-              ></div>
+          
+          {/* Progress Bar for Messages */}
+          {messagesIncluded < 999999 && (
+            <div className="mt-3">
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div 
+                  className={`h-2.5 rounded-full ${
+                    isOverLimit 
+                      ? 'bg-red-600' 
+                      : isNearLimit 
+                        ? 'bg-yellow-500'
+                        : 'bg-blue-600'
+                  }`}
+                  style={{ width: `${usagePercentage}%` }}
+                ></div>
+              </div>
             </div>
-          </div>
+          )}
+          
           <div className="mt-3">
             <a
               href="/subscription"

@@ -7,6 +7,7 @@ import SubscriptionManager from './SubscriptionManager'
 import StandardFieldsExtractionModule from './StandardFieldsExtractionModule'
 import AgencyBrandingManager from './AgencyBrandingManager'
 import AgencyOpenAIManager from './AgencyOpenAIManager'
+import AgencyLicensedLocationsManager from './AgencyLicensedLocationsManager'
 import InstallationGuide from './InstallationGuide'
 import Navigation from './Navigation'
 import LogViewer from './LogViewer'
@@ -169,6 +170,15 @@ function DataExtractorAppContent({ user, authService }) {
               </div>
             ) : (
               <AgencyOpenAIManager user={user} authService={authService} />
+            )
+          } />
+          <Route path="/licensed-locations" element={
+            needsOAuthInstallation() ? (
+              <div className="text-center py-8">
+                <p className="text-gray-600">Please complete the OAuth installation first.</p>
+              </div>
+            ) : (
+              <AgencyLicensedLocationsManager user={user} authService={authService} />
             )
           } />
         </Routes>

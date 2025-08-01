@@ -111,6 +111,40 @@ function AppContent() {
     )
   }
 
+  // Check if user is not licensed (for agency-managed locations)
+  if (user && user.isLicensed === false) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6 text-center">
+          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 mb-4">
+            <svg className="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-semibold text-yellow-600 mb-4">Access Restricted</h2>
+          <p className="text-gray-700 mb-4">{user.licenseError}</p>
+          <div className="bg-yellow-50 p-4 rounded-lg mb-4 text-left">
+            <h3 className="font-semibold text-yellow-800 mb-2">What does this mean?</h3>
+            <ul className="text-sm text-yellow-700 space-y-1">
+              <li>• Your location is managed by an agency</li>
+              <li>• The agency has not licensed this location for data extraction</li>
+              <li>• Contact your agency administrator to request access</li>
+              <li>• Once licensed, you'll have full access to all features</li>
+            </ul>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg text-left">
+            <h3 className="font-semibold text-gray-800 mb-2">Location Details:</h3>
+            <ul className="text-sm text-gray-600 space-y-1">
+              <li><strong>Location ID:</strong> {user.locationId}</li>
+              <li><strong>User:</strong> {user.userName}</li>
+              <li><strong>Email:</strong> {user.email}</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <Routes>
       <Route path="/*" element={<DataExtractorApp user={user} authService={authService} />} />
