@@ -281,12 +281,12 @@ const SubscriptionManager = ({ user, authService }) => {
                     break;
                   case 'agency_enterprise':
                     includedSubAccounts = 100;
-                    additionalSubAccountCost = 4;
-                    includedAIExtractions = 500000; // Effectively unlimited for most
+                    additionalSubAccountCost = 5;
+                    includedAIExtractions = 500000;
                     aiOveragePrice = 0.001;
                     specialFeatures.push("Dedicated account manager");
                     specialFeatures.push("Advanced analytics");
-                    specialFeatures.push("Option to use own OpenAI API key");
+                    specialFeatures.push("Truly unlimited usage with own OpenAI key");
                     break;
                 }
 
@@ -303,7 +303,7 @@ const SubscriptionManager = ({ user, authService }) => {
                       <h4 className="font-medium text-gray-900">{plan.name}</h4>
                       <div className="mt-2">
                         <span className="text-2xl font-bold text-gray-900">
-                          ${plan.price_monthly}/month
+                          ${plan.price_monthly.toLocaleString()}/month
                         </span> 
                       </div>
                       
@@ -311,20 +311,20 @@ const SubscriptionManager = ({ user, authService }) => {
                       <div className="mt-3 space-y-2 text-sm text-gray-600">
                         <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-3">
                           <div className="text-blue-800 font-medium">
-                            {includedSubAccounts} sub-accounts included
+                            {includedSubAccounts.toLocaleString()} sub-accounts included
                           </div>
                           {additionalSubAccountCost > 0 && (
                             <div className="text-blue-700 text-xs mt-1">
-                              ${additionalSubAccountCost}/month for each additional sub-account
+                              ${additionalSubAccountCost.toLocaleString()}/month for each additional sub-account
                             </div>
                           )}
                         </div>
 
                         <div>
-                          <strong>{includedAIExtractions.toLocaleString()}</strong> AI extractions/month (pooled)
+                          <strong>{includedAIExtractions.toLocaleString()}</strong> AI extractions/month (pooled across all sub-accounts)
                         </div>
                         <div>
-                          Overage: <strong>${aiOveragePrice}</strong> per extraction
+                          Overage: <strong>${aiOveragePrice.toFixed(3)}</strong> per extraction
                         </div>
                         <div>Custom fields: <strong>Unlimited</strong></div>
                         {specialFeatures.map((feature, index) => (
