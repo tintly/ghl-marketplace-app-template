@@ -186,6 +186,22 @@ export const handler = async (event) => {
 
         // Step 0.6: Determine if this extraction will be an overage and check funds
         console.log('Step 0.6: Checking for overage and funds...');
+        
+        // Check if this is a call extraction (infrastructure ready but disabled for now)
+        const isCallExtraction = event.extraction_type === 'call_extraction' || 
+                                event.is_call_extraction === true ||
+                                ['Call', 'Voicemail'].includes(event.messageType);
+        
+        // Get call duration if this is a call extraction
+        let callMinutesUsed = 0;
+        if (isCallExtraction) {
+            callMinutesUsed = event.call_duration_minutes || event.call_minutes || 1; // Default to 1 minute
+            console.log(`Call extraction detected. Duration: ${callMinutesUsed} minutes`);
+            
+            // TODO: Remove this when ready to enable call billing
+            console.log('⚠️ CALL BILLING DISABLED: Call extraction detected but billing is currently disabled');
+        }
+        
         try {
             // Get current usage for this location
             const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
@@ -221,6 +237,29 @@ export const handler = async (event) => {
             const currentMessagesUsed = usageData?.messages_used || 0;
             const messagesIncluded = subscriptionData?.subscription_plans?.messages_included || 500; // Default to 500 if no plan
             
+            // For call extractions, always charge (no free tier for calls)
+            if (isCallExtraction) {
+                isOverage = true;
+                unitsToCharge = callMinutesUsed; // Charge per minute
+                
+                // Determine Call Meter ID based on account type
+                if (agency_ghl_id && agency_ghl_id !== location_id) {
+                    // It's an agency sub-account
+                    meterId = process.env.GHL_METER_ID_AGENCY_CALL_MINUTES; // Use GHL-generated Meter ID for agency call minutes
+                    console.log('Agency sub-account call detected. Using agency call minutes meter ID.');
+                } else {
+                    // It's a direct account
+                    meterId = process.env.GHL_METER_ID_DIRECT_CALL_MINUTES; // Use GHL-generated Meter ID for direct account call minutes
+                    console.log('Direct account call detected. Using direct call minutes meter ID.');
+                }
+                
+                console.log(`Call billing prepared: Meter ID: ${meterId}, Minutes: ${unitsToCharge}`);
+                
+                // TODO: Remove this when ready to enable call billing
+                console.log('⚠️ CALL BILLING DISABLED: Skipping funds check and billing for calls');
+                isOverage = false; // Disable billing for now
+            } else {
+                // Message extraction logic (existing)
             console.log('Usage check:', {
                 currentMessagesUsed,
                 messagesIncluded,
@@ -278,6 +317,7 @@ export const handler = async (event) => {
             } else {
                 console.log('✅ Within free tier. No overage charge required.');
             }
+            } // End of message extraction logic
             
         } catch (billingCheckError) {
             console.error('Error during billing check:', billingCheckError);
@@ -564,10 +604,14 @@ export const handler = async (event) => {
                 console.log('✅ GHL Wallet charge created successfully. Charge ID:', ghlChargeId);
                 
                 // Calculate actual customer cost based on meter ID
-                if (meterId === 'message_overage_agency_account') {
+                if (meterId === process.env.GHL_METER_ID_AGENCY_OVERAGE) {
                     customerCostEstimate = unitsToCharge * 0.002; // $0.002 per message for agencies
-                } else if (meterId === 'message_overage_direct_account') {
+                } else if (meterId === process.env.GHL_METER_ID_DIRECT_OVERAGE) {
                     customerCostEstimate = unitsToCharge * 0.005; // $0.005 per message for direct accounts
+                } else if (meterId === process.env.GHL_METER_ID_AGENCY_CALL_MINUTES) {
+                    customerCostEstimate = unitsToCharge * 0.15; // $0.15 per minute for agency calls
+                } else if (meterId === process.env.GHL_METER_ID_DIRECT_CALL_MINUTES) {
+                    customerCostEstimate = unitsToCharge * 0.25; // $0.25 per minute for direct calls
                 }
                 
                 if (currentSegment) {
@@ -604,6 +648,8 @@ export const handler = async (event) => {
             customer_cost_estimate: customerCostEstimate,
             customer_cost_calculated: true,
             ghl_charge_id: ghlChargeId,
+            is_call_extraction: isCallExtraction,
+            call_minutes_used: callMinutesUsed,
             success: extractionSuccess,
             error_message: errorMessage,
             response_time_ms: responseTimeMs,
@@ -662,6 +708,8 @@ export const handler = async (event) => {
                 customer_cost_estimate: customerCostEstimate,
                 customer_cost_calculated: true,
                 ghl_charge_id: ghlChargeId,
+                is_call_extraction: isCallExtraction,
+                call_minutes_used: callMinutesUsed,
                 is_call_extraction: isCallExtraction,
                 call_minutes_used: callMinutesUsed,
                 success: false,
