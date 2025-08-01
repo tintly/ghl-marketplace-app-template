@@ -291,18 +291,11 @@ const SubscriptionManager = ({ user, authService }) => {
                             <div className="text-blue-700 text-xs">$0.002 per extraction after 1,000</div>
                           </div>
                         )}
-                        {plan.name === 'Agency Tier 2' && (
+                        {(plan.name === 'Agency Tier 2' || plan.name === 'Agency Pro') && (
                           <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-3">
                             <div className="text-blue-800 font-medium">Up to 10 sub-accounts included</div>
-                            <div className="text-blue-700 text-xs mt-1">1,000 free AI extractions per sub-account/month</div>
-                            <div className="text-blue-700 text-xs">$0.002 per extraction after 1,000</div>
-                          </div>
-                        )}
-                        {plan.name === 'Agency Tier 3' && (
-                          <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-3">
-                            <div className="text-blue-800 font-medium">First 10 sub-accounts included</div>
                             <div className="text-blue-700 text-xs mt-1">$10/month for each additional sub-account</div>
-                            <div className="text-blue-700 text-xs">1,000 free AI extractions per sub-account/month</div>
+                            <div className="text-blue-700 text-xs mt-1">1,000 free AI extractions per sub-account/month</div>
                             <div className="text-blue-700 text-xs">$0.002 per extraction after 1,000</div>
                           </div>
                         )}
