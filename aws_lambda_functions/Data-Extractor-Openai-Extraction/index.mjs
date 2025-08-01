@@ -186,6 +186,19 @@ export const handler = async (event) => {
 
         // Step 0.6: Determine if this extraction will be an overage and check funds
         console.log('Step 0.6: Checking for overage and funds...');
+        // Determine if this is a call extraction based on the extraction type or conversation data
+        isCallExtraction = event.extraction_type === 'call_extraction' || 
+                          event.is_call_extraction === true ||
+                          (event.conversation_history && event.conversation_history.some(msg => 
+                              msg.message_type === 'Call' || msg.message_type === 'Voicemail'
+                          ));
+        
+        // For call extractions, calculate minutes used (this would come from the call duration)
+        if (isCallExtraction) {
+            callMinutesUsed = event.call_duration_minutes || event.call_minutes || 1; // Default to 1 minute if not provided
+            console.log(`Call extraction detected. Minutes to charge: ${callMinutesUsed}`);
+        }
+
         try {
             // Get current usage for this location
             const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
