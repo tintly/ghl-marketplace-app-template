@@ -205,6 +205,50 @@ export const handler = async (event) => { // Directly export the async handler
         const contextualRules = await getContextualRules(supabase, ghlConfig.id);
         console.log(`Found ${contextualRules.length} contextual rules`);
 
+        // Step 4.5: Determine billing entity and fetch billing tokens
+        console.log('Step 4.5: Determining billing entity and tokens...');
+        let billing_entity_id;
+        let billing_access_token;
+        let billing_refresh_token;
+        let billing_token_expires_at;
+        let billing_user_id;
+        let billing_company_id;
+
+        // Check if this location is managed by an agency
+        if (ghlConfig.agency_ghl_id && ghlConfig.agency_ghl_id !== ghlConfig.ghl_account_id) {
+            // Location is managed by an agency - agency will be billed
+            billing_entity_id = ghlConfig.agency_ghl_id;
+            console.log('Location is agency-managed. Billing entity (agency):', billing_entity_id);
+            
+            // Fetch agency's GHL configuration for billing tokens
+            const agencyConfig = await getGHLConfiguration(supabase, ghlConfig.agency_ghl_id);
+            if (!agencyConfig) {
+                throw new Error(`No GHL configuration found for agency: ${ghlConfig.agency_ghl_id}`);
+            }
+            
+            billing_access_token = agencyConfig.access_token;
+            billing_refresh_token = agencyConfig.refresh_token;
+            billing_token_expires_at = agencyConfig.token_expires_at;
+            billing_user_id = agencyConfig.user_id;
+            billing_company_id = agencyConfig.ghl_company_id || ghlConfig.agency_ghl_id;
+            
+            console.log('Agency billing configuration retrieved:', {
+                billing_entity_id,
+                hasAccessToken: !!billing_access_token,
+                hasRefreshToken: !!billing_refresh_token,
+                tokenExpiry: billing_token_expires_at
+            });
+        } else {
+            // Direct location - location will be billed directly
+            billing_entity_id = ghlConfig.ghl_account_id;
+            billing_access_token = ghlConfig.access_token;
+            billing_refresh_token = ghlConfig.refresh_token;
+            billing_token_expires_at = ghlConfig.token_expires_at;
+            billing_user_id = ghlConfig.user_id;
+            billing_company_id = ghlConfig.ghl_company_id || ghlConfig.ghl_account_id;
+            
+            console.log('Direct location billing. Billing entity (location):', billing_entity_id);
+        }
         // Step 5: Generate extraction prompt from ai-prompt-generator Lambda
         console.log('Step 5: Invoking ai-prompt-generator Lambda...');
         // Ensure prompt generator gets all necessary context
@@ -258,6 +302,13 @@ export const handler = async (event) => { // Directly export the async handler
             conversation_history: conversationData.messages,
             system_prompt: promptData.prompt, // Use the generated prompt
             instructions: "Extract all relevant information from the conversation",
+            // Billing entity information for metered pricing
+            billing_entity_id: billing_entity_id,
+            billing_access_token: billing_access_token,
+            billing_refresh_token: billing_refresh_token,
+            billing_token_expires_at: billing_token_expires_at,
+            billing_user_id: billing_user_id,
+            billing_company_id: billing_company_id,
             response_format: {
                 type: "json_object",
                 rules: [

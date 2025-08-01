@@ -2,6 +2,7 @@
 import { getSupabaseClient } from './supabaseClient.mjs';
 import { getOpenAISecrets, getSupabaseSecrets } from './secrets.mjs';
 import { decryptApiKey, updateUsageLog } from './helpers.mjs';
+import * as ghlWalletService from './ghlWalletService.mjs';
 import OpenAI from 'openai';
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda"; // Keep this import
 
@@ -48,6 +49,13 @@ export const handler = async (event) => {
         system_prompt,
         instructions,
         response_format,
+        // Billing entity information for metered pricing
+        billing_entity_id,
+        billing_access_token,
+        billing_refresh_token,
+        billing_token_expires_at,
+        billing_user_id,
+        billing_company_id,
         // Removed overwrite_policy from here, as it's not directly used by this lambda's core logic
         // but would be passed to the update-ghl-contact lambda if needed there.
         // The original Deno function didn't use it in prepareUpdatePayload, it used field-specific policies.
@@ -79,6 +87,11 @@ export const handler = async (event) => {
     let platformCostEstimate = 0;
     let customerCostEstimate = 0;
     let openaiKeyUsed = null;
+    let ghlChargeId = null; // NEW: To store the GHL Wallet charge ID
+    let isOverage = false;
+    let meterId = '';
+    let unitsToCharge = 0;
+    let currentBillingAccessToken = billing_access_token; // Track current token for refreshes
     let ghlUpdateResult = null; // NEW: To store the result from the update Lambda
 
     const startTime = Date.now();
@@ -98,6 +111,179 @@ export const handler = async (event) => {
         // Initialize Supabase client
         supabaseClient = await getSupabaseClient();
 
+        // Step 0.5: Validate and refresh billing entity tokens if needed
+        console.log('Step 0.5: Validating billing entity tokens...');
+        if (billing_token_expires_at) {
+            const expiryDate = new Date(billing_token_expires_at);
+            const now = new Date();
+            const hoursUntilExpiry = (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+            
+            console.log(`Billing token expires in ${hoursUntilExpiry.toFixed(2)} hours`);
+            
+            // Refresh if token expires within 1 hour
+            if (hoursUntilExpiry <= 1) {
+                console.log('Billing token needs refresh...');
+                try {
+                    const clientId = process.env.GHL_MARKETPLACE_CLIENT_ID;
+                    const clientSecret = process.env.GHL_MARKETPLACE_CLIENT_SECRET;
+                    
+                    if (!clientId || !clientSecret) {
+                        throw new Error('GHL client credentials not configured for token refresh');
+                    }
+                    
+                    const refreshResult = await ghlWalletService.refreshAccessToken(
+                        billing_refresh_token,
+                        clientId,
+                        clientSecret
+                    );
+                    
+                    // Update the current token
+                    currentBillingAccessToken = refreshResult.access_token;
+                    
+                    // Update the database with new tokens
+                    const newExpiresAt = new Date(Date.now() + (refreshResult.expires_in * 1000)).toISOString();
+                    
+                    const { error: updateError } = await supabaseClient
+                        .from('ghl_configurations')
+                        .update({
+                            access_token: refreshResult.access_token,
+                            refresh_token: refreshResult.refresh_token,
+                            token_expires_at: newExpiresAt,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('ghl_account_id', billing_entity_id);
+                    
+                    if (updateError) {
+                        console.warn('Failed to update refreshed tokens in database:', updateError);
+                    } else {
+                        console.log('✅ Billing tokens refreshed and updated in database');
+                    }
+                    
+                } catch (refreshError) {
+                    console.error('Failed to refresh billing tokens:', refreshError);
+                    errorMessage = `Failed to refresh billing tokens: ${refreshError.message}`;
+                    extractionSuccess = false;
+                    
+                    // Update usage log with error and return early
+                    if (usageLogId && supabaseClient) {
+                        await updateUsageLog(supabaseClient, usageLogId, {
+                            success: false,
+                            error_message: errorMessage,
+                            response_time_ms: Date.now() - startTime
+                        }, currentSegment);
+                    }
+                    
+                    return {
+                        statusCode: 401,
+                        body: JSON.stringify({
+                            success: false,
+                            error: errorMessage
+                        }),
+                    };
+                }
+            }
+        }
+
+        // Step 0.6: Determine if this extraction will be an overage and check funds
+        console.log('Step 0.6: Checking for overage and funds...');
+        try {
+            // Get current usage for this location
+            const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
+            
+            const { data: usageData, error: usageError } = await supabaseClient
+                .from('usage_tracking')
+                .select('messages_used')
+                .eq('location_id', location_id)
+                .eq('month_year', currentMonth)
+                .maybeSingle();
+            
+            if (usageError && usageError.code !== 'PGRST116') {
+                console.warn('Error fetching usage data:', usageError);
+            }
+            
+            // Get subscription plan limits
+            const { data: subscriptionData, error: subscriptionError } = await supabaseClient
+                .from('location_subscriptions')
+                .select(`
+                    subscription_plans (
+                        messages_included,
+                        overage_price
+                    )
+                `)
+                .eq('location_id', location_id)
+                .eq('is_active', true)
+                .maybeSingle();
+            
+            if (subscriptionError && subscriptionError.code !== 'PGRST116') {
+                console.warn('Error fetching subscription data:', subscriptionError);
+            }
+            
+            const currentMessagesUsed = usageData?.messages_used || 0;
+            const messagesIncluded = subscriptionData?.subscription_plans?.messages_included || 500; // Default to 500 if no plan
+            
+            console.log('Usage check:', {
+                currentMessagesUsed,
+                messagesIncluded,
+                isOverage: currentMessagesUsed >= messagesIncluded
+            });
+            
+            // Determine if this extraction will be an overage
+            if (currentMessagesUsed >= messagesIncluded) {
+                isOverage = true;
+                unitsToCharge = 1; // Charging per message
+                
+                // Determine Meter ID based on account type
+                if (agency_ghl_id && agency_ghl_id !== location_id) {
+                    // It's an agency sub-account
+                    meterId = 'message_overage_agency_account';
+                    console.log('Agency sub-account overage detected. Using agency meter ID.');
+                } else {
+                    // It's a direct account
+                    meterId = 'message_overage_direct_account';
+                    console.log('Direct account overage detected. Using direct meter ID.');
+                }
+                
+                console.log(`Overage will be charged: Meter ID: ${meterId}, Units: ${unitsToCharge}`);
+                
+                // Check funds before proceeding with OpenAI call
+                console.log('Checking funds for billing entity:', billing_entity_id);
+                const fundsCheck = await ghlWalletService.checkFunds(currentBillingAccessToken, billing_entity_id);
+                
+                if (!fundsCheck.hasFunds) {
+                    errorMessage = `Insufficient funds in GHL Wallet for ${billing_entity_id}. Extraction aborted.`;
+                    extractionSuccess = false;
+                    console.error(errorMessage);
+                    
+                    // Update usage log with error and return early
+                    if (usageLogId && supabaseClient) {
+                        await updateUsageLog(supabaseClient, usageLogId, {
+                            success: false,
+                            error_message: errorMessage,
+                            response_time_ms: Date.now() - startTime,
+                            model_used: openaiModel
+                        }, currentSegment);
+                    }
+                    
+                    return {
+                        statusCode: 402, // Payment Required
+                        body: JSON.stringify({
+                            success: false,
+                            error: errorMessage,
+                            billing_entity_id: billing_entity_id
+                        }),
+                    };
+                }
+                
+                console.log('✅ Sufficient funds available for overage charge');
+            } else {
+                console.log('✅ Within free tier. No overage charge required.');
+            }
+            
+        } catch (billingCheckError) {
+            console.error('Error during billing check:', billingCheckError);
+            // Continue with extraction but log the error
+            console.warn('Proceeding with extraction despite billing check error');
+        }
         // Determine OpenAI API key and model to use (agency-specific logic)
         if (agency_ghl_id) {
             console.log('Checking for agency-specific OpenAI key...');
@@ -348,6 +534,64 @@ export const handler = async (event) => {
             if (currentSegment) currentSegment.addAnnotation('noDataExtractedByAi', true);
         }
 
+        // NEW STEP: Create GHL Wallet charge if this is an overage
+        if (isOverage && extractionSuccess) {
+            console.log('Creating GHL Wallet charge for overage...');
+            try {
+                const chargePayload = {
+                    appId: process.env.GHL_APP_ID, // Ensure this environment variable is set
+                    meterId: meterId,
+                    eventId: usageLogId, // Link to usage log record
+                    userId: billing_user_id || contact_id, // Use billing user ID or fallback to contact
+                    locationId: location_id, // Where the usage occurred
+                    companyId: billing_company_id || billing_entity_id, // Entity being billed
+                    description: `AI Message Overage - ${totalTokens} tokens`,
+                    units: unitsToCharge,
+                    eventTime: new Date().toISOString()
+                };
+                
+                console.log('Charge payload:', {
+                    appId: chargePayload.appId,
+                    meterId: chargePayload.meterId,
+                    units: chargePayload.units,
+                    companyId: chargePayload.companyId,
+                    description: chargePayload.description
+                });
+                
+                const chargeResponse = await ghlWalletService.createCharge(currentBillingAccessToken, chargePayload);
+                ghlChargeId = chargeResponse.chargeId;
+                
+                console.log('✅ GHL Wallet charge created successfully. Charge ID:', ghlChargeId);
+                
+                // Calculate actual customer cost based on meter ID
+                if (meterId === 'message_overage_agency_account') {
+                    customerCostEstimate = unitsToCharge * 0.002; // $0.002 per message for agencies
+                } else if (meterId === 'message_overage_direct_account') {
+                    customerCostEstimate = unitsToCharge * 0.005; // $0.005 per message for direct accounts
+                }
+                
+                if (currentSegment) {
+                    currentSegment.addAnnotation('ghlChargeCreated', true);
+                    currentSegment.addAnnotation('ghlChargeId', ghlChargeId);
+                    currentSegment.addAnnotation('customerCostEstimate', customerCostEstimate);
+                }
+                
+            } catch (chargeError) {
+                console.error('Failed to create GHL Wallet charge:', chargeError);
+                errorMessage = `AI extraction successful but failed to charge GHL Wallet: ${chargeError.message}`;
+                extractionSuccess = false; // Mark extraction as failed if billing fails
+                
+                if (currentSegment) {
+                    currentSegment.addError(chargeError);
+                    currentSegment.addAnnotation('ghlChargeFailed', true);
+                }
+            }
+        } else if (isOverage && !extractionSuccess) {
+            console.log('Extraction failed, skipping GHL Wallet charge');
+        } else {
+            console.log('Within free tier, no GHL Wallet charge required');
+            customerCostEstimate = 0; // No charge for free tier usage
+        }
 
         // Final update to usage log
         await updateUsageLog(supabaseClient, usageLogId, {
@@ -358,6 +602,8 @@ export const handler = async (event) => {
             cost_estimate: costEstimate,
             platform_cost_estimate: platformCostEstimate,
             customer_cost_estimate: customerCostEstimate,
+            customer_cost_calculated: true,
+            ghl_charge_id: ghlChargeId,
             success: extractionSuccess,
             error_message: errorMessage,
             response_time_ms: responseTimeMs,
@@ -380,6 +626,14 @@ export const handler = async (event) => {
                 },
                 usage_log_id: usageLogId,
                 error: errorMessage,
+                billing: {
+                    is_overage: isOverage,
+                    meter_id: meterId,
+                    units_charged: unitsToCharge,
+                    ghl_charge_id: ghlChargeId,
+                    customer_cost_estimate: customerCostEstimate,
+                    billing_entity_id: billing_entity_id
+                },
                 ghl_update_result: ghlUpdateResult // NEW: Include the GHL update result
             }),
         };
@@ -406,6 +660,8 @@ export const handler = async (event) => {
                 cost_estimate: costEstimate,
                 platform_cost_estimate: platformCostEstimate,
                 customer_cost_estimate: customerCostEstimate,
+                customer_cost_calculated: true,
+                ghl_charge_id: ghlChargeId,
                 success: false,
                 error_message: errorMessage,
                 response_time_ms: responseTimeMs,
