@@ -254,10 +254,9 @@ const SubscriptionManager = ({ user, authService }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {plans.map((plan) => {
                 // Filter out unwanted plans
-                const unwantedPlans = ['free', 'solo', 'business', 'agency'];
+                const unwantedPlans = ['free', 'solo', 'business', 'agency', 'starter'];
                 if (unwantedPlans.includes(plan.code) || 
                     (plan.code?.startsWith('agency') && user.type !== 'agency') ||
-                    plan.price_monthly === 299 || // Remove $299 business plan
                     plan.price_monthly === 499) { // Remove $499 agency plan
                   return null;
                 }
@@ -278,48 +277,55 @@ const SubscriptionManager = ({ user, authService }) => {
                           ${plan.price_monthly}
                         </span> 
                         <span className="text-gray-600">
-                          {plan.code !== 'starter' && plan.code !== 'free' ? '/month' : ''}
+                          /month
                         </span>
                       </div>
                       
                       {/* Plan Features */}
                       <div className="mt-3 space-y-2 text-sm text-gray-600">
+                        {/* Agency Tier Specific Information */}
+                        {plan.name === 'Agency Tier 1' && (
+                          <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-3">
+                            <div className="text-blue-800 font-medium">Up to 3 sub-accounts included</div>
+                            <div className="text-blue-700 text-xs mt-1">1,000 free AI extractions per sub-account/month</div>
+                            <div className="text-blue-700 text-xs">$0.002 per extraction after 1,000</div>
+                          </div>
+                        )}
+                        {plan.name === 'Agency Tier 2' && (
+                          <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-3">
+                            <div className="text-blue-800 font-medium">Up to 10 sub-accounts included</div>
+                            <div className="text-blue-700 text-xs mt-1">1,000 free AI extractions per sub-account/month</div>
+                            <div className="text-blue-700 text-xs">$0.002 per extraction after 1,000</div>
+                          </div>
+                        )}
+                        {plan.name === 'Agency Tier 3' && (
+                          <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-3">
+                            <div className="text-blue-800 font-medium">First 10 sub-accounts included</div>
+                            <div className="text-blue-700 text-xs mt-1">$10/month for each additional sub-account</div>
+                            <div className="text-blue-700 text-xs">1,000 free AI extractions per sub-account/month</div>
+                            <div className="text-blue-700 text-xs">$0.002 per extraction after 1,000</div>
+                          </div>
+                        )}
+                        
                         <div>
-                          <strong>{plan.messages_included >= 999999 ? 'Unlimited' : plan.messages_included.toLocaleString()}</strong> AI extractions/month
-                        </div>
-                        {plan.daily_cap_messages && plan.daily_cap_messages < 999999 && (
-                          <div>Daily limit: {plan.daily_cap_messages} extractions</div>
-                        )}
-                        <div>
-                          Sub-accounts: {plan.max_sub_accounts >= 999999 ? 'Unlimited' : (plan.max_sub_accounts || 'Contact sales')}
+                          <strong>1,000</strong> AI extractions per sub-account/month
                         </div>
                         <div>
-                          Custom fields: {plan.custom_fields_limit >= 999999 ? 'Unlimited' : (plan.custom_fields_limit || 5)}
+                          Overage: <strong>$0.002</strong> per extraction
                         </div>
-                        {plan.ai_summary_included && (
-                          <div className="text-green-600">✓ AI Summary Field</div>
-                        )}
-                        {plan.can_use_own_openai_key && (
-                          <div className="text-blue-600">✓ Custom OpenAI Keys</div>
-                        )}
-                        {plan.can_white_label && (
-                          <div className="text-purple-600">✓ White Label</div>
-                        )}
+                        <div>
+                          Custom fields: <strong>Unlimited</strong>
+                        </div>
+                        <div className="text-green-600">✓ AI Summary Field</div>
+                        <div className="text-blue-600">✓ Custom OpenAI Keys</div>
+                        <div className="text-purple-600">✓ White Label Branding</div>
+                        <div className="text-indigo-600">✓ Priority Support</div>
                       </div>
                       
                       {/* Pricing Details */}
                       <div className="mt-3 text-xs text-gray-500 space-y-1">
-                        {plan.overage_price > 0 && (
-                          <div>Overage: ${plan.overage_price}/extraction</div>
-                        )}
-                        {plan.sub_account_overage_price > 0 && (
-                          <div>Extra sub-accounts: ${plan.sub_account_overage_price}/month each</div>
-                        )}
                         {plan.call_extraction_rate_per_minute > 0 && (
-                          <div>Call transcription: ${plan.call_extraction_rate_per_minute}/minute</div>
-                        )}
-                        {plan.call_package_1_minutes > 0 && (
-                          <div>Call bundle: {plan.call_package_1_minutes} minutes for ${plan.call_package_1_price}</div>
+                          <div>Call transcription: <strong>${plan.call_extraction_rate_per_minute}/minute</strong></div>
                         )}
                       </div>
                       
