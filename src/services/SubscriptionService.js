@@ -294,7 +294,7 @@ export class SubscriptionService {
         console.error('Error getting subscription:', subError)
         // Use default values if subscription can't be fetched
         subscription = {
-          messages_included: isAgency ? 999999 : 100
+          messages_included: isAgency ? 999999 : 100,
           daily_cap_messages: isAgency ? 999999 : (subscription?.daily_cap_messages || 100)
         }
       }
