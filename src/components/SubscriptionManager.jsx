@@ -98,7 +98,7 @@ const SubscriptionManager = ({ user, authService }) => {
       setLoading(true)
       
       // Don't allow changing from agency plan
-      if (subscription?.plan_code === 'agency') {
+      if (subscription?.plan_code?.includes('agency')) {
         setError('Agency plan cannot be changed')
         setLoading(false)
         return
