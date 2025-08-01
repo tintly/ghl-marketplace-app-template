@@ -159,17 +159,19 @@ export class SubscriptionService {
         messages_included: 500,
         overage_price: 0.01,
         can_use_own_openai_key: false,
-        can_white_label: false,
-        daily_cap_messages: 100,
-        custom_fields_limit: 1,
+        plan_name: 'Agency Enterprise',
+        plan_code: 'agency_enterprise',
+        price_monthly: 997,
         ai_summary_included: false,
         call_extraction_rate_per_minute: 0.25,
         call_package_1_minutes: 0,
-        call_package_1_price: 0,
+        overage_price: 0.002,
         call_package_2_minutes: 0,
         call_package_2_price: 0,
         is_active: true,
-        payment_status: 'active'
+        payment_status: 'active',
+        max_sub_accounts: 999999,
+        sub_account_overage_price: 10.00
       }
     } catch (error) {
       console.error('Error getting subscription:', error)

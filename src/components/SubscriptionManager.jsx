@@ -253,8 +253,12 @@ const SubscriptionManager = ({ user, authService }) => {
             <h3 className="text-md font-medium text-gray-900 mb-4">Available Plans</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {plans.map((plan) => {
-                // Don't show agency plan for non-agency users
-                if (plan.code?.startsWith('agency') && user.type !== 'agency') {
+                // Filter out unwanted plans
+                const unwantedPlans = ['free', 'solo', 'business', 'agency'];
+                if (unwantedPlans.includes(plan.code) || 
+                    (plan.code?.startsWith('agency') && user.type !== 'agency') ||
+                    plan.price_monthly === 299 || // Remove $299 business plan
+                    plan.price_monthly === 499) { // Remove $499 agency plan
                   return null;
                 }
                 
@@ -281,13 +285,16 @@ const SubscriptionManager = ({ user, authService }) => {
                       {/* Plan Features */}
                       <div className="mt-3 space-y-2 text-sm text-gray-600">
                         <div>
-                          <strong>{plan.messages_included >= 999999 ? 'Unlimited' : plan.messages_included.toLocaleString()}</strong> messages/month
+                          <strong>{plan.messages_included >= 999999 ? 'Unlimited' : plan.messages_included.toLocaleString()}</strong> AI extractions/month
                         </div>
                         {plan.daily_cap_messages && plan.daily_cap_messages < 999999 && (
-                          <div>Daily cap: {plan.daily_cap_messages} messages</div>
+                          <div>Daily limit: {plan.daily_cap_messages} extractions</div>
                         )}
                         <div>
-                          Custom fields: {plan.custom_fields_limit >= 999999 ? 'Unlimited' : plan.custom_fields_limit}
+                          Sub-accounts: {plan.max_sub_accounts >= 999999 ? 'Unlimited' : (plan.max_sub_accounts || 'Contact sales')}
+                        </div>
+                        <div>
+                          Custom fields: {plan.custom_fields_limit >= 999999 ? 'Unlimited' : (plan.custom_fields_limit || 5)}
                         </div>
                         {plan.ai_summary_included && (
                           <div className="text-green-600">✓ AI Summary Field</div>
@@ -303,13 +310,16 @@ const SubscriptionManager = ({ user, authService }) => {
                       {/* Pricing Details */}
                       <div className="mt-3 text-xs text-gray-500 space-y-1">
                         {plan.overage_price > 0 && (
-                          <div>Overage: ${plan.overage_price}/message</div>
+                          <div>Overage: ${plan.overage_price}/extraction</div>
+                        )}
+                        {plan.sub_account_overage_price > 0 && (
+                          <div>Extra sub-accounts: ${plan.sub_account_overage_price}/month each</div>
                         )}
                         {plan.call_extraction_rate_per_minute > 0 && (
-                          <div>Calls: ${plan.call_extraction_rate_per_minute}/minute</div>
+                          <div>Call transcription: ${plan.call_extraction_rate_per_minute}/minute</div>
                         )}
                         {plan.call_package_1_minutes > 0 && (
-                          <div>Call Package: {plan.call_package_1_minutes} min for ${plan.call_package_1_price}</div>
+                          <div>Call bundle: {plan.call_package_1_minutes} minutes for ${plan.call_package_1_price}</div>
                         )}
                       </div>
                       
