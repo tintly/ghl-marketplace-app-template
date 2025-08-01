@@ -295,7 +295,7 @@ export class SubscriptionService {
         // Use default values if subscription can't be fetched
         subscription = {
           messages_included: isAgency ? 999999 : 100
-          daily_cap_messages: isAgency ? 999999 : 100
+          daily_cap_messages: isAgency ? 999999 : (subscription?.daily_cap_messages || 100)
         }
       }
       
