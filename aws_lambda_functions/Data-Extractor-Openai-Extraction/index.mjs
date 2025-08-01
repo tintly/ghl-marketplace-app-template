@@ -235,11 +235,11 @@ export const handler = async (event) => {
                 // Determine Meter ID based on account type
                 if (agency_ghl_id && agency_ghl_id !== location_id) {
                     // It's an agency sub-account
-                    meterId = 'message_overage_agency_account';
+                    meterId = process.env.GHL_METER_ID_AGENCY_OVERAGE; // Use GHL-generated Meter ID for agency overage
                     console.log('Agency sub-account overage detected. Using agency meter ID.');
                 } else {
                     // It's a direct account
-                    meterId = 'message_overage_direct_account';
+                    meterId = process.env.GHL_METER_ID_DIRECT_OVERAGE; // Use GHL-generated Meter ID for direct account overage
                     console.log('Direct account overage detected. Using direct meter ID.');
                 }
                 
