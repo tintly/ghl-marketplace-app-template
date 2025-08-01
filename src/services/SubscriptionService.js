@@ -22,6 +22,7 @@ export class SubscriptionService {
           price_monthly: 499,
           max_users: 999999,
           messages_included: 999999,
+          daily_cap_messages: 999999,
           overage_price: 0.005,
           can_use_own_openai_key: true,
           can_white_label: true,
