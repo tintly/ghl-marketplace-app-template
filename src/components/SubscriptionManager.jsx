@@ -306,20 +306,42 @@ const SubscriptionManager = ({ user, authService }) => {
                             <div className="text-blue-700 text-xs">$0.002 per extraction after 1,000</div>
                           </div>
                         )}
+                        {plan.name === 'Agency Enterprise' && (
+                          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded p-3 mb-3">
+                            <div className="text-purple-800 font-medium">100 sub-accounts included</div>
+                            <div className="text-purple-700 text-xs mt-1">Only $5/month for each additional sub-account</div>
+                            <div className="text-purple-700 text-xs">Truly unlimited AI extractions with your own OpenAI key</div>
+                            <div className="text-purple-700 text-xs">No per-extraction charges when using custom keys</div>
+                          </div>
+                        )}
                         
                         <div>
-                          <strong>1,000</strong> AI extractions per sub-account/month
+                          {plan.name === 'Agency Enterprise' ? (
+                            <strong>Unlimited</strong> AI extractions (with custom OpenAI key)
+                          ) : (
+                            <strong>1,000</strong> AI extractions per sub-account/month
+                          )}
                         </div>
                         <div>
-                          Overage: <strong>$0.002</strong> per extraction
+                          {plan.name === 'Agency Enterprise' ? (
+                            <span className="text-green-600">No overage charges with custom OpenAI key</span>
+                          ) : (
+                            <>Overage: <strong>$0.002</strong> per extraction</>
+                          )}
                         </div>
                         <div>
                           Custom fields: <strong>Unlimited</strong>
                         </div>
                         <div className="text-green-600">✓ AI Summary Field</div>
                         <div className="text-blue-600">✓ Custom OpenAI Keys</div>
+                        {plan.name === 'Agency Enterprise' && (
+                          <div className="text-purple-600">✓ Truly Unlimited Usage</div>
+                        )}
                         <div className="text-purple-600">✓ White Label Branding</div>
                         <div className="text-indigo-600">✓ Priority Support</div>
+                        {plan.name === 'Agency Enterprise' && (
+                          <div className="text-purple-600">✓ Dedicated Account Manager</div>
+                        )}
                       </div>
                       
                       {/* Pricing Details */}
